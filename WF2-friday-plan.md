@@ -26,6 +26,17 @@ Replace Huidu firmware with our own (Arduino IDE) for much better color, and giv
 5. Order ~15 USB-A to USB-A cables.
 - Later/stretch: USB-stick (U-disk) playback = USB host mode – hard in Arduino (ESP-IDF USB Host MSC).
 
+## Decisions (2026-11-17)
+- **Name: Pocket Jumbotron.** Not limited to one family's holiday card. Hotspot SSID like `PocketJumbotron-4F2A`.
+- **Toolchain: PlatformIO** (pioarduino / Arduino core 3.x), not the Arduino IDE. Claude does the coding and testing. GitHub Actions builds firmware releases.
+- **Website: GitHub Pages from `/docs`**, aimed at non-technical recipients first. The maker/technical info goes on a separate page. It will later host the ESP Web Tools flasher.
+- **No-WiFi path: on-demand card hotspot.** Press S1 and the card starts a password-protected AP with a local web page: upload photos/GIFs/video, playlist, brightness, firmware update file, optional join-home-WiFi. It never needs the internet.
+- **No USB uploads** for now (recipients aren't technical). USB drive mode is shelved.
+- **Media format:** GIF as-is. Photos/video converted *in the browser on the phone* (crop to 128x64, preview, encode as a sequence of JPEG frames) for full color. Card decodes with JPEGDEC.
+- **Storage rule: a new upload/content pack replaces everything** (wipe, then write), so flash can't fill up.
+- **Fresh content through the season:** WiFi-connected cards check once a day and download that day's pack from GitHub (a manifest listing packs by date). Offline cards keep whatever was last uploaded.
+- ⚠️ **Check VBUS on Friday:** USB-A to A with the card's own 5V supply also connected may back-feed the PC port. Keep "unplug card power while on USB" until verified.
+
 ## Friday agenda
 1. USB-A to USB-A cable arrives.
 2. **Back up Huidu firmware**: `esptool --chip esp32s3 read_flash 0 ALL wf2_backup.bin` (confirm size with `esptool flash_id`).

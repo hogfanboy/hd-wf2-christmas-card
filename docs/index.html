@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pocket Jumbotron</title>
+<meta name="description" content="A tiny light-up screen that keeps getting new pictures.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0b12; --bg2: #13131d; --line: #262636; --text: #ecebf5; --muted: #a3a2b8;
+    --gold: #ffbe3c; --cyan: #5ac8ff; --red: #ff4d6a; --green: #4ee08a;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.6 Inter, system-ui, sans-serif; }
+  a { color: var(--cyan); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; }
+  .logo { font-family: Silkscreen, monospace; font-size: 20px; color: var(--gold); text-decoration: none; letter-spacing: .5px; text-shadow: 0 0 12px rgba(255,190,60,.45); }
+  .logo span { color: var(--cyan); text-shadow: 0 0 12px rgba(90,200,255,.45); }
+  nav a { color: var(--muted); text-decoration: none; margin-left: 18px; font-size: 15px; }
+  nav a:hover { color: var(--text); }
+
+  .hero { display: grid; grid-template-columns: 1fr; gap: 28px; padding: 28px 0 56px; text-align: center; }
+  h1 { font-size: clamp(32px, 6vw, 56px); line-height: 1.08; margin: 0 0 14px; font-weight: 800; letter-spacing: -1px; }
+  h1 em { font-style: normal; color: var(--gold); }
+  .lede { color: var(--muted); font-size: clamp(17px, 2.2vw, 20px); max-width: 640px; margin: 0 auto; }
+
+  .card-frame { position: relative; margin: 0 auto; width: 100%; max-width: 860px; padding: 14px; border-radius: 18px;
+    background: linear-gradient(160deg, #b31d2c, #7d1220); box-shadow: 0 30px 80px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.15); }
+  .card-frame canvas { display: block; width: 100%; aspect-ratio: 2 / 1; border-radius: 6px; background: #07070b; }
+  .glow { position: absolute; inset: 14px; border-radius: 6px; filter: blur(22px) saturate(1.4); opacity: .55; z-index: -1; }
+  .scenes { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
+  .scenes button { font: 600 14px Inter, sans-serif; color: var(--muted); background: var(--bg2); border: 1px solid var(--line);
+    padding: 7px 14px; border-radius: 999px; cursor: pointer; }
+  .scenes button[aria-pressed="true"] { color: var(--bg); background: var(--gold); border-color: var(--gold); }
+
+  section { padding: 56px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: clamp(26px, 4vw, 36px); margin: 0 0 8px; letter-spacing: -.5px; }
+  .sub { color: var(--muted); margin: 0 0 28px; max-width: 640px; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+  .tile { background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; }
+  .tile h3 { margin: 6px 0 6px; font-size: 19px; }
+  .tile p { margin: 0; color: var(--muted); font-size: 16px; }
+  .icon { font-size: 26px; }
+  .path { border-top: 3px solid var(--cyan); }
+  .path.alt { border-top-color: var(--green); }
+  .tag { display: inline-block; font: 600 12px Inter, sans-serif; text-transform: uppercase; letter-spacing: 1px; color: var(--cyan); }
+  .path.alt .tag { color: var(--green); }
+  ol { margin: 12px 0 0; padding-left: 20px; color: var(--muted); font-size: 16px; }
+  ol li { margin: 4px 0; }
+
+  .notice { background: rgba(255,190,60,.08); border: 1px solid rgba(255,190,60,.35); border-radius: var(--radius); padding: 20px 22px; }
+  .notice strong { color: var(--gold); }
+
+  details { background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 20px; margin-bottom: 10px; }
+  summary { cursor: pointer; font-weight: 600; }
+  details p { color: var(--muted); margin: 10px 0 0; }
+
+  footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--muted); font-size: 14px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+
+  @media (max-width: 560px) {
+    body { font-size: 16px; }
+    nav a { margin-left: 12px; font-size: 14px; }
+    .logo { font-size: 16px; }
+    .card-frame { padding: 8px; border-radius: 12px; }
+    .glow { inset: 8px; }
+    section { padding: 40px 0; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="logo" href="./">Pocket <span>Jumbotron</span></a>
+    <nav><a href="#updates">Updates</a><a href="#faq">FAQ</a></nav>
+  </header>
+
+  <div class="hero">
+    <div>
+      <h1>A tiny light-up screen that <em>keeps getting new pictures.</em></h1>
+      <p class="lede">Your Pocket Jumbotron plays bright, colorful animations. It can pick up fresh ones all season long, or show photos and videos you add yourself.</p>
+    </div>
+    <div>
+      <div class="card-frame">
+        <canvas class="glow" aria-hidden="true"></canvas>
+        <canvas id="panel" role="img" aria-label="Simulated 128 by 64 LED screen showing an animation"></canvas>
+      </div>
+      <div class="scenes" role="group" aria-label="Try a demo">
+        <button data-scene="snow" aria-pressed="true">Snowy night</button>
+        <button data-scene="color" aria-pressed="false">Full color</button>
+        <button data-scene="name" aria-pressed="false">Marquee</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section>
+  <div class="wrap">
+    <h2>What it does</h2>
+    <p class="sub">An 8,192-light screen in a frame, with a small computer on the back.</p>
+    <div class="grid">
+      <div class="tile"><div class="icon">🎞️</div><h3>Plays animations</h3><p>It loops through a playlist of animations and pictures, all day, on its own.</p></div>
+      <div class="tile"><div class="icon">🌈</div><h3>Much richer color</h3><p>The new software shows smooth colors and gradients. The original software couldn't do that.</p></div>
+      <div class="tile"><div class="icon">📸</div><h3>Your own photos &amp; videos</h3><p>Pick something on your phone. It gets resized to fit, you see a preview, then it's sent to the screen.</p></div>
+      <div class="tile"><div class="icon">🎁</div><h3>Fresh content all season</h3><p>When it's on your WiFi, it can download a new batch of animations every day through the holidays.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="updates">
+  <div class="wrap">
+    <h2>Two ways to get new pictures</h2>
+    <p class="sub">Choose whichever suits you. Connecting to your home WiFi is optional.</p>
+    <div class="grid">
+      <div class="tile path">
+        <span class="tag">Automatic</span>
+        <h3>Over your home WiFi</h3>
+        <p>Set it up once and it takes care of itself.</p>
+        <ol>
+          <li>Press the button on the back.</li>
+          <li>On your phone, join the WiFi named <b>PocketJumbotron</b>.</li>
+          <li>Choose your home WiFi and type its password.</li>
+          <li>That's it. Once a day it checks for new animations and updates.</li>
+        </ol>
+      </div>
+      <div class="tile path alt">
+        <span class="tag">No WiFi needed</span>
+        <h3>Straight from your phone</h3>
+        <p>It never connects to your home network or the internet.</p>
+        <ol>
+          <li>Press the button on the back.</li>
+          <li>On your phone, join the WiFi named <b>PocketJumbotron</b>.</li>
+          <li>A page opens. Add photos, GIFs or a short video.</li>
+          <li>Tap <b>Send</b>. The new pictures replace the old ones.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="notice">
+      <strong>Coming soon.</strong> We're writing the new software now. Your screen needs one update from a computer to switch over, and we'll walk you through it with photos. After that, updates are wireless.
+    </div>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <h2>Questions</h2>
+    <details><summary>Do I have to put it on my WiFi?</summary><p>No. Without WiFi, it keeps playing whatever is on it, and you can add new pictures straight from your phone whenever you want.</p></details>
+    <details><summary>Can an update break it?</summary><p>No. It keeps the old software until the new version has started up properly. If something goes wrong, it switches back on its own.</p></details>
+    <details><summary>Will the old HD2020 / LedArt apps still work?</summary><p>No. After the switch, the Pocket Jumbotron page on your phone replaces those apps.</p></details>
+    <details><summary>How much can it hold?</summary><p>About a dozen animations, or roughly a minute of video. Each new batch replaces the previous one, so it never runs out of space.</p></details>
+    <details><summary>Why isn't it full brightness?</summary><p>It's set a little below maximum on purpose. It's still easy to see, and it keeps the power plug and supply cool.</p></details>
+  </div>
+</section>
+
+<div class="wrap">
+  <footer>
+    <span>Pocket Jumbotron</span>
+    <span>For makers: <a href="https://github.com/hogfanboy/hd-wf2-christmas-card">source code &amp; hardware notes</a></span>
+  </footer>
+</div>
+
+<script src="panel.js"></script>
+<script>
+  const canvas = document.getElementById('panel');
+  const glow = document.querySelector('.glow');
+  const gctx = glow.getContext('2d');
+  glow.width = 128; glow.height = 64;
+  const buttons = document.querySelectorAll('.scenes button');
+  const mark = (name) => buttons.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.scene === name)));
+  const panel = PocketJumbotron.mount(canvas, { scene: 'snow', onScene: mark });
+  buttons.forEach(b => b.addEventListener('click', () => { panel.show(b.dataset.scene); mark(b.dataset.scene); }));
+  // Soft colored glow behind the card that follows the picture.
+  (function glowLoop() { gctx.drawImage(canvas, 0, 0, 128, 64); requestAnimationFrame(glowLoop); })();
+</script>
+</body>
+</html>
