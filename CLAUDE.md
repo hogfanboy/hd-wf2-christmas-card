@@ -27,6 +27,10 @@ Custom Arduino firmware to replace the stock Huidu firmware on ~15 already-deplo
 4. **Updates**: on each boot, fetch a manifest from GitHub and download any new GIFs or firmware. Use the OTA rollback so a bad image reverts on its own.
 5. **One-time cable install for recipients**: ESP Web Tools page on GitHub Pages (Chrome/Edge). Flash over USB-A to USB-A while holding S1 to enter ROM boot mode, with the card's own 5V supply unplugged.
 
+## Connecting to a card running Huidu firmware
+
+S1 is not the GPIO0 boot button. The USB-Serial/JTAG port only appears briefly at power-up before Huidu firmware takes over the USB pins. Run `tools/backup-watch.ps1`, which waits for the VID 303A port and immediately uses `esptool --before usb-reset` to drop into ROM download mode. The user holds S1 while plugging in only to lengthen that window. esptool is at `%LOCALAPPDATA%\Programs\esptool\esptool-windows-amd64\esptool.exe` (v5, hyphenated commands such as `read-flash`, not on PATH).
+
 ## Useful commands
 
 ```bash

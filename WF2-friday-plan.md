@@ -37,6 +37,12 @@ Replace Huidu firmware with our own (Arduino IDE) for much better color, and giv
 - **Fresh content through the season:** WiFi-connected cards check once a day and download that day's pack from GitHub (a manifest listing packs by date). Offline cards keep whatever was last uploaded.
 - ⚠️ **Check VBUS on Friday:** USB-A to A with the card's own 5V supply also connected may back-feed the PC port. Keep "unplug card power while on USB" until verified.
 
+## Findings from first connection (2026-11-17)
+- **Backup done**: `firmware-backup/wf2_backup_20261117_163902.bin` (8 MB, sha256 `b7893e09…f45973ec`). It's gitignored: keep copies off this PC.
+- Chip: ESP32-S3 (QFN56) rev v0.2, MAC e8:06:90:fe:ee:d0, flash 8 MB (mfr 0x1c), **DIO** mode in bootloader, no flash encryption.
+- **How connecting actually works:** S1 is *not* the boot (GPIO0) button. It's read by Huidu firmware (fast LED blink). At power-up the chip's built-in USB-Serial/JTAG enumerates (PC dings), then Huidu firmware switches the USB pins to host mode and the PC loses it. Holding S1 just delays that. Fix: catch the port as soon as it appears and run esptool with `--before usb-reset`, which resets the chip straight into ROM download mode. `tools/backup-watch.ps1` does this. The web flasher (ESP Web Tools) will need the same trick, or a 1-click retry, for the first install. Once our firmware is on, it keeps USB in device mode, so this only matters once.
+- Huidu partition table: nvs, otadata, phy_init, **ota_0 1 MB** (WFX_PRO, IDF v4.4, 2023), **ota_1 1 MB** (WF2_2, Jun 2024, active), **app_data 5 MB** (custom type 0x40, media; ~450 KB used).
+
 ## Friday agenda
 1. USB-A to USB-A cable arrives.
 2. **Back up Huidu firmware**: `esptool --chip esp32s3 read_flash 0 ALL wf2_backup.bin` (confirm size with `esptool flash_id`).

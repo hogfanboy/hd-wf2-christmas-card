@@ -13,3 +13,6 @@ build/
 Thumbs.db
 desktop.ini
 .vscode/
+
+# Local firmware dumps
+firmware-backup/
