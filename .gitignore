@@ -16,3 +16,7 @@ desktop.ini
 
 # Local firmware dumps
 firmware-backup/
+
+# Personal / copyrighted media - never commit
+media/
+tools/node_modules/
