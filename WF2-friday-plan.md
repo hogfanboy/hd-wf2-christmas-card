@@ -49,6 +49,13 @@ Replace Huidu firmware with our own (Arduino IDE) for much better color, and giv
 - **Order matters for the first flash:** the watcher script (or the web flasher's Connect) must already be waiting *before* plugging in. The port only exists while Huidu is still starting, or for as long as S1 is held. For recipients: "hold S1 the whole time until the install starts".
 - After our firmware is on, the card stays on USB normally, so reflashing needs no S1 trick.
 
+## GIF player (2026-11-17)
+- `firmware/pocket_jumbotron` plays all GIFs in LittleFS `/gifs`. Layout: 2x 1.75 MB OTA slots + 4.4 MB LittleFS (`partitions.csv`). Double-buffered, 8-bit color (library default; it can do up to 12-bit, worth an A/B test later). The library already applies CIE1931 brightness correction, so the firmware adds no gamma of its own.
+- GIF frame disposal is handled properly: the previous frame's rule is applied before the next frame. This fixed a glitch at the end of each loop on the dancing reindeer GIFs.
+- **S1 button = GPIO 17, active LOW** (found by pin scan). It will start the on-demand hotspot.
+- The user's original GIFs are on their Desktop (`Gif Files/Christmas Gif Files/P25Gifs`, `SmallGifs`). Converted copies are in `media/` (gitignored; many are commercial characters). `tools/make-gifs.mjs` resizes them. Some text-heavy GIFs still look rough at 128x64; hand-cleaning them is a later task.
+- Flashing over PC USB can drop out mid-write (likely the PC port powering the lit panel). A retry works.
+
 ## Friday agenda
 1. USB-A to USB-A cable arrives.
 2. **Back up Huidu firmware**: `esptool --chip esp32s3 read_flash 0 ALL wf2_backup.bin` (confirm size with `esptool flash_id`).

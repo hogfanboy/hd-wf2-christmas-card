@@ -12,10 +12,12 @@ static const HUB75_I2S_CFG::i2s_pins PINS = {
   /*R1*/ 2, /*G1*/ 6, /*B1*/ 10, /*R2*/ 3, /*G2*/ 7, /*B2*/ 11,
   /*A*/ 39, /*B*/ 38, /*C*/ 37, /*D*/ 36, /*E*/ 21, /*LAT*/ 33, /*OE*/ 35, /*CLK*/ 34};
 static const int W = 128, H = 64;
+static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
 static const uint8_t BRIGHTNESS = 140;        // ~55%: protects barrel jack / supply
-static const float GAMMA = 2.2f;
+// The HUB75 library already applies CIE1931 brightness correction (lumConvTab), so no extra gamma here.
+static const float GAMMA = 1.0f;
 static const uint32_t MIN_SHOW_MS = 8000;     // short GIFs loop until this long
 static const uint32_t MAX_SHOW_MS = 20000;    // long GIFs get cut off here (at a loop end)
 
@@ -51,17 +53,33 @@ int32_t gifSeek(GIFFILE *f, int32_t pos) {
   return f->iPos;
 }
 
+// GIF "disposal" says what to do with a frame's area *after* it has been shown, before the next frame.
+// 2 = clear it to background, 3 = restore what was there before it. We remember the previous frame's
+// rule and apply it when the next frame starts (including when the animation loops back to frame 1).
+struct PendingDisposal { uint8_t method; int x, y, w, h; } pending = {0, 0, 0, 0, 0};
+static uint8_t saved[H][W][3];                 // canvas snapshot for disposal 3
+
+static void fillRect(int x0, int y0, int w, int h, const uint8_t (*src)[W][3]) {
+  for (int y = std::max(0, y0); y < std::min(H, y0 + h); y++)
+    for (int x = std::max(0, x0); x < std::min(W, x0 + w); x++)
+      for (int c = 0; c < 3; c++) canvas[y][x][c] = src ? src[y][x][c] : 0;
+}
+
+static void beginFrame(GIFDRAW *d) {
+  if (pending.method == 2) fillRect(pending.x, pending.y, pending.w, pending.h, nullptr);
+  else if (pending.method == 3) fillRect(pending.x, pending.y, pending.w, pending.h, saved);
+  pending = {d->ucDisposalMethod, d->iX + offX, d->iY + offY, d->iWidth, d->iHeight};
+  if (pending.method == 3) memcpy(saved, canvas, sizeof(canvas));
+}
+
 // Called once per line of each frame: composite into the canvas (skips transparent pixels).
 void gifDraw(GIFDRAW *d) {
+  if (d->y == 0) beginFrame(d);
   int y = d->iY + d->y + offY;
   if (y < 0 || y >= H) return;
   const uint8_t *pal = d->pPalette24;
   const uint8_t *src = d->pPixels;
   int x0 = d->iX + offX;
-  // Disposal 2 ("restore to background"): clear the frame area before drawing.
-  if (d->ucDisposalMethod == 2) {
-    for (int i = 0; i < d->iWidth; i++) { int x = x0 + i; if (x >= 0 && x < W) canvas[y][x][0] = canvas[y][x][1] = canvas[y][x][2] = 0; }
-  }
   for (int i = 0; i < d->iWidth; i++) {
     uint8_t idx = src[i];
     if (d->ucHasTransparency && idx == d->ucTransparent) continue;
@@ -119,7 +137,9 @@ void setup() {
   if (!startPanel(true) && !startPanel(false)) { Serial.println("Panel init FAILED"); for (;;) delay(1000); }
   panel->setBrightness8(BRIGHTNESS);
   panel->clearScreen();
-  Serial.printf("Panel ok, double buffer: %s, free heap %u\n", doubleBuffered ? "yes" : "no", (unsigned)ESP.getFreeHeap());
+  Serial.printf("Panel ok, %d-bit color, double buffer: %s, free heap %u\n", PIXEL_COLOR_DEPTH_BITS,
+                doubleBuffered ? "yes" : "no", (unsigned)ESP.getFreeHeap());
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
 
   if (!LittleFS.begin(false)) {
     Serial.println("LittleFS mount failed");
@@ -141,6 +161,7 @@ void playOne(const String &name) {
   offX = (W - gif.getCanvasWidth()) / 2;
   offY = (H - gif.getCanvasHeight()) / 2;
   memset(canvas, 0, sizeof(canvas));
+  pending.method = 0;
   uint32_t start = millis(), frames = 0, loops = 0;
   for (;;) {
     uint32_t t0 = millis();
