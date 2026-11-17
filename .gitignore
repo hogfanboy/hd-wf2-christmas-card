@@ -1,0 +1,15 @@
+# Stock Huidu firmware backups - proprietary, keep local only
+*backup*.bin
+wf2_backup*
+
+# Arduino / PlatformIO build output
+build/
+.pio/
+*.elf
+*.map
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
