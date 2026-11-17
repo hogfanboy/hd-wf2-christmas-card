@@ -43,6 +43,12 @@ Replace Huidu firmware with our own (Arduino IDE) for much better color, and giv
 - **How connecting actually works:** S1 is *not* the boot (GPIO0) button. It's read by Huidu firmware (fast LED blink). At power-up the chip's built-in USB-Serial/JTAG enumerates (PC dings), then Huidu firmware switches the USB pins to host mode and the PC loses it. Holding S1 just delays that. Fix: catch the port as soon as it appears and run esptool with `--before usb-reset`, which resets the chip straight into ROM download mode. `tools/backup-watch.ps1` does this. The web flasher (ESP Web Tools) will need the same trick, or a 1-click retry, for the first install. Once our firmware is on, it keeps USB in device mode, so this only matters once.
 - Huidu partition table: nvs, otadata, phy_init, **ota_0 1 MB** (WFX_PRO, IDF v4.4, 2023), **ota_1 1 MB** (WF2_2, Jun 2024, active), **app_data 5 MB** (custom type 0x40, media; ~450 KB used).
 
+## First flash: color test works (2026-11-17)
+- `firmware/wf2_colortest` flashed with `tools/flash-watch.ps1`. **Pinout confirmed**: R1 2, G1 6, B1 10, R2 3, G2 7, B2 11, A 39, B 38, C 37, D 36, E 21, LAT 33, OE 35, CLK 34. The default shift-register driver works on this panel. Orientation, color bars, gradients and rainbow all look right, with 270 KB heap free after the DMA buffers.
+- Toolchain switched to **arduino-cli** (no Python needed). ESP32 core 3.3.13, HUB75 DMA lib 3.1.0.
+- **Order matters for the first flash:** the watcher script (or the web flasher's Connect) must already be waiting *before* plugging in. The port only exists while Huidu is still starting, or for as long as S1 is held. For recipients: "hold S1 the whole time until the install starts".
+- After our firmware is on, the card stays on USB normally, so reflashing needs no S1 trick.
+
 ## Friday agenda
 1. USB-A to USB-A cable arrives.
 2. **Back up Huidu firmware**: `esptool --chip esp32s3 read_flash 0 ALL wf2_backup.bin` (confirm size with `esptool flash_id`).

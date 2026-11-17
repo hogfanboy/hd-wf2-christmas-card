@@ -31,6 +31,15 @@ Custom Arduino firmware to replace the stock Huidu firmware on ~15 already-deplo
 
 S1 is not the GPIO0 boot button. The USB-Serial/JTAG port only appears briefly at power-up before Huidu firmware takes over the USB pins. Run `tools/backup-watch.ps1`, which waits for the VID 303A port and immediately uses `esptool --before usb-reset` to drop into ROM download mode. The user holds S1 while plugging in only to lengthen that window. esptool is at `%LOCALAPPDATA%\Programs\esptool\esptool-windows-amd64\esptool.exe` (v5, hyphenated commands such as `read-flash`, not on PATH).
 
+## Build and flash (arduino-cli, not on PATH)
+
+```bash
+A="/c/Users/hogfa/AppData/Local/Programs/arduino-cli/arduino-cli.exe"
+cd firmware && "$A" compile -b "esp32:esp32:esp32s3:FlashMode=dio,FlashSize=8M,PartitionScheme=default_8MB,CDCOnBoot=cdc,USBMode=hwcdc,PSRAM=disabled" --output-dir build/<sketch> <sketch>
+```
+
+Flash with `tools/flash-watch.ps1 -Bin firmware/build/<sketch>/<sketch>.ino.merged.bin`, run in a terminal tab the user can see. Start it **before** the user plugs in (holding S1). It writes the merged image at 0x0, reboots, and prints 25 s of serial log. Confirmed WF2 HUB75 pins are in `firmware/wf2_colortest/wf2_colortest.ino`. arduino-cli shares the user's Arduino IDE sketchbook and core install (`~/Documents/Arduino/libraries`), so library or core installs affect their other projects.
+
 ## Useful commands
 
 ```bash
