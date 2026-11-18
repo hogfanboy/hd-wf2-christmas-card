@@ -33,8 +33,10 @@ Custom firmware + website for ~15 LED "Christmas cards" already mailed out last 
 
 ## ✅ RUL6024 panels WORK with the library's DP3246 mode (2026-11-17)
 - The RUL6024 is NOT S-PWM after all: it's a plain shift-register driver that needs **LAT high for 3 clocks** to latch (per GitHub discussion #525 on the HUB75 DMA library; Huidu drives these as "ICN2038S"). The library's `cfg.driver = HUB75_I2S_CFG::DP3246` mode does exactly that (LAT on the last 3 pixels of each row). Card 2 then shows the color test correctly. **Most of the user's 15 cards have RUL6024 panels.**
-- Side effects being fixed: DP3246 init forces `clkphase = true` → image shifted 1 column left (draw at x+1, wrapping); the darkest gray levels drop out (trying `min_refresh_rate = 30`, and comparing 55% vs 100% brightness); camera shows a dark band (rolling shutter, invisible to the eye).
-- Next: the firmware must pick the driver per card (FM6124C cards: default; RUL6024 cards: DP3246 + shift). Idea: a setting saved in NVS, chosen in the installer or via an S1 "does this look right?" step.
+- **One firmware for both panel types (fw 0.6.0):** DP3246 mode also works on the FM6124C panel (card 1: bright, looks very good). The only difference: RUL6024 shows everything 1 column left (DP3246 forces `clkphase = true`), FM6124C doesn't. Firmware draws at x+1 when the **edge fix** setting is on (NVS `edgefix`, default ON since most cards are RUL6024; checkbox on the card's web page, `POST /api/edgefix?v=0|1`). Wrong setting = a stray line at the left (FM card with fix on) or the left column showing at the right edge (RUL card with fix off).
+- Refresh rate: `min_refresh_rate` 30 gave the smoothest gradients but whites visibly jitter; 45 still jitters; **keep the default 60** (dark grays a bit weak/raised at the very dark end).
+- Card 2 (RUL6024) is much dimmer than card 1 at the same setting, and has fixed-position noise in the lower middle-right of the bottom half (~cols 64-80, rows 56-63) on every screen. Not seen on card 1 → likely card 2's panel/connection. Unresolved.
+- Camera shows partial-frame bands at low refresh (rolling shutter, invisible to the eye).
 
 ## Panel driver chips differ between cards (found 2026-11-17)
 - Card 1 panel: **FM6124C** shift-register drivers → works with ESP32-HUB75-MatrixPanel-DMA.

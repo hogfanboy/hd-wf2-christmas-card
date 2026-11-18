@@ -44,10 +44,10 @@ static void screenOrientation() {
   dma->clearScreen();
   for (int x = 0; x < PANEL_W; x++) { px(x, 0, 80, 80, 80); px(x, PANEL_H - 1, 80, 80, 80); }
   for (int y = 0; y < PANEL_H; y++) { px(0, y, 80, 80, 80); px(PANEL_W - 1, y, 80, 80, 80); }
-  dma->fillRect(2, 2, 12, 12, dma->color565(255, 0, 0));
-  dma->fillRect(PANEL_W - 14, 2, 12, 12, dma->color565(0, 255, 0));
-  dma->fillRect(2, PANEL_H - 14, 12, 12, dma->color565(0, 0, 255));
-  dma->fillRect(PANEL_W - 14, PANEL_H - 14, 12, 12, dma->color565(255, 255, 255));
+  for (int y = 0; y < 12; y++) for (int x = 0; x < 12; x++) {
+    px(2 + x, 2 + y, 255, 0, 0);                 px(PANEL_W - 14 + x, 2 + y, 0, 255, 0);
+    px(2 + x, PANEL_H - 14 + y, 0, 0, 255);      px(PANEL_W - 14 + x, PANEL_H - 14 + y, 255, 255, 255);
+  }
   dma->setTextColor(dma->color565(255, 190, 60));
   dma->setTextSize(1);
   dma->setCursor(34, 22); dma->print("POCKET");
@@ -87,7 +87,8 @@ void setup() {
   HUB75_I2S_CFG cfg(PANEL_W, PANEL_H, 1, pins);
   cfg.clkphase = false;
   cfg.driver = HUB75_I2S_CFG::DP3246;
-  cfg.min_refresh_rate = 30;            // default 60: lower = longer LSB pulses   // RUL6024 test: library mode that holds LAT for 3 clocks
+  // RUL6024: library mode that holds LAT for 3 clocks. Refresh: 30 = best gradients but whites jitter,
+  // 45 still jitters, 60 (default) = no jitter but dark grays drop out. Using the default.
   dma = new MatrixPanel_I2S_DMA(cfg);
   if (!dma->begin()) {
     Serial.println("DMA begin FAILED (not enough memory?)");

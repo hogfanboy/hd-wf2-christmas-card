@@ -15,11 +15,15 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "0.5.0";
+static const char *FW_VERSION = "0.6.0";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
 uint8_t brightnessPct = 100;                   // user setting, saved in NVS
+// Panels come with FM6124C or RUL6024 driver chips. Both run in the library's DP3246 mode (3-clock latch),
+// but RUL6024 panels show everything one column to the left, so we draw one column to the right.
+// On by default (most cards are RUL6024); FM6124C cards turn it off on the web page. Saved in NVS.
+bool edgeShift = true;
 // The HUB75 library already applies CIE1931 brightness correction (lumConvTab), so no extra gamma here.
 static const float GAMMA = 1.0f;
 static const uint32_t MIN_SHOW_MS = 8000;     // short GIFs loop until this long
@@ -109,11 +113,12 @@ void gifDraw(GIFDRAW *d) {
 
 // Single-buffered: only pixels that changed since the last push are redrawn, which keeps each update
 // short (less chance of a visible half-drawn frame). "shown" mirrors what the panel displays.
+static inline int colX(int x) { return edgeShift ? (x + 1) % W : x; }
 void pushCanvas() {
   if (doubleBuffered || !shown || !shownValid) {
     for (int y = 0; y < H; y++)
       for (int x = 0; x < W; x++)
-        panel->drawPixelRGB888(x, y, gammaLut[canvas[y][x][0]], gammaLut[canvas[y][x][1]], gammaLut[canvas[y][x][2]]);
+        panel->drawPixelRGB888(colX(x), y, gammaLut[canvas[y][x][0]], gammaLut[canvas[y][x][1]], gammaLut[canvas[y][x][2]]);
     if (doubleBuffered) panel->flipDMABuffer();
     if (shown) { memcpy(shown, canvas, CANVAS_BYTES); shownValid = true; }
     return;
@@ -122,7 +127,7 @@ void pushCanvas() {
     for (int x = 0; x < W; x++) {
       uint8_t *c = canvas[y][x], *o = shown[y][x];
       if (c[0] == o[0] && c[1] == o[1] && c[2] == o[2]) continue;
-      panel->drawPixelRGB888(x, y, gammaLut[c[0]], gammaLut[c[1]], gammaLut[c[2]]);
+      panel->drawPixelRGB888(colX(x), y, gammaLut[c[0]], gammaLut[c[1]], gammaLut[c[2]]);
       o[0] = c[0]; o[1] = c[1]; o[2] = c[2];
     }
 }
@@ -164,7 +169,8 @@ void playerFree() {
 
 bool startPanel(bool dbl) {
   HUB75_I2S_CFG cfg(W, H, 1, PINS);
-  cfg.clkphase = false;
+  cfg.clkphase = false;                 // (DP3246 mode forces this back to true)
+  cfg.driver = HUB75_I2S_CFG::DP3246;   // works on both FM6124C and RUL6024 panels
   cfg.double_buff = dbl;
   panel = new MatrixPanel_I2S_DMA(cfg);
   if (panel->begin()) { doubleBuffered = dbl; return true; }
