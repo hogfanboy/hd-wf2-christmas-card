@@ -6,7 +6,13 @@ Pocket Jumbotron: replacement firmware for Huidu HD-WF2 LED cards (ESP32-S3, 8 M
 This folder is the clone of github.com/hogfanboy/hd-wf2-christmas-card (public). Pushing to `main` makes GitHub Actions
 build the firmware and publish `docs/` (website + online installer) to GitHub Pages.
 
-**Read [PROGRESS.md](PROGRESS.md) first.** [PROJECT-NOTES.md](PROJECT-NOTES.md) has full history and gotchas; read only the part you need.
+**Read [PROGRESS.md](PROGRESS.md) first.** [PROJECT-NOTES.md](PROJECT-NOTES.md) is the spec and settled truth (features, hardware, panel setup, decisions, gotchas); read only the part you need.
+
+## Docs (four files, one job each)
+- `CLAUDE.md`: permanent rules and commands only. No brainstorming.
+- `PROGRESS.md`: current target, what just broke, next step. If an idea changes direction, replace the old target.
+- `PROJECT-NOTES.md`: the spec (acts as the FSD) and settled truth. Add only things that are built and verified; no history or failed attempts.
+- `IDEAS.md`: backlog and parking lot for untested ideas. Don't read it unless asked or when picking the next task. When the user says "park this", append one line under "Backlog / Parking Lot" and go back to the current task without discussing it. At session end, if asked, promote verified items to PROJECT-NOTES.md and remove them.
 
 ## Rules
 - Don't read `firmware/build/`, `tools/node_modules/`, `~/.arduino15`, Arduino `libraries/`, `firmware-backup/` or `media/` unless asked.

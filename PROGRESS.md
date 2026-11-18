@@ -19,12 +19,9 @@
 - Registers persist until panel power-off, so test variants per power-up with an NVS counter.
 
 ## Key decisions
-- Claude codes and tests; the user handles hardware and judges by eye, using test-card probes rather than photos.
-- Before flashing over USB, check the MAC (`esptool read-mac`) and use `flash-watch.ps1 -WaitGone` so the right card gets flashed.
-- Never commit `media/` or `firmware-backup/` (gitignored). Commit as hogfanboy noreply identity.
+- One firmware and one panel setup for every card (no per-chip detection).
 
 ## Next
 - User checks card 1 on 0.6.2 by eye: edges, half alignment, lower-left noise during the WiFi text.
 - Confirm the CI installer build for 0.6.2 succeeded.
-- Backlog: daily content packs, short videos, website update for the home-WiFi flow, installer backs up Huidu first,
-  dark-gray weakness at 60 Hz, Pixel 10a reachability, VBUS check.
+- After that, pick the next task from IDEAS.md (backlog).
