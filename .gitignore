@@ -20,3 +20,6 @@ firmware-backup/
 # Personal / copyrighted media - never commit
 media/
 tools/node_modules/
+
+# Built by tools/build-install.mjs (published by GitHub Actions, not committed)
+docs/firmware/

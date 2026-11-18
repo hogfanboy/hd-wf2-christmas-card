@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Install Pocket Jumbotron</title>
+<meta name="description" content="One-time switch of your screen to the Pocket Jumbotron software.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0b0b12; --bg2:#13131d; --line:#262636; --text:#ecebf5; --muted:#a3a2b8; --gold:#ffbe3c; --cyan:#5ac8ff; --red:#ff4d6a; --green:#4ee08a; --radius:14px; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:17px/1.6 Inter,system-ui,sans-serif; }
+  a { color:var(--cyan); }
+  .wrap { max-width:760px; margin:0 auto; padding:0 16px; }
+  header { display:flex; align-items:center; justify-content:space-between; padding:18px 0; }
+  .logo { font-family:Silkscreen,monospace; font-size:20px; color:var(--gold); text-decoration:none; text-shadow:0 0 12px rgba(255,190,60,.45); }
+  .logo span { color:var(--cyan); text-shadow:0 0 12px rgba(90,200,255,.45); }
+  nav a { color:var(--muted); text-decoration:none; margin-left:18px; font-size:15px; }
+  h1 { font-size:clamp(28px,5vw,42px); line-height:1.1; margin:18px 0 10px; letter-spacing:-.5px; }
+  .lede { color:var(--muted); margin:0 0 24px; }
+  .box { background:var(--bg2); border:1px solid var(--line); border-radius:var(--radius); padding:20px 22px; margin-bottom:14px; }
+  .warn { border-color:rgba(255,190,60,.4); background:rgba(255,190,60,.07); }
+  .err { border-color:rgba(255,77,106,.5); background:rgba(255,77,106,.08); }
+  ol.steps { counter-reset:s; list-style:none; padding:0; margin:0; }
+  ol.steps > li { counter-increment:s; position:relative; padding:0 0 18px 48px; }
+  ol.steps > li::before { content:counter(s); position:absolute; left:0; top:-2px; width:34px; height:34px; border-radius:50%; background:#24243a; border:1px solid var(--line);
+    display:grid; place-items:center; font-weight:800; color:var(--gold); }
+  ol.steps b { color:var(--text); }
+  .steps .muted { color:var(--muted); font-size:15px; }
+  button { font:700 18px Inter,system-ui,sans-serif; border:0; border-radius:12px; padding:15px 22px; cursor:pointer; background:var(--gold); color:#1a1300; width:100%; }
+  button:disabled { opacity:.45; cursor:default; }
+  .bar { height:12px; border-radius:999px; background:#22222f; overflow:hidden; margin:12px 0 6px; }
+  .bar i { display:block; height:100%; width:0; background:var(--green); transition:width .2s; }
+  #status { font-weight:600; min-height:27px; }
+  .ok { color:var(--green); } .bad { color:var(--red); }
+  details { margin-top:12px; color:var(--muted); font-size:14px; }
+  pre { white-space:pre-wrap; word-break:break-word; max-height:220px; overflow:auto; background:#0a0a10; border-radius:8px; padding:10px; font-size:12px; }
+  footer { border-top:1px solid var(--line); margin-top:30px; padding:24px 0 40px; color:var(--muted); font-size:14px; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="logo" href="./">Pocket <span>Jumbotron</span></a>
+    <nav><a href="./">Home</a></nav>
+  </header>
+
+  <h1>Switch your screen to the new software</h1>
+  <p class="lede">A one-time job, about 2 minutes. After this, updates and new pictures arrive over WiFi.</p>
+
+  <div class="box err" id="unsupported" hidden>
+    <b>This needs Google Chrome or Microsoft Edge on a computer</b> (Windows, Mac or Chromebook). Phones and Safari/Firefox can't talk to the screen over USB.
+  </div>
+
+  <div class="box" id="needs">
+    <b>You need:</b> your screen, the <b>USB cable with the same flat plug on both ends</b> (USB-A to USB-A), and a computer with Chrome or Edge.
+  </div>
+
+  <div class="box">
+    <ol class="steps">
+      <li><b>Unplug the screen's power supply.</b> <span class="muted">The computer powers it during the install.</span></li>
+      <li><b>Press and hold the button on the back</b> of the screen (marked <b>S1</b>). <span class="muted">Keep holding it through the next two steps.</span></li>
+      <li><b>Still holding the button, plug the USB cable</b> into the screen and into the computer.</li>
+      <li><b>Click the button below</b>, choose <b>"USB JTAG/serial debug unit"</b> in the list, and click <b>Connect</b>.</li>
+      <li><b>Let go of the button</b> when it says <i>Installing</i>, and wait for <i>Done</i>. <span class="muted">Don't unplug anything while it works.</span></li>
+    </ol>
+    <button id="go" disabled>Loading software…</button>
+    <div class="bar"><i id="bar"></i></div>
+    <div id="status"></div>
+    <details><summary>Technical details</summary><pre id="log"></pre></details>
+  </div>
+
+  <div class="box warn" id="retry" hidden>
+    <b>Didn't catch the screen?</b> No problem. Unplug the USB cable, <b>hold the button</b>, and plug it back in. This page notices and restarts the install by itself.
+  </div>
+
+  <div class="box" id="done" hidden>
+    <div class="ok" style="font-size:22px;font-weight:800">Done! 🎉</div>
+    <ol>
+      <li>Unplug the USB cable and plug the screen's own power supply back in.</li>
+      <li>The screen plays a few starter animations and says <b>"Hold the button 2 sec to set up"</b>.</li>
+      <li>Hold the button for 2 seconds and follow the screen: join its WiFi on your phone and pick your home WiFi.</li>
+      <li>Then the screen shows its web address. Open it on any phone or computer on your WiFi to add your own pictures.</li>
+    </ol>
+  </div>
+
+  <footer>Problems? The old software can always be put back, and the screen can't be damaged by trying again.</footer>
+</div>
+
+<script type="module">
+import { ESPLoader, Transport } from './vendor/esptool-js-0.7.1.js';
+
+const ESPRESSIF_VID = 0x303a;
+const $ = (id) => document.getElementById(id);
+const log = (s) => { $('log').textContent += s; $('log').scrollTop = 1e9; };
+const status = (s, cls = '') => { $('status').className = cls; $('status').textContent = s; };
+const progress = (f) => { $('bar').style.width = Math.round(f * 100) + '%'; };
+const terminal = { clean() {}, writeLine(d) { log(d + '\n'); }, write(d) { log(d); } };
+
+let image = null, info = null, busy = false, armed = false;
+
+if (!('serial' in navigator)) {
+  $('unsupported').hidden = false;
+  $('go').textContent = 'Use Chrome or Edge on a computer';
+} else {
+  loadImage();
+}
+
+// Download the software first, so the install can start the moment the screen is caught.
+async function loadImage() {
+  try {
+    info = await (await fetch('firmware/info.json', { cache: 'no-store' })).json();
+    const r = await fetch('firmware/' + info.install.file, { cache: 'no-store' });
+    const total = +r.headers.get('content-length') || info.install.size;
+    const reader = r.body.getReader(), chunks = [];
+    let got = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value); got += value.length;
+      progress(got / total * 0.999);
+      status(`Downloading the software… ${Math.round(got / total * 100)}%`);
+    }
+    image = new Uint8Array(got);
+    let o = 0; for (const c of chunks) { image.set(c, o); o += c.length; }
+    const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', image))).map(b => b.toString(16).padStart(2, '0')).join('');
+    if (digest !== info.install.sha256) throw new Error('download was damaged, please reload the page');
+    progress(0);
+    status(`Software version ${info.version} ready.`);
+    $('go').disabled = false;
+    $('go').textContent = 'Connect to the screen';
+  } catch (e) {
+    status('Couldn\'t download the software: ' + e.message, 'bad');
+  }
+}
+
+$('go').onclick = async () => {
+  armed = true;
+  let port;
+  try {
+    port = await navigator.serial.requestPort({ filters: [{ usbVendorId: ESPRESSIF_VID }] });
+  } catch {
+    status('No screen chosen. Make sure you\'re holding the button while plugging in, then try again.', 'bad');
+    $('retry').hidden = false;
+    return;
+  }
+  install(port);
+};
+
+// The screen's USB connection only lasts a moment unless the button is held. Once Chrome has been
+// given permission, re-plugging fires a "connect" event and we start again without any dialog.
+navigator.serial?.addEventListener('connect', (e) => {
+  if (armed && !busy) { log('\n[screen plugged in again]\n'); install(e.target); }
+});
+
+async function install(port) {
+  if (busy || !image) return;
+  busy = true;
+  $('go').disabled = true; $('retry').hidden = true;
+  let transport;
+  try {
+    status('Connecting to the screen…');
+    transport = new Transport(port, false);
+    const loader = new ESPLoader({ transport, baudrate: 921600, terminal, debugLogging: false });
+    const chip = await loader.main();                 // resets the chip into install mode (USB reset)
+    log(`\nChip: ${chip}\n`);
+    if (!/ESP32-S3/i.test(chip)) throw new Error(`this doesn't look like a Pocket Jumbotron (found ${chip})`);
+    status('Installing… you can let go of the button now. Don\'t unplug anything.');
+    await loader.writeFlash({
+      fileArray: [{ data: image, address: 0 }],
+      flashSize: 'keep', flashMode: 'keep', flashFreq: 'keep', eraseAll: false, compress: true,
+      reportProgress: (_i, written, total) => { progress(written / total); status(`Installing… ${Math.round(written / total * 100)}%  (don't unplug anything)`); },
+    });
+    status('Restarting the screen…');
+    await loader.after('hard_reset');
+    try { await transport.disconnect(); } catch {}
+    progress(1);
+    status('Done!', 'ok');
+    $('done').hidden = false;
+    $('go').textContent = 'Installed';
+    armed = false;
+  } catch (e) {
+    log('\nERROR: ' + (e && e.message || e) + '\n');
+    try { await transport?.disconnect(); } catch {}
+    status('Lost the connection to the screen before it finished.', 'bad');
+    $('retry').hidden = false;
+    $('go').disabled = false;
+    $('go').textContent = 'Try again';
+  }
+  busy = false;
+}
+</script>
+</body>
+</html>

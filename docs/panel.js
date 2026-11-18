@@ -15,6 +15,31 @@
     ' ':[0,0,0,0,0]
   };
 
+  // Pixel drawing into an RGBA buffer (128x64). Shared by the website and tools/make-starter.mjs.
+  function makeDrawer(buf) {
+    function set(x, y, r, g, b) {
+      x |= 0; y |= 0;
+      if (x < 0 || y < 0 || x >= W || y >= H) return;
+      const i = (y * W + x) * 4;
+      buf[i] = r; buf[i + 1] = g; buf[i + 2] = b; buf[i + 3] = 255;
+    }
+    function clear() { for (let i = 0; i < buf.length; i += 4) { buf[i] = buf[i+1] = buf[i+2] = 0; buf[i+3] = 255; } }
+    function text(str, x0, y0, color, size) {
+      size = size || 1;
+      let x = x0;
+      for (const ch of str) {
+        const cols = FONT[ch] || FONT[' '];
+        for (let c = 0; c < 5; c++) for (let row = 0; row < 7; row++)
+          if (cols[c] >> row & 1)
+            for (let dy = 0; dy < size; dy++) for (let dx = 0; dx < size; dx++)
+              set(x + c * size + dx, y0 + row * size + dy, ...(typeof color === 'function' ? color(x + c * size, y0 + row * size) : color));
+        x += 6 * size;
+      }
+      return x - x0;
+    }
+    return { set, clear, text };
+  }
+
   function makePanel(canvas) {
     const src = document.createElement('canvas');
     src.width = W; src.height = H;
@@ -41,26 +66,7 @@
       }
     }
 
-    function set(x, y, r, g, b) {
-      x |= 0; y |= 0;
-      if (x < 0 || y < 0 || x >= W || y >= H) return;
-      const i = (y * W + x) * 4;
-      buf[i] = r; buf[i + 1] = g; buf[i + 2] = b; buf[i + 3] = 255;
-    }
-    function clear() { for (let i = 0; i < buf.length; i += 4) { buf[i] = buf[i+1] = buf[i+2] = 0; buf[i+3] = 255; } }
-    function text(str, x0, y0, color, size) {
-      size = size || 1;
-      let x = x0;
-      for (const ch of str) {
-        const cols = FONT[ch] || FONT[' '];
-        for (let c = 0; c < 5; c++) for (let row = 0; row < 7; row++)
-          if (cols[c] >> row & 1)
-            for (let dy = 0; dy < size; dy++) for (let dx = 0; dx < size; dx++)
-              set(x + c * size + dx, y0 + row * size + dy, ...(typeof color === 'function' ? color(x + c * size, y0 + row * size) : color));
-        x += 6 * size;
-      }
-      return x - x0;
-    }
+    const { set, clear, text } = makeDrawer(buf);
     function present() {
       sctx.putImageData(img, 0, 0);
       ctx.imageSmoothingEnabled = false;
@@ -82,7 +88,7 @@
   // ---- Scenes ----
   const flakes = Array.from({ length: 70 }, () => ({ x: Math.random() * W, y: Math.random() * H, v: 0.15 + Math.random() * 0.45 }));
   const scenes = {
-    snow(p, t) {
+    snow(p, t, opts) {
       for (let y = 0; y < H; y++) { const k = y / H; for (let x = 0; x < W; x++) p.set(x, y, 4, 8 + 20 * k, 30 + 40 * k); }
       // ground + tree
       for (let x = 0; x < W; x++) for (let y = 56 + Math.round(Math.sin(x / 9) * 1.5); y < H; y++) p.set(x, y, 200, 210, 230);
@@ -91,7 +97,7 @@
       const tw = (Math.sin(t / 150) + 1) / 2; p.set(108, 26, 255, 220 * tw + 35, 40); p.set(107, 27, 255, 200, 40); p.set(109, 27, 255, 200, 40);
       [[104,36],[112,40],[102,46],[110,50],[106,42]].forEach(([x, y], i) => { const on = Math.sin(t / 200 + i * 1.7) > 0; p.set(x, y, on ? 255 : 90, on ? 60 : 20, on ? 60 : 20); });
       for (const f of flakes) { f.y += f.v; f.x += Math.sin((t / 700) + f.y / 7) * 0.15; if (f.y > H) { f.y = -1; f.x = Math.random() * W; } p.set(f.x, f.y, 235, 240, 255); }
-      const msg = 'MERRY CHRISTMAS!', w = msg.length * 12;
+      const msg = (opts && opts.msg) || 'MERRY CHRISTMAS!', w = msg.length * 12;
       const x = W - ((t / 28) % (w + W));
       p.text(msg, x, 6, (cx) => hsv(((cx + t / 12) / 160) % 1, 0.65, 1), 2);
     },
@@ -111,7 +117,7 @@
     }
   };
 
-  window.PocketJumbotron = { mount(canvas, opts) {
+  window.PocketJumbotron = { W, H, scenes, makeDrawer, mount(canvas, opts) {
     const p = makePanel(canvas);
     let current = (opts && opts.scene) || 'snow', last = performance.now(), auto = true, sceneStart = last;
     const order = Object.keys(scenes);

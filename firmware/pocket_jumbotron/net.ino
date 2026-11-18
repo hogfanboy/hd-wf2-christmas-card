@@ -333,7 +333,11 @@ void portalStop() {
 
 // ---------- Start / service ----------
 void netBegin() {
-  if (staSsid.isEmpty()) { Serial.println("No home WiFi saved (hold S1 2 s to set up)"); return; }
+  if (staSsid.isEmpty()) {
+    Serial.println("No home WiFi saved (hold S1 2 s to set up)");
+    showAddress(15000);                          // tells a new owner to hold the button
+    return;
+  }
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(hostName.c_str());
   WiFi.setAutoReconnect(true);
