@@ -2,7 +2,20 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**Read [PROJECT-NOTES.md](PROJECT-NOTES.md) first.** It has the current state, decisions, gotchas and backlog. Keep it current.
+**Read [PROGRESS.md](PROGRESS.md) first** (short current state). [PROJECT-NOTES.md](PROJECT-NOTES.md) has the full history, gotchas and backlog; read the part you need.
+
+## Hardware & Build Rules
+- Target MCU: ESP32-S3 (Huidu HD-WF2 board, 8 MB flash, no PSRAM) driving a 128x64 HUB75 panel, 1/32 scan.
+- Build/Flash command: `arduino-cli compile` (full line under **Build** below), then `tools/flash-watch.ps1` (under **Flash**).
+- Never read vendor SDK folders (`~/.arduino15`, the Arduino `libraries/` folder), `build/`, `firmware/build/`, `.pio/`, `node_modules/`, `firmware-backup/` or `media/` unless explicitly asked.
+
+## Context & Token Management Protocol
+- Maintain a concise `PROGRESS.md` file in the root directory (keep under 60 lines).
+- After completing any driver, feature, or bug fix, update `PROGRESS.md` with:
+  1. Current working state & verified hardware pins/peripherals.
+  2. Active bug or immediate next task.
+  3. Key architectural decisions (do NOT include old failed attempts).
+- Whenever a task is finished and `PROGRESS.md` is updated, explicitly remind me: "Task complete and PROGRESS.md updated. Ready for /clear."
 
 ## Layout
 - `firmware/pocket_jumbotron/`: the firmware (Arduino sketch). `pocket_jumbotron.ino` = panel, GIF player, button, main loop. `net.ino` = home WiFi + web server/API, WiFi-setup hotspot, settings (NVS), OTA. `rollback.cpp` = OTA rollback hook. `partitions.csv` = flash layout. `web_index.h` is **generated**; don't edit it.
