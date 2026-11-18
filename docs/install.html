@@ -61,10 +61,10 @@
 
   <div class="box">
     <ol class="steps">
-      <li><b>Unplug the screen's power supply.</b> <span class="muted">The computer powers it during the install.</span></li>
-      <li><b>Press and hold the button on the back</b> of the screen (marked <b>S1</b>). <span class="muted">Keep holding it through the next two steps.</span></li>
-      <li><b>Still holding the button, plug the USB cable</b> into the screen and into the computer.</li>
-      <li><b>Click the button below</b>, choose <b>"USB JTAG/serial debug unit"</b> in the list, and click <b>Connect</b>.</li>
+      <li><b>Unplug the screen's power supply</b>, and plug the USB cable into the <b>computer only</b> for now. <span class="muted">The computer powers the screen during the install.</span></li>
+      <li><b>Click the yellow button below.</b> A small window opens listing devices. It's empty for now; leave it open.</li>
+      <li><b>Press and hold the button on the back</b> of the screen (marked <b>S1</b>) and, <b>still holding it, plug the cable into the screen.</b></li>
+      <li>Within a second or two <b>"USB JTAG/serial debug unit"</b> appears in the window. <b>Click it, then click Connect.</b> <span class="muted">Keep holding the button.</span></li>
       <li><b>Let go of the button</b> when it says <i>Installing</i>, and wait for <i>Done</i>. <span class="muted">Don't unplug anything while it works.</span></li>
     </ol>
     <button id="go" disabled>Loading software…</button>
@@ -74,7 +74,7 @@
   </div>
 
   <div class="box warn" id="retry" hidden>
-    <b>Didn't catch the screen?</b> No problem. Unplug the USB cable, <b>hold the button</b>, and plug it back in. This page notices and restarts the install by itself.
+    <b>Didn't catch the screen?</b> No problem. Unplug the cable from the screen, click the yellow button again, then <b>hold the button and plug it back in</b>. If you've connected once before, the page notices by itself and no window is needed.
   </div>
 
   <div class="box" id="done" hidden>
@@ -131,7 +131,7 @@ async function loadImage() {
     progress(0);
     status(`Software version ${info.version} ready.`);
     $('go').disabled = false;
-    $('go').textContent = 'Connect to the screen';
+    $('go').textContent = 'Open the device window';
   } catch (e) {
     status('Couldn\'t download the software: ' + e.message, 'bad');
   }
@@ -143,7 +143,7 @@ $('go').onclick = async () => {
   try {
     port = await navigator.serial.requestPort({ filters: [{ usbVendorId: ESPRESSIF_VID }] });
   } catch {
-    status('No screen chosen. Make sure you\'re holding the button while plugging in, then try again.', 'bad');
+    status('The window closed before the screen was chosen. Click the yellow button first, then hold the screen\'s button and plug it in.', 'bad');
     $('retry').hidden = false;
     return;
   }
