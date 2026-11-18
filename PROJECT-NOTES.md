@@ -44,13 +44,14 @@ Custom firmware + website for ~15 LED "Christmas cards" already mailed out last 
 - Arduino `.ino` files are concatenated. Globals used across files must be declared in the main `.ino` before use. A C-linkage override (`verifyRollbackLater`) must live in a `.cpp` file.
 
 ## Next steps (backlog, roughly in priority order)
-1. Done: single buffer + upload fix (fw 0.4.2). Wireless firmware update + rollback confirmation verified on the card. Flicker check by the user pending.
+1. Done: single buffer + upload fix (fw 0.4.2). Wireless firmware update + rollback confirmation verified on the card. User checked: no flicker, looks the same as double-buffered.
 2. **First-install path for recipients**: GitHub Actions builds firmware + a default content image; ESP Web Tools flasher page on GitHub Pages; handle the "catch the port at power-up / hold S1" step; photo instructions.
 3. **Daily fresh content from GitHub**: manifest of dated packs, downloaded once a day, replaces the content (respect the ~4.3 MB limit).
-4. Update the website for the home-WiFi flow (setup steps, the S1 address screen, `pocketjumbo-xxxx.local`).
-5. Phone reachability on home WiFi: test another phone; explain guest network / AP isolation in the help.
-6. Color depth A/B (8 vs 10/12-bit); text-heavy GIF cleanup; video (JPEG-frame format); people with no home WiFi.
-7. ⚠️ VBUS check: with a USB-A to A cable *and* the card's own supply connected, does it back-feed the PC port? Until checked: unplug the card's supply while on USB.
+4. **Short videos**: the user wants them. Plan: convert on the phone/PC into a compact JPEG-frame file (full color, unlike GIF's 256 colors), decoded on the card with JPEGDEC. Trim clips to fit the ~4.3 MB limit.
+5. Update the website for the home-WiFi flow (setup steps, the S1 address screen, `pocketjumbo-xxxx.local`).
+6. Phone reachability on home WiFi: test another phone; explain guest network / AP isolation in the help.
+7. Color depth A/B (8 vs 10/12-bit); text-heavy GIF cleanup; people with no home WiFi.
+8. ⚠️ VBUS check: with a USB-A to A cable *and* the card's own supply connected, does it back-feed the PC port? Until checked: unplug the card's supply while on USB.
 
 ## Separate track (later): Waveshare ESP32-S3-RGB-Matrix
 3 boards ordered (N32R16, microSD, ES8311 audio, USB-C; no speaker included, so a 4–8 Ω speaker is needed). Idea: MJPEG video + audio from SD. Confirm it drives a 128x64 panel (2x 64x64 chained). Don't mix assumptions with the WF2 (it has no PSRAM). Distribute only your own family video, not commercial specials.
