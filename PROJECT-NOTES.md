@@ -31,6 +31,12 @@ Custom firmware + website for ~15 LED "Christmas cards" already mailed out last 
 - Stored format is 128x64 GIF. Each frame has 254 quantized colors + exact black + 1 transparent slot, and only pixels that changed are stored. The converter trims plain borders and fills letterbox bars with the image's own edge color when the edge is plain, otherwise black.
 - Planned: WiFi cards fetch a fresh content pack from GitHub daily during the season.
 
+## ⚠️ Panel driver chips differ between cards (found 2026-11-17)
+- Card 1 panel: plain shift-register drivers → works with ESP32-HUB75-MatrixPanel-DMA.
+- **Card 2 panel: RUL6024 = S-PWM driver** (on-chip frame memory + PWM). Listed as NOT supported by the library (README "Unsupported Panels": RUL6024, MBI6024, ICN2053...). Browser install on card 2 worked (log shows the player running), but **the panel stays dark**. Card 2's Huidu firmware was NOT backed up before the install.
+- The ICN2053 fork (github.com/LAutour/ESP32-HUB75-MatrixPanel-DMA-ICN2053, 2023) uses the original ESP32's I2S parallel mode, so it **doesn't run on the ESP32-S3** (LCD_CAM) without a port. No public RUL6024 datasheet found.
+- Before mailing the installer: find out which of the 15 cards have which panel chip; the install page should warn/check and **back up Huidu first** (esptool-js read-flash → download).
+
 ## Gotchas (learned the hard way)
 - **First flash of a Huidu card**: the USB port exists only briefly at power-up (Huidu then switches USB to host mode), or for as long as S1 is held. A watcher must be running *before* plugging in. `esptool --before usb-reset` then forces ROM download mode (`tools/backup-watch.ps1`, `tools/flash-watch.ps1`). With our firmware on, USB stays up, so no trick is needed.
 - Flashing over PC USB can drop mid-write (the PC port also powers the lit panel). A retry works.
