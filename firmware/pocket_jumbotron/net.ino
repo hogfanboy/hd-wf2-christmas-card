@@ -212,6 +212,7 @@ static void handleEdgeFix() {
   touch();
   edgeShift = web->arg("v") == "1";
   prefs.putBool("edgefix", edgeShift);
+  if (edgeShift) rulPanelInit();
   shownValid = false;                 // redraw every pixel in the new position
   panel->clearScreen();
   sendJson("{\"ok\":true}");

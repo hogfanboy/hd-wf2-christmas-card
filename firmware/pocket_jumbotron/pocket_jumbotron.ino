@@ -6,6 +6,8 @@
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
 #include <vector>
 #include <algorithm>
+#include "soc/gpio_struct.h"
+#include "driver/gpio.h"
 
 // ---- Hardware (confirmed on WF2 V7.2, see PROJECT-NOTES.md) ----
 static const HUB75_I2S_CFG::i2s_pins PINS = {
@@ -15,7 +17,7 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "0.6.0";
+static const char *FW_VERSION = "0.6.1";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
@@ -113,6 +115,33 @@ void gifDraw(GIFDRAW *d) {
 
 // Single-buffered: only pixels that changed since the last push are redrawn, which keeps each update
 // short (less chance of a visible half-drawn frame). "shown" mirrors what the panel displays.
+// RUL6024 panels read the driver chips' hidden config registers the FM6126A/ICN2038S way (REG1 latched
+// with LAT high for the last 12 clocks, REG2 for 13). The library's DP3246 init writes them with 11/12,
+// which leaves the dark grays poor; rewriting them like this smooths the gray ramp (brightness unchanged).
+// The pins are taken from the LCD peripheral for a moment as plain GPIO, then handed back.
+static void panelRegWrite(const bool reg[16], int latClocks) {
+  const uint8_t steal[] = {PINS.r1, PINS.g1, PINS.b1, PINS.r2, PINS.g2, PINS.b2, PINS.clk, PINS.lat, PINS.oe};
+  const uint8_t data[] = {PINS.r1, PINS.g1, PINS.b1, PINS.r2, PINS.g2, PINS.b2};
+  uint32_t saved[sizeof(steal)];
+  gpio_set_level((gpio_num_t)PINS.oe, 1); gpio_set_level((gpio_num_t)PINS.lat, 0); gpio_set_level((gpio_num_t)PINS.clk, 0);
+  for (int i = 0; i < (int)sizeof(steal); i++) { saved[i] = GPIO.func_out_sel_cfg[steal[i]].val; GPIO.func_out_sel_cfg[steal[i]].val = 0x100; }
+  for (int l = 0; l < W; l++) {
+    for (uint8_t p : data) gpio_set_level((gpio_num_t)p, reg[l % 16]);
+    if (l == W - latClocks) gpio_set_level((gpio_num_t)PINS.lat, 1);
+    gpio_set_level((gpio_num_t)PINS.clk, 1); gpio_set_level((gpio_num_t)PINS.clk, 0);
+  }
+  gpio_set_level((gpio_num_t)PINS.lat, 0);
+  for (uint8_t p : data) gpio_set_level((gpio_num_t)p, 0);
+  gpio_set_level((gpio_num_t)PINS.clk, 1); gpio_set_level((gpio_num_t)PINS.clk, 0);
+  for (int i = 0; i < (int)sizeof(steal); i++) GPIO.func_out_sel_cfg[steal[i]].val = saved[i];
+}
+void rulPanelInit() {
+  static const bool REG1[16] = {0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0};
+  static const bool REG2[16] = {0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0};
+  panelRegWrite(REG1, 12);
+  panelRegWrite(REG2, 13);
+}
+
 static inline int colX(int x) { return edgeShift ? (x + 1) % W : x; }
 void pushCanvas() {
   if (doubleBuffered || !shown || !shownValid) {
@@ -186,6 +215,7 @@ void setup() {
 
   if (!startPanel(USE_DOUBLE_BUFFER) && !startPanel(false)) { Serial.println("Panel init FAILED"); for (;;) delay(1000); }
   settingsLoad();
+  if (edgeShift) rulPanelInit();   // edge fix on = RUL6024 panel
   applyBrightness();
   panel->clearScreen();
   Serial.printf("Panel ok, %d-bit color, double buffer: %s, free heap %u\n", PIXEL_COLOR_DEPTH_BITS,

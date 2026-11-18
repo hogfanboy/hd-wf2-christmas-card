@@ -2,7 +2,7 @@
 # writes a merged firmware image at 0x0, reboots it and shows its serial log.
 # Usage: tools\flash-watch.ps1 -Bin firmware\build\wf2_colortest\wf2_colortest.ino.merged.bin
 #    or: tools\flash-watch.ps1 -Images "0x0=boot.bin","0x8000=parts.bin","0x10000=app.bin","0x390000=littlefs.bin"
-param([string]$Bin, [string[]]$Images, [int]$TimeoutSec = 180, [int]$LogSec = 25)
+param([string]$Bin, [string[]]$Images, [int]$TimeoutSec = 180, [int]$LogSec = 25, [switch]$WaitGone)
 $esptool = "$env:LOCALAPPDATA\Programs\esptool\esptool-windows-amd64\esptool.exe"
 $writeArgs = @()
 if ($Bin) { $Bin = (Resolve-Path $Bin).Path; $writeArgs = @('0x0', $Bin) }
@@ -17,6 +17,10 @@ function Find-CardPort {
   }
 }
 
+if ($WaitGone -and (Find-CardPort)) {   # a card is still plugged in: wait until it is unplugged first
+  Write-Host "A card is still plugged in. Unplug it first..."
+  while (Find-CardPort) { Start-Sleep -Milliseconds 300 }
+}
 Write-Host "Flashing $Bin"
 Write-Host "Waiting for the card... (plug it in now)"
 $deadline = (Get-Date).AddSeconds($TimeoutSec)
