@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pocket Jumbotron WiFi</title>
+<style>
+  :root { --bg:#0b0b12; --bg2:#15151f; --line:#2a2a3a; --text:#ecebf5; --muted:#a3a2b8; --gold:#ffbe3c; --cyan:#5ac8ff; --red:#ff5a6e; --green:#4ee08a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  main { max-width:480px; margin:0 auto; padding:16px; }
+  h1 { font-size:22px; margin:4px 0; color:var(--gold); } h1 span { color:var(--cyan); }
+  .muted { color:var(--muted); font-size:14px; }
+  .box { background:var(--bg2); border:1px solid var(--line); border-radius:14px; padding:16px; margin-top:14px; }
+  .net { display:flex; align-items:center; gap:10px; padding:12px; border:1px solid var(--line); border-radius:10px; margin-top:8px; cursor:pointer; }
+  .net.on { border-color:var(--cyan); background:#10202b; }
+  .net b { flex:1; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bars { font-size:12px; color:var(--muted); }
+  input[type=text], input[type=password] { width:100%; font-size:17px; padding:12px; border-radius:10px; border:1px solid var(--line); background:#0f0f18; color:var(--text); margin-top:6px; }
+  label { display:block; margin-top:14px; font-weight:600; }
+  .show { font-weight:400; font-size:14px; color:var(--muted); display:flex; gap:6px; align-items:center; margin-top:8px; }
+  button { font:600 17px system-ui,sans-serif; border:0; border-radius:12px; padding:14px; width:100%; margin-top:16px; background:var(--gold); color:#1a1300; cursor:pointer; }
+  button:disabled { opacity:.45; }
+  .ok { color:var(--green); } .err { color:var(--red); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Pocket <span>Jumbotron</span></h1>
+  <div class="muted">Connect your screen to your home WiFi. You only do this once.</div>
+  <div class="box" id="form">
+    <div style="font-weight:600">Pick your home WiFi</div>
+    <div id="list" class="muted">Looking for networks…</div>
+    <label>Or type its name<input type="text" id="ssid" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+    <label>WiFi password<input type="password" id="pass" autocomplete="off"></label>
+    <div class="show"><input type="checkbox" id="showpw"> <span>Show password</span></div>
+    <button id="save">Connect</button>
+    <div id="msg" class="muted" style="margin-top:10px"></div>
+  </div>
+  <div class="box" id="done" hidden>
+    <div class="ok" style="font-weight:700;font-size:18px">Saved!</div>
+    <p>Your screen is restarting and joining <b id="joined"></b>.</p>
+    <p><b>Next:</b> switch your phone back to your home WiFi. In a few seconds the screen shows its address,
+      like <b>http://192.168.1.57</b>. Open that in your browser to add pictures.</p>
+    <p class="muted">Missed it? Press the button on the back once to show the address again.</p>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+$('showpw').onchange = (e) => { $('pass').type = e.target.checked ? 'text' : 'password'; };
+fetch('/api/scan').then(r => r.json()).then(nets => {
+  if (!nets.length) { $('list').textContent = 'No networks found. Type the name below.'; return; }
+  $('list').textContent = '';
+  for (const n of nets) {
+    const d = document.createElement('div'); d.className = 'net';
+    const bars = n.rssi > -60 ? '▂▄▆█' : n.rssi > -70 ? '▂▄▆' : n.rssi > -80 ? '▂▄' : '▂';
+    d.innerHTML = '<b></b><span class="bars"></span>';
+    d.querySelector('b').textContent = n.ssid + (n.open ? ' (open)' : '');
+    d.querySelector('.bars').textContent = bars;
+    d.onclick = () => { document.querySelectorAll('.net').forEach(x => x.classList.remove('on')); d.classList.add('on'); $('ssid').value = n.ssid; $('pass').focus(); };
+    $('list').appendChild(d);
+  }
+}).catch(() => { $('list').textContent = 'Couldn\'t list networks. Type the name below.'; });
+
+$('save').onclick = async () => {
+  const ssid = $('ssid').value.trim(), pass = $('pass').value;
+  if (!ssid) { $('msg').className = 'err'; $('msg').textContent = 'Pick or type your WiFi name.'; return; }
+  $('save').disabled = true; $('msg').className = 'muted'; $('msg').textContent = 'Saving…';
+  try {
+    const r = await fetch('/api/wifi', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'ssid=' + encodeURIComponent(ssid) + '&pass=' + encodeURIComponent(pass) });
+    if (!r.ok) throw new Error(await r.text());
+    $('joined').textContent = ssid; $('form').hidden = true; $('done').hidden = false;
+  } catch (e) { $('msg').className = 'err'; $('msg').textContent = 'Couldn\'t save: ' + e.message; $('save').disabled = false; }
+};
+</script>
+</body>
+</html>

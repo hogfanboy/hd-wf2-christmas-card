@@ -19,7 +19,7 @@
   .secondary { background:#24243a; color:var(--text); border:1px solid var(--line); }
   .ghost { background:none; color:var(--muted); width:auto; padding:6px 10px; font-size:14px; }
   button:disabled { opacity:.45; cursor:default; }
-  input[type=file] { display:none; }
+  input[type=file] { position:absolute; width:1px; height:1px; opacity:0; overflow:hidden; }
   .items { display:grid; gap:10px; margin-top:12px; }
   .item { display:grid; grid-template-columns:128px 1fr; gap:12px; align-items:center; background:#101019; border:1px solid var(--line); border-radius:12px; padding:8px; }
   .item canvas { width:128px; height:64px; border-radius:4px; background:#07070b; image-rendering:pixelated; }
@@ -77,7 +77,6 @@
   </div>
 
   <div class="box stack">
-    <button class="secondary" id="done">Done: back to playing</button>
     <details>
       <summary>Advanced: install a software update</summary>
       <div class="stack" style="margin-top:10px">
@@ -85,6 +84,13 @@
         <label class="btn secondary" for="fw">Choose update file</label>
         <input id="fw" type="file" accept=".bin">
         <div class="status" id="fwStatus"></div>
+      </div>
+    </details>
+    <details>
+      <summary>Advanced: change the screen's WiFi</summary>
+      <div class="stack" style="margin-top:10px">
+        <div class="muted">The screen forgets this WiFi and restarts. Then hold its button for 2 seconds to pick a new one.</div>
+        <button class="secondary" id="forget">Forget this WiFi</button>
       </div>
     </details>
   </div>
@@ -271,7 +277,12 @@ $('send').onclick = async () => {
   $('send').disabled = true;
   try {
     st.textContent = 'Clearing old pictures…';
-    await api('/api/clear', { method: 'POST' });
+    for (let tries = 0; ; tries++) {          // the screen finishes its current frame first (503 = busy)
+      const r = await fetch('/api/clear', { method: 'POST' });
+      if (r.ok) break;
+      if (r.status !== 503 || tries > 30) throw new Error(await r.text());
+      await new Promise(res => setTimeout(res, 300));
+    }
     for (let i = 0; i < list.length; i++) {
       st.textContent = `Sending ${i + 1} of ${list.length}…`;
       const fd = new FormData();
@@ -294,9 +305,10 @@ $('bright').oninput = (e) => {
   brightTimer = setTimeout(() => api('/api/brightness?v=' + e.target.value, { method: 'POST' }).catch(() => {}), 250);
 };
 
-$('done').onclick = async () => {
-  try { await api('/api/done', { method: 'POST' }); } catch {}
-  document.querySelector('main').innerHTML = '<h1>Pocket <span>Jumbotron</span></h1><div class="box">All set! The screen is playing again. You can switch your phone back to your normal WiFi.</div>';
+$('forget').onclick = async () => {
+  if (!confirm('Make the screen forget this WiFi?')) return;
+  try { await api('/api/forget-wifi', { method: 'POST' }); } catch {}
+  document.querySelector('main').innerHTML = '<h1>Pocket <span>Jumbotron</span></h1><div class="box">Done. The screen is restarting. Hold its button for 2 seconds to connect it to a WiFi network.</div>';
 };
 
 $('fw').onchange = async (e) => {

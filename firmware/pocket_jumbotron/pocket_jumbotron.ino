@@ -15,7 +15,7 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "0.3.1";
+static const char *FW_VERSION = "0.4.0";
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
 uint8_t brightnessPct = 100;                   // user setting, saved in NVS
 // The HUB75 library already applies CIE1931 brightness correction (lumConvTab), so no extra gamma here.
@@ -25,12 +25,20 @@ static const uint32_t MAX_SHOW_MS = 20000;    // long GIFs get cut off here (at 
 
 enum ButtonAction { BTN_NONE, BTN_SHORT, BTN_LONG };
 volatile ButtonAction buttonAction = BTN_NONE;
-bool portalActive = false;
+bool portalActive = false;                     // WiFi setup hotspot running
+bool holdPlayback = false;                     // phone is replacing pictures: stop playing
+bool playing = false;                          // a GIF file is open
+uint32_t addrUntil = 0;                        // showing the web address on the panel until then
+size_t playIdx = 0;
 MatrixPanel_I2S_DMA *panel = nullptr;
 bool doubleBuffered = false;
-AnimatedGIF gif;
+// Player memory is allocated on the heap so setup mode can hand it to WiFi (which needs ~70 KB more).
+AnimatedGIF *gifp = nullptr;
+#define gif (*gifp)
 uint8_t gammaLut[256];
-uint8_t canvas[H][W][3];                       // composited frame (RGB888, before gamma)
+typedef uint8_t PixRow[W][3];
+static const size_t CANVAS_BYTES = sizeof(PixRow) * H;
+PixRow *canvas = nullptr;                      // composited frame (RGB888)
 int offX = 0, offY = 0;                        // centers GIFs smaller than the panel
 std::vector<String> playlist;
 
@@ -62,9 +70,9 @@ int32_t gifSeek(GIFFILE *f, int32_t pos) {
 // 2 = clear it to background, 3 = restore what was there before it. We remember the previous frame's
 // rule and apply it when the next frame starts (including when the animation loops back to frame 1).
 struct PendingDisposal { uint8_t method; int x, y, w, h; } pending = {0, 0, 0, 0, 0};
-static uint8_t saved[H][W][3];                 // canvas snapshot for disposal 3
+static PixRow *saved = nullptr;                // canvas snapshot for disposal 3 (allocated only if a GIF uses it)
 
-static void fillRect(int x0, int y0, int w, int h, const uint8_t (*src)[W][3]) {
+static void fillRect(int x0, int y0, int w, int h, const PixRow *src) {
   for (int y = std::max(0, y0); y < std::min(H, y0 + h); y++)
     for (int x = std::max(0, x0); x < std::min(W, x0 + w); x++)
       for (int c = 0; c < 3; c++) canvas[y][x][c] = src ? src[y][x][c] : 0;
@@ -72,9 +80,9 @@ static void fillRect(int x0, int y0, int w, int h, const uint8_t (*src)[W][3]) {
 
 static void beginFrame(GIFDRAW *d) {
   if (pending.method == 2) fillRect(pending.x, pending.y, pending.w, pending.h, nullptr);
-  else if (pending.method == 3) fillRect(pending.x, pending.y, pending.w, pending.h, saved);
+  else if (pending.method == 3 && saved) fillRect(pending.x, pending.y, pending.w, pending.h, saved);
   pending = {d->ucDisposalMethod, d->iX + offX, d->iY + offY, d->iWidth, d->iHeight};
-  if (pending.method == 3) memcpy(saved, canvas, sizeof(canvas));
+  if (pending.method == 3) { if (!saved) saved = (PixRow *)malloc(CANVAS_BYTES); if (saved) memcpy(saved, canvas, CANVAS_BYTES); }
 }
 
 // Called once per line of each frame: composite into the canvas (skips transparent pixels).
@@ -123,6 +131,17 @@ void showMessage(const char *line1, const char *line2) {
   if (doubleBuffered) panel->flipDMABuffer();
 }
 
+bool playerAlloc() {
+  if (!gifp) { gifp = new AnimatedGIF(); gifp->begin(GIF_PALETTE_RGB888); }
+  if (!canvas) canvas = (PixRow *)calloc(1, CANVAS_BYTES);
+  return gifp && canvas;
+}
+void playerFree() {
+  delete gifp; gifp = nullptr;
+  free(canvas); canvas = nullptr;
+  free(saved); saved = nullptr;
+}
+
 bool startPanel(bool dbl) {
   HUB75_I2S_CFG cfg(W, H, 1, PINS);
   cfg.clkphase = false;
@@ -153,11 +172,12 @@ void setup() {
     for (;;) delay(1000);
   }
   Serial.printf("LittleFS %u / %u KB used\n", (unsigned)(LittleFS.usedBytes() / 1024), (unsigned)(LittleFS.totalBytes() / 1024));
-  gif.begin(GIF_PALETTE_RGB888);
+  playerAlloc();
   loadPlaylist();
   Serial.printf("%u GIFs in playlist\n", (unsigned)playlist.size());
   if (playlist.empty()) showMessage("POCKET", "JUMBOTRON");
   markAppValid();                 // we started fine: cancel automatic rollback of a fresh update
+  netBegin();
 }
 
 void playOne(const String &name) {
@@ -165,9 +185,10 @@ void playOne(const String &name) {
     Serial.printf("  can't open %s (err %d)\n", name.c_str(), gif.getLastError());
     return;
   }
+  playing = true;
   offX = (W - gif.getCanvasWidth()) / 2;
   offY = (H - gif.getCanvasHeight()) / 2;
-  memset(canvas, 0, sizeof(canvas));
+  memset(canvas, 0, CANVAS_BYTES);
   pending.method = 0;
   uint32_t start = millis(), frames = 0, loops = 0;
   for (;;) {
@@ -178,14 +199,14 @@ void playOne(const String &name) {
     frames++;
     if (delayMs < 20) delayMs = 100;            // GIFs with 0 delay: browsers use ~100 ms
     int32_t wait = delayMs - (int32_t)(millis() - t0);
-    if (wait > 0 && waitMs(wait)) break;        // button pressed: skip / setup mode
-    if (buttonAction) break;
+    if (wait > 0 && waitMs(wait)) break;        // button / phone / address screen interrupts
+    if (buttonAction || holdPlayback || addrUntil) break;
     if (more <= 0) {                             // end of one loop
       loops++;
       uint32_t elapsed = millis() - start;
       if (elapsed >= MIN_SHOW_MS || more < 0) break;
       gif.reset();
-      memset(canvas, 0, sizeof(canvas));       // each loop starts from a blank screen, like browsers do
+      memset(canvas, 0, CANVAS_BYTES);       // each loop starts from a blank screen, like browsers do
       pending.method = 0;
     } else if (millis() - start > MAX_SHOW_MS && loops > 0) break;
     if (millis() - start > MAX_SHOW_MS * 2) break;  // very long single loop: hard stop
@@ -194,9 +215,11 @@ void playOne(const String &name) {
   Serial.printf("  %-36s %3dx%-3d %4u frames %2u loops %5.1f fps\n", name.c_str(), gif.getCanvasWidth(), gif.getCanvasHeight(),
                 (unsigned)frames, (unsigned)loops, frames * 1000.0f / (ms ? ms : 1));
   gif.close();
+  playing = false;
+  if (saved) { free(saved); saved = nullptr; }
 }
 
-// ---- S1 button: short press = next picture, hold 2 s = phone setup mode on/off ----
+// ---- S1 button: short press = show the web address, hold 2 s = WiFi setup hotspot ----
 void pollButton() {
   static bool down = false, longFired = false;
   static uint32_t downAt = 0;
@@ -206,24 +229,30 @@ void pollButton() {
   else if (pressed && down && !longFired && now - downAt >= 2000) { longFired = true; buttonAction = BTN_LONG; }
   else if (!pressed && down) { down = false; if (!longFired && now - downAt >= 40) buttonAction = BTN_SHORT; }
 }
-// Waits up to ms while watching the button. Returns true if a button action happened.
+// Waits up to ms while serving the network and watching the button.
+// Returns true if something should interrupt the current picture.
 bool waitMs(uint32_t ms) {
   uint32_t end = millis() + ms;
   while ((int32_t)(end - millis()) > 0) {
     pollButton();
-    if (buttonAction != BTN_NONE) return true;
-    delay(5);
+    netService();
+    if (buttonAction != BTN_NONE || holdPlayback || addrUntil) return true;
+    delay(3);
   }
   return false;
 }
 
 void loop() {
   pollButton();
+  netService();
   if (buttonAction == BTN_LONG) { buttonAction = BTN_NONE; portalActive ? portalStop() : portalStart(); }
-  if (portalActive) { portalLoop(); buttonAction = buttonAction == BTN_SHORT ? BTN_NONE : buttonAction; delay(2); return; }
-  if (buttonAction == BTN_SHORT) buttonAction = BTN_NONE;   // next picture
-  if (playlist.empty()) { waitMs(200); return; }
-  static size_t idx = 0;
-  if (idx >= playlist.size()) idx = 0;
-  playOne(playlist[idx++]);
+  if (portalActive) { buttonAction = BTN_NONE; delay(2); return; }
+  if (buttonAction == BTN_SHORT) { buttonAction = BTN_NONE; showAddress(10000); }
+  if (addrUntil) {                                   // address screen is up
+    if ((int32_t)(millis() - addrUntil) < 0) { delay(5); return; }
+    addrUntil = 0;
+  }
+  if (holdPlayback || playlist.empty()) { delay(5); return; }
+  if (playIdx >= playlist.size()) playIdx = 0;
+  playOne(playlist[playIdx++]);
 }

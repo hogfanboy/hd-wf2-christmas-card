@@ -18,10 +18,14 @@ http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   const log = (...a) => console.log(new Date().toISOString().slice(11, 19), req.method, url.pathname, ...a);
   if (url.pathname === '/') { res.writeHead(200, { 'Content-Type': 'text/html' }); return res.end(fs.readFileSync(path.join(root, 'firmware/build/web/index.html'))); }
+  if (url.pathname === '/wifi') { res.writeHead(200, { 'Content-Type': 'text/html' }); return res.end(fs.readFileSync(path.join(root, 'firmware/build/web/wifi.html'))); }
+  if (url.pathname === '/api/scan') return json(res, [{ ssid: 'HomeNet', rssi: -48, open: false }, { ssid: 'Neighbor 5G', rssi: -77, open: false }, { ssid: 'CoffeeShop', rssi: -85, open: true }]);
+  if (url.pathname === '/api/wifi' || url.pathname === '/api/forget-wifi') { let b = ''; req.on('data', c => b += c); req.on('end', () => { log(b); json(res, { ok: true }); }); return; }
   if (url.pathname === '/api/info') {
     const used = files().reduce((s, f) => s + fs.statSync(path.join(store, f)).size, 0);
     return json(res, { fw: 'fake', total: TOTAL, used, files: files().length, brightness });
   }
+  if (url.pathname === '/api/clear' && (globalThis.busy = !globalThis.busy)) { log('503 busy'); res.writeHead(503); return res.end('busy'); }
   if (url.pathname === '/api/clear') { files().forEach(f => fs.unlinkSync(path.join(store, f))); log(); return json(res, { ok: true }); }
   if (url.pathname === '/api/brightness') { brightness = +url.searchParams.get('v'); log(brightness); return json(res, { ok: true }); }
   if (url.pathname === '/api/play' || url.pathname === '/api/done') { log(); return json(res, { ok: true }); }
