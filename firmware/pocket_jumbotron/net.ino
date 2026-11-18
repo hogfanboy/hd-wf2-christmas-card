@@ -33,7 +33,6 @@ static size_t upFree = 0;   // free space measured once per file (usedBytes() wa
 void settingsLoad() {
   prefs.begin("pj", false);
   brightnessPct = prefs.getUChar("bright", 100);
-  edgeShift = prefs.getBool("edgefix", true);
   staSsid = prefs.getString("ssid", "");
   staPass = prefs.getString("pass", "");
   apPass = prefs.getString("appass", "");
@@ -132,8 +131,8 @@ static int countPictures() {
 static void handleInfo() {
   touch();
   char buf[220];
-  snprintf(buf, sizeof(buf), "{\"fw\":\"%s\",\"total\":%u,\"used\":%u,\"files\":%d,\"brightness\":%u,\"edgefix\":%s,\"heap\":%u}", FW_VERSION,
-           (unsigned)LittleFS.totalBytes(), (unsigned)LittleFS.usedBytes(), countPictures(), brightnessPct, edgeShift ? "true" : "false",
+  snprintf(buf, sizeof(buf), "{\"fw\":\"%s\",\"total\":%u,\"used\":%u,\"files\":%d,\"brightness\":%u,\"heap\":%u}", FW_VERSION,
+           (unsigned)LittleFS.totalBytes(), (unsigned)LittleFS.usedBytes(), countPictures(), brightnessPct,
            (unsigned)ESP.getFreeHeap());
   sendJson(buf);
 }
@@ -208,16 +207,6 @@ static void handleBrightness() {
   sendJson("{\"ok\":true}");
 }
 
-static void handleEdgeFix() {
-  touch();
-  edgeShift = web->arg("v") == "1";
-  prefs.putBool("edgefix", edgeShift);
-  if (edgeShift) rulPanelInit();
-  shownValid = false;                 // redraw every pixel in the new position
-  panel->clearScreen();
-  sendJson("{\"ok\":true}");
-}
-
 // Firmware update: written to the other app slot; the bootloader switches to it on restart.
 static void handleUpdateData() {
   lastActivity = millis();
@@ -258,7 +247,6 @@ static void startHomeWeb() {
   web->on("/api/upload", HTTP_POST, handleUploadDone, handleUploadData);
   web->on("/api/play", HTTP_POST, handlePlay);
   web->on("/api/brightness", HTTP_POST, handleBrightness);
-  web->on("/api/edgefix", HTTP_POST, handleEdgeFix);
   web->on("/api/update", HTTP_POST, handleUpdateDone, handleUpdateData);
   web->on("/api/forget-wifi", HTTP_POST, handleForgetWifi);
   web->onNotFound([]() { web->send(404, "text/plain", "not found"); });

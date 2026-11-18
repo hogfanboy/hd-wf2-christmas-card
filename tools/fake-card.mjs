@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const store = path.join(root, 'firmware/build/fake-card');
 fs.mkdirSync(store, { recursive: true });
-let brightness = 100, edgefix = true;
+let brightness = 100;
 const TOTAL = 0x460000;
 
 const json = (res, o) => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
@@ -23,11 +23,10 @@ http.createServer((req, res) => {
   if (url.pathname === '/api/wifi' || url.pathname === '/api/forget-wifi') { let b = ''; req.on('data', c => b += c); req.on('end', () => { log(b); json(res, { ok: true }); }); return; }
   if (url.pathname === '/api/info') {
     const used = files().reduce((s, f) => s + fs.statSync(path.join(store, f)).size, 0);
-    return json(res, { fw: 'fake', total: TOTAL, used, files: files().length, brightness, edgefix });
+    return json(res, { fw: 'fake', total: TOTAL, used, files: files().length, brightness });
   }
   if (url.pathname === '/api/clear' && (globalThis.busy = !globalThis.busy)) { log('503 busy'); res.writeHead(503); return res.end('busy'); }
   if (url.pathname === '/api/clear') { files().forEach(f => fs.unlinkSync(path.join(store, f))); log(); return json(res, { ok: true }); }
-  if (url.pathname === '/api/edgefix') { edgefix = url.searchParams.get('v') === '1'; log(edgefix); return json(res, { ok: true }); }
   if (url.pathname === '/api/brightness') { brightness = +url.searchParams.get('v'); log(brightness); return json(res, { ok: true }); }
   if (url.pathname === '/api/play' || url.pathname === '/api/done') { log(); return json(res, { ok: true }); }
   if (url.pathname === '/api/upload' || url.pathname === '/api/update') {

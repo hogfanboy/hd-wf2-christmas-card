@@ -17,15 +17,11 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "0.6.1";
+static const char *FW_VERSION = "0.6.2";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
 uint8_t brightnessPct = 100;                   // user setting, saved in NVS
-// Panels come with FM6124C or RUL6024 driver chips. Both run in the library's DP3246 mode (3-clock latch),
-// but RUL6024 panels show everything one column to the left, so we draw one column to the right.
-// On by default (most cards are RUL6024); FM6124C cards turn it off on the web page. Saved in NVS.
-bool edgeShift = true;
 // The HUB75 library already applies CIE1931 brightness correction (lumConvTab), so no extra gamma here.
 static const float GAMMA = 1.0f;
 static const uint32_t MIN_SHOW_MS = 8000;     // short GIFs loop until this long
@@ -115,9 +111,12 @@ void gifDraw(GIFDRAW *d) {
 
 // Single-buffered: only pixels that changed since the last push are redrawn, which keeps each update
 // short (less chance of a visible half-drawn frame). "shown" mirrors what the panel displays.
-// RUL6024 panels read the driver chips' hidden config registers the FM6126A/ICN2038S way (REG1 latched
-// with LAT high for the last 12 clocks, REG2 for 13). The library's DP3246 init writes them with 11/12,
-// which leaves the dark grays poor; rewriting them like this smooths the gray ramp (brightness unchanged).
+// RUL6024 config registers, found by experiment on card 2 (no datasheet). A register is written by holding
+// LAT high for the last N clocks of a 128-bit chain; the panel keeps it until power-off.
+//  - N=12/13 with the FM6126A values: smoother dark grays than the library's DP3246 init leaves.
+//  - N=11 all ones: LED current/brightness (Huidu-level bright; the library's value left it dim).
+//  - N=14 = 0x0100: removes the fixed noise in the lower middle-right. Other bits there either do nothing,
+//    make the noise worse, or roughen the gradient.
 // The pins are taken from the LCD peripheral for a moment as plain GPIO, then handed back.
 static void panelRegWrite(const bool reg[16], int latClocks) {
   const uint8_t steal[] = {PINS.r1, PINS.g1, PINS.b1, PINS.r2, PINS.g2, PINS.b2, PINS.clk, PINS.lat, PINS.oe};
@@ -135,19 +134,22 @@ static void panelRegWrite(const bool reg[16], int latClocks) {
   gpio_set_level((gpio_num_t)PINS.clk, 1); gpio_set_level((gpio_num_t)PINS.clk, 0);
   for (int i = 0; i < (int)sizeof(steal); i++) GPIO.func_out_sel_cfg[steal[i]].val = saved[i];
 }
-void rulPanelInit() {
+void panelRegInit() {
   static const bool REG1[16] = {0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0};
   static const bool REG2[16] = {0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0};
+  static const bool GAIN[16] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
+  static const bool R14[16]  = {0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0};   // 0x0100, MSB first
   panelRegWrite(REG1, 12);
   panelRegWrite(REG2, 13);
+  panelRegWrite(GAIN, 11);
+  panelRegWrite(R14, 14);
 }
 
-static inline int colX(int x) { return edgeShift ? (x + 1) % W : x; }
 void pushCanvas() {
   if (doubleBuffered || !shown || !shownValid) {
     for (int y = 0; y < H; y++)
       for (int x = 0; x < W; x++)
-        panel->drawPixelRGB888(colX(x), y, gammaLut[canvas[y][x][0]], gammaLut[canvas[y][x][1]], gammaLut[canvas[y][x][2]]);
+        panel->drawPixelRGB888(x, y, gammaLut[canvas[y][x][0]], gammaLut[canvas[y][x][1]], gammaLut[canvas[y][x][2]]);
     if (doubleBuffered) panel->flipDMABuffer();
     if (shown) { memcpy(shown, canvas, CANVAS_BYTES); shownValid = true; }
     return;
@@ -156,7 +158,7 @@ void pushCanvas() {
     for (int x = 0; x < W; x++) {
       uint8_t *c = canvas[y][x], *o = shown[y][x];
       if (c[0] == o[0] && c[1] == o[1] && c[2] == o[2]) continue;
-      panel->drawPixelRGB888(colX(x), y, gammaLut[c[0]], gammaLut[c[1]], gammaLut[c[2]]);
+      panel->drawPixelRGB888(x, y, gammaLut[c[0]], gammaLut[c[1]], gammaLut[c[2]]);
       o[0] = c[0]; o[1] = c[1]; o[2] = c[2];
     }
 }
@@ -198,11 +200,18 @@ void playerFree() {
 
 bool startPanel(bool dbl) {
   HUB75_I2S_CFG cfg(W, H, 1, PINS);
-  cfg.clkphase = false;                 // (DP3246 mode forces this back to true)
-  cfg.driver = HUB75_I2S_CFG::DP3246;   // works on both FM6124C and RUL6024 panels
+  // One setup for both panel types the cards came with (FM6124C and RUL6024), tested 2026-11-18:
+  // the library's DP3246 mode gives the 3-clock latch the RUL6024 needs, but it also inverts the clock,
+  // which shifts the RUL6024 image one column and misaligns the FM6124C's two halves. So after begin()
+  // the clock pin goes back to the original edge (the library applies the inversion in the GPIO matrix).
+  cfg.driver = HUB75_I2S_CFG::DP3246;
   cfg.double_buff = dbl;
   panel = new MatrixPanel_I2S_DMA(cfg);
-  if (panel->begin()) { doubleBuffered = dbl; return true; }
+  if (panel->begin()) {
+    GPIO.func_out_sel_cfg[PINS.clk].inv_sel = 0;
+    doubleBuffered = dbl;
+    return true;
+  }
   delete panel; panel = nullptr;
   return false;
 }
@@ -215,7 +224,7 @@ void setup() {
 
   if (!startPanel(USE_DOUBLE_BUFFER) && !startPanel(false)) { Serial.println("Panel init FAILED"); for (;;) delay(1000); }
   settingsLoad();
-  if (edgeShift) rulPanelInit();   // edge fix on = RUL6024 panel
+  panelRegInit();                  // every panel (FM6124C ignores these; RUL6024 needs them)
   applyBrightness();
   panel->clearScreen();
   Serial.printf("Panel ok, %d-bit color, double buffer: %s, free heap %u\n", PIXEL_COLOR_DEPTH_BITS,

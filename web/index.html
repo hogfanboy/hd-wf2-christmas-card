@@ -74,7 +74,6 @@
     <h2>Brightness</h2>
     <input type="range" id="bright" min="10" max="100" step="5" value="100">
     <div class="muted" id="brightLabel"></div>
-    <label class="muted"><input type="checkbox" id="edgefix"> Edge fix: try switching this if there's a stray line down the left or right edge of the screen</label>
   </div>
 
   <div class="box stack">
@@ -266,7 +265,6 @@ async function loadInfo() {
     $('cardInfo').textContent = `Connected · ${card.files} picture${card.files === 1 ? '' : 's'} on the screen · version ${card.fw}`;
     $('bright').value = card.brightness;
     $('brightLabel').textContent = card.brightness + '%';
-    $('edgefix').checked = card.edgefix !== false;
   } catch { $('cardInfo').textContent = 'Can\'t reach the screen. Are you on its WiFi?'; }
   updateSpace();
 }
@@ -306,8 +304,6 @@ $('bright').oninput = (e) => {
   clearTimeout(brightTimer);
   brightTimer = setTimeout(() => api('/api/brightness?v=' + e.target.value, { method: 'POST' }).catch(() => {}), 250);
 };
-
-$('edgefix').onchange = (e) => api('/api/edgefix?v=' + (e.target.checked ? 1 : 0), { method: 'POST' }).catch(() => {});
 
 $('forget').onclick = async () => {
   if (!confirm('Make the screen forget this WiFi?')) return;
