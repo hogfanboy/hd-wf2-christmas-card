@@ -5,6 +5,7 @@
 // understands this protocol. Cycles through variants; watch the panel + serial log.
 #include <Arduino.h>
 #include "soc/gpio_struct.h"
+#include "variant.h"
 typedef uint8_t (*Pattern)(int line, int ch, int chip);   // declared early for Arduino prototypes
 
 // HD-WF2 HUB75 pins
@@ -68,55 +69,67 @@ static void writeConfig() {
   command(14); writeChain(0x0008, 0x0008, 0x0008, 2);   // debug reg
 }
 
-// Pattern: which of the 6 data lines are ON for a given (line, channel, chip) word.
-// bits: 1=R1 2=G1 4=B1 (top half)  8=R2 16=G2 32=B2 (bottom half)
-// Probe 3 format (MBI5153-style): for each line, for each channel, shift one 16-bit word per chip down the
-// whole chain (last chip's word first), then DATA_LATCH (LAT high) on the final clock only: 1 latch per
-// channel, 16 per line, 512 per frame. (Probe 2 latched after every chip's word = 8x too often.)
-static void writeFrame(Pattern pat) {
-  for (int line = 0; line < LINES; line++)
+// ---------------- Probe 4: six data-latch variants in one loop ----------------
+// Every variant draws the same test pattern: lines 0-15 and channels 0-7 of every chip lit, in ONE colour
+// on ONE half (data line chosen by the variant), so success = 8-column-wide stripes in the top part of
+// that half. Uniform-per-chip patterns can't produce this, so it proves real per-pixel storage.
+
+
+static bool lit(int line, int ch) { return line < 16 && ch < 8; }
+
+static void writeFrameV(const Variant &v) {
+  const int total = CHIPS * 16;
+  for (int line = 0; line < LINES; line++) {
+    if (v.setAddr) setRow(line);
     for (int ch = 0; ch < CH; ch++)
-      for (int chip = CHIPS - 1; chip >= 0; chip--) {
-        uint8_t m = pat ? pat(line, ch, chip) : 0;
-        pinSet(P_R1, m & 1); pinSet(P_G1, m & 2); pinSet(P_B1, m & 4);
-        pinSet(P_R2, m & 8); pinSet(P_G2, m & 16); pinSet(P_B2, m & 32);
+      for (int n = 0; n < CHIPS; n++) {
+        bool on = lit(line, ch);
+        rgb(0, 0, 0);
+        pinSet(v.pin, on);
         for (int bit = 15; bit >= 0; bit--) {
-          bool last = (chip == 0 && bit == 0);
-          if (last) pinSet(LAT, 1);
+          int pos = n * 16 + (15 - bit);                       // position within this channel's chain
+          bool lat = v.perWord ? (bit < v.latchWidth) : (pos >= total - v.latchWidth);
+          pinSet(LAT, lat);
           clk();
-          if (last) pinSet(LAT, 0);
+          if (v.gclkDuring) { pinSet(OE, 1); pinSet(OE, 0); }
         }
+        pinSet(LAT, 0);
       }
+  }
   rgb(0, 0, 0);
 }
 
-static void show(const char *name, Pattern pat, uint32_t ms) {
-  Serial.printf("%7lu ms  %s\n", millis(), name);
-  command(14); command(12);
-  writeConfig();
-  writeFrame(pat);
-  command(3);
+static void showV(const Variant &v, uint32_t ms) {
+  Serial.printf("%7lu ms  %s\n", millis(), v.name);
+  if (v.startup) { command(14); command(12); writeConfig(); }
+  writeFrameV(v);
+  command(3);                                                  // vsync
   refresh(ms, 138);
 }
-
-static uint8_t p1(int l, int c, int k) { return l == 0 ? 1 : 0; }                      // RED: line 0
-static uint8_t p2(int l, int c, int k) { return c == 0 ? 2 : 0; }                      // GREEN: channel 0
-static uint8_t p3(int l, int c, int k) { return k == 0 ? 4 : 0; }                      // BLUE: chip 0
-static uint8_t p4(int l, int c, int k) { return (l == 0 && c == 0 && k == 0) ? 1 : 0; } // RED: one pixel
-static uint8_t p5(int l, int c, int k) { return (l < 4 && c < 4 && k == 0) ? 2 : 0; }  // GREEN: 4x4 corner
-static uint8_t p6(int l, int c, int k) { return k == 7 ? 4 : 0; }                      // BLUE: chip 7
-static uint8_t p7(int l, int c, int k) { return 1 | 8; }                               // RED: everything
+static void blank(uint32_t ms) {
+  Variant b = {"  (black)", P_R1, false, 1, false, false, true, false};
+  // all-dark frame: pattern pin never set because we write with a pin that is masked off below
+  command(14); command(12); writeConfig();
+  for (int i = 0; i < LINES * CH * CHIPS * 16; i++) { pinSet(LAT, (i % (CHIPS * 16)) == CHIPS * 16 - 1); clk(); }
+  pinSet(LAT, 0); command(3); refresh(ms, 138);
+  (void)b;
+}
 
 void setup() {
   Serial.begin(115200);
   delay(500);
-  Serial.println("\nS-PWM mapping probe (RUL6024)");
+  Serial.println("\nS-PWM probe 4 (RUL6024): six latch variants");
   for (uint8_t p : (const uint8_t[]){P_R1, P_G1, P_B1, P_R2, P_G2, P_B2, PA, PB, PC, PD, PE, LAT, OE, CLK}) { pinMode(p, OUTPUT); pinSet(p, 0); }
 }
 
 void loop() {
-  const struct { const char *name; Pattern p; } stages[] = {
-    {"1 RED    line 0", p1}, {"2 GREEN  channel 0", p2}, {"3 BLUE   chip 0", p3}, {"4 RED    one pixel (line0 ch0 chip0)", p4},
-    {"5 GREEN  4x4 (lines0-3, ch0-3, chip0)", p5}, {"6 BLUE   chip 7", p6}, {"7 RED    everything (both halves)", p7}};
-  for (auto &s : stages) { show(s.name, s.p, 8000); show("  (black)", nullptr, 1500); }
+  const Variant vs[] = {
+    {"1 TOP RED      per-channel latch + row address set",  P_R1, false, 1, true,  false, true,  false},
+    {"2 TOP GREEN    per-word latch + row address set",     P_G1, true,  1, true,  false, true,  false},
+    {"3 TOP BLUE     per-channel latch, 2-clock wide",      P_B1, false, 2, false, false, true,  false},
+    {"4 BOTTOM RED   per-channel latch + GCLK during data", P_R2, false, 1, false, true,  true,  false},
+    {"5 BOTTOM GREEN per-channel latch, no startup/config", P_G2, false, 1, false, false, false, false},
+    {"6 BOTTOM BLUE  per-word latch, chip order reversed",  P_B2, true,  1, false, false, true,  true},
+  };
+  for (auto &v : vs) { showV(v, 8000); blank(1500); }
 }

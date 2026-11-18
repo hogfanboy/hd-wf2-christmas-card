@@ -31,7 +31,12 @@ Custom firmware + website for ~15 LED "Christmas cards" already mailed out last 
 - Stored format is 128x64 GIF. Each frame has 254 quantized colors + exact black + 1 transparent slot, and only pixels that changed are stored. The converter trims plain borders and fills letterbox bars with the image's own edge color when the edge is plain, otherwise black.
 - Planned: WiFi cards fetch a fresh content pack from GitHub daily during the season.
 
-## ⚠️ Panel driver chips differ between cards (found 2026-11-17)
+## ✅ RUL6024 panels WORK with the library's DP3246 mode (2026-11-17)
+- The RUL6024 is NOT S-PWM after all: it's a plain shift-register driver that needs **LAT high for 3 clocks** to latch (per GitHub discussion #525 on the HUB75 DMA library; Huidu drives these as "ICN2038S"). The library's `cfg.driver = HUB75_I2S_CFG::DP3246` mode does exactly that (LAT on the last 3 pixels of each row). Card 2 then shows the color test correctly. **Most of the user's 15 cards have RUL6024 panels.**
+- Side effects being fixed: DP3246 init forces `clkphase = true` → image shifted 1 column left (draw at x+1, wrapping); the darkest gray levels drop out (trying `min_refresh_rate = 30`, and comparing 55% vs 100% brightness); camera shows a dark band (rolling shutter, invisible to the eye).
+- Next: the firmware must pick the driver per card (FM6124C cards: default; RUL6024 cards: DP3246 + shift). Idea: a setting saved in NVS, chosen in the installer or via an S1 "does this look right?" step.
+
+## Panel driver chips differ between cards (found 2026-11-17)
 - Card 1 panel: **FM6124C** shift-register drivers → works with ESP32-HUB75-MatrixPanel-DMA.
 - **Card 2 panel: RUL6024 = S-PWM driver** (on-chip frame memory + PWM). Listed as NOT supported by the library (README "Unsupported Panels": RUL6024, MBI6024, ICN2053...). Browser install on card 2 worked (log shows the player running), but **the panel stays dark**. Card 2's Huidu firmware was NOT backed up before the install.
 - The ICN2053 fork (github.com/LAutour/ESP32-HUB75-MatrixPanel-DMA-ICN2053, 2023) uses the original ESP32's I2S parallel mode, so it **doesn't run on the ESP32-S3** (LCD_CAM) without a port. No public RUL6024 datasheet found.
