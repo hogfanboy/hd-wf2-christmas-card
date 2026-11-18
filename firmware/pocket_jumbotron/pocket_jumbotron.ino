@@ -15,7 +15,9 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "0.4.0";
+static const char *FW_VERSION = "0.4.2";
+// Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
+static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
 uint8_t brightnessPct = 100;                   // user setting, saved in NVS
 // The HUB75 library already applies CIE1931 brightness correction (lumConvTab), so no extra gamma here.
@@ -70,6 +72,8 @@ int32_t gifSeek(GIFFILE *f, int32_t pos) {
 // 2 = clear it to background, 3 = restore what was there before it. We remember the previous frame's
 // rule and apply it when the next frame starts (including when the animation loops back to frame 1).
 struct PendingDisposal { uint8_t method; int x, y, w, h; } pending = {0, 0, 0, 0, 0};
+static PixRow *shown = nullptr;                // what the panel currently shows (single-buffer mode)
+static bool shownValid = false;
 static PixRow *saved = nullptr;                // canvas snapshot for disposal 3 (allocated only if a GIF uses it)
 
 static void fillRect(int x0, int y0, int w, int h, const PixRow *src) {
@@ -103,11 +107,24 @@ void gifDraw(GIFDRAW *d) {
   }
 }
 
+// Single-buffered: only pixels that changed since the last push are redrawn, which keeps each update
+// short (less chance of a visible half-drawn frame). "shown" mirrors what the panel displays.
 void pushCanvas() {
+  if (doubleBuffered || !shown || !shownValid) {
+    for (int y = 0; y < H; y++)
+      for (int x = 0; x < W; x++)
+        panel->drawPixelRGB888(x, y, gammaLut[canvas[y][x][0]], gammaLut[canvas[y][x][1]], gammaLut[canvas[y][x][2]]);
+    if (doubleBuffered) panel->flipDMABuffer();
+    if (shown) { memcpy(shown, canvas, CANVAS_BYTES); shownValid = true; }
+    return;
+  }
   for (int y = 0; y < H; y++)
-    for (int x = 0; x < W; x++)
-      panel->drawPixelRGB888(x, y, gammaLut[canvas[y][x][0]], gammaLut[canvas[y][x][1]], gammaLut[canvas[y][x][2]]);
-  if (doubleBuffered) panel->flipDMABuffer();
+    for (int x = 0; x < W; x++) {
+      uint8_t *c = canvas[y][x], *o = shown[y][x];
+      if (c[0] == o[0] && c[1] == o[1] && c[2] == o[2]) continue;
+      panel->drawPixelRGB888(x, y, gammaLut[c[0]], gammaLut[c[1]], gammaLut[c[2]]);
+      o[0] = c[0]; o[1] = c[1]; o[2] = c[2];
+    }
 }
 
 void loadPlaylist() {
@@ -134,12 +151,15 @@ void showMessage(const char *line1, const char *line2) {
 bool playerAlloc() {
   if (!gifp) { gifp = new AnimatedGIF(); gifp->begin(GIF_PALETTE_RGB888); }
   if (!canvas) canvas = (PixRow *)calloc(1, CANVAS_BYTES);
+  if (!doubleBuffered && !shown) shown = (PixRow *)calloc(1, CANVAS_BYTES);
+  shownValid = false;
   return gifp && canvas;
 }
 void playerFree() {
   delete gifp; gifp = nullptr;
   free(canvas); canvas = nullptr;
   free(saved); saved = nullptr;
+  free(shown); shown = nullptr;
 }
 
 bool startPanel(bool dbl) {
@@ -158,7 +178,7 @@ void setup() {
   Serial.println("\nPocket Jumbotron - GIF player");
   for (int i = 0; i < 256; i++) gammaLut[i] = (uint8_t)(powf(i / 255.0f, GAMMA) * 255.0f + 0.5f);
 
-  if (!startPanel(true) && !startPanel(false)) { Serial.println("Panel init FAILED"); for (;;) delay(1000); }
+  if (!startPanel(USE_DOUBLE_BUFFER) && !startPanel(false)) { Serial.println("Panel init FAILED"); for (;;) delay(1000); }
   settingsLoad();
   applyBrightness();
   panel->clearScreen();
@@ -190,6 +210,7 @@ void playOne(const String &name) {
   offY = (H - gif.getCanvasHeight()) / 2;
   memset(canvas, 0, CANVAS_BYTES);
   pending.method = 0;
+  shownValid = false;                            // other screens may have been drawn since
   uint32_t start = millis(), frames = 0, loops = 0;
   for (;;) {
     uint32_t t0 = millis();

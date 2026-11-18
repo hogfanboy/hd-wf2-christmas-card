@@ -8,8 +8,8 @@ Custom firmware + website for ~15 LED "Christmas cards" already mailed out last 
 - Repo: https://github.com/hogfanboy/hd-wf2-christmas-card (public). Website: GitHub Pages from `/docs` → https://hogfanboy.github.io/hd-wf2-christmas-card/
 - **Never commit** the user's media (`media/`, many are commercial characters) or Huidu firmware dumps (`firmware-backup/`). Both are gitignored.
 
-## Current state (fw 0.4.0, one test card)
-- **Player**: plays every GIF in LittleFS `/gifs` in name order. Short GIFs loop for ≥8 s; long ones stop at ~20 s at the end of a loop. Double-buffered, 8-bit color, brightness capped at 55% of full (`MAX_BRIGHTNESS` 140); the user's % setting is saved in NVS.
+## Current state (fw 0.4.2, one test card)
+- **Player**: plays every GIF in LittleFS `/gifs` in name order. Short GIFs loop for ≥8 s; long ones stop at ~20 s at the end of a loop. **Single-buffered** (redraws only changed pixels), 8-bit color, brightness capped at 55% of full (`MAX_BRIGHTNESS` 140); the user's % setting is saved in NVS.
 - **Home WiFi** (`net.ino`): the card joins the saved WiFi and serves the full page (`web/index.html`) at its IP **and** at `http://pocketjumbo-XXXX.local` / `http://pocketjumbo-XXXX` (mDNS + DHCP hostname; both confirmed from Windows Chrome) while GIFs keep playing. Page features: add photos/GIFs (converted to 128x64 on the phone/PC), Send (= replace everything), brightness, firmware update upload, forget WiFi.
 - **WiFi setup hotspot**: hold S1 for 2 s → AP `PocketJumbo-XXXX` + a per-card 8-digit password shown on the panel → the captive pop-up page (`web/wifi.html`) lists networks → save → restart onto home WiFi. Leaving the hotspot always restarts the card.
 - **S1 short press** shows the web address on the panel for 10 s (also shown for 10 s after WiFi connects).
@@ -36,14 +36,15 @@ Custom firmware + website for ~15 LED "Christmas cards" already mailed out last 
 - Flashing over PC USB can drop mid-write (the PC port also powers the lit panel). A retry works.
 - **Android vs. the card's hotspot**: a WiFi network without internet is "limited"/"sign-in". Only the sign-in pop-up may use it (and it has no file picker), and Chrome is routed over mobile data and times out, even with mobile data off. That's why uploads go over home WiFi.
 - The user's Pixel 10a couldn't reach the card on home WiFi either, while the PC could. Not solved yet (guest network / AP isolation / Chrome setting?). The user will test with another phone.
-- **Memory is the main limit**: no PSRAM. Double-buffered DMA takes ~100 KB. With home WiFi + playing, free heap is only ~20–25 KB, so uploads crawl at ~10 KB/s. The player buffers are heap-allocated so the hotspot can free them (`playerFree()`). Turning WiFi off/on again in one session fails on this core → restart instead.
+- **Memory**: no PSRAM. Double-buffered DMA costs ~100 KB; with it, home WiFi + playing left only ~20-25 KB free. Now single-buffered (`USE_DOUBLE_BUFFER`): ~79 KB free with WiFi + playing. The player buffers are heap-allocated so the hotspot can free them (`playerFree()`). Turning WiFi off/on again in one session fails on this core, so restart instead.
+- **Upload speed** was limited by calling `LittleFS.usedBytes()` (walks the whole FS) per 1.4 KB chunk. Now it's measured once per file: 2.36 MB / 22 files in 41 s (was 151 s). OTA firmware upload: 1 MB in ~12 s.
 - The HUB75 library already applies CIE1931 correction, so don't add gamma (the earlier gamma 2.2 made everything too dark).
 - GIF playback: apply the *previous* frame's disposal before the next frame, and clear the canvas when a loop restarts. Both fixed visible glitches.
 - arduino-cli shares the user's Arduino IDE sketchbook/core (`~/Documents/Arduino/libraries`). Installs affect their other projects.
 - Arduino `.ino` files are concatenated. Globals used across files must be declared in the main `.ino` before use. A C-linkage override (`verifyRollbackLater`) must live in a `.cpp` file.
 
 ## Next steps (backlog, roughly in priority order)
-1. **Free memory → faster uploads**: try single buffering (or 7-bit color) and measure the heap with WiFi on. The user judges any flicker.
+1. Done: single buffer + upload fix (fw 0.4.2). Wireless firmware update + rollback confirmation verified on the card. Flicker check by the user pending.
 2. **First-install path for recipients**: GitHub Actions builds firmware + a default content image; ESP Web Tools flasher page on GitHub Pages; handle the "catch the port at power-up / hold S1" step; photo instructions.
 3. **Daily fresh content from GitHub**: manifest of dated packs, downloaded once a day, replaces the content (respect the ~4.3 MB limit).
 4. Update the website for the home-WiFi flow (setup steps, the S1 address screen, `pocketjumbo-xxxx.local`).

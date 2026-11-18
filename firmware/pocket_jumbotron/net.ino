@@ -27,6 +27,7 @@ static bool webStarted = false, restartRequested = false, staFailShown = false;
 static File upFile;
 static String upError;
 static int upCount = 0;
+static size_t upFree = 0;   // free space measured once per file (usedBytes() walks the whole FS: slow)
 
 // ---------- Settings (NVS) ----------
 void settingsLoad() {
@@ -166,6 +167,7 @@ static void handleUploadData() {
     String name = up.filename;
     name.replace("/", ""); name.replace("\\", "");
     if (!name.endsWith(".gif")) name += ".gif";
+    upFree = LittleFS.totalBytes() - LittleFS.usedBytes();
     upFile = LittleFS.open("/gifs/" + name, "w");
     if (!upFile) upError = "can't create file";
     char st[24]; snprintf(st, sizeof(st), "Receiving #%d", ++upCount);
@@ -173,7 +175,7 @@ static void handleUploadData() {
     text(28, st, C(78, 224, 138));
     if (doubleBuffered) panel->flipDMABuffer();
   } else if (up.status == UPLOAD_FILE_WRITE && upFile) {
-    if (LittleFS.totalBytes() - LittleFS.usedBytes() < up.currentSize + 8192) { upError = "screen is full"; upFile.close(); }
+    if (up.totalSize + up.currentSize + 16384 > upFree) { upError = "screen is full"; upFile.close(); }
     else if (upFile.write(up.buf, up.currentSize) != up.currentSize) { upError = "write failed"; upFile.close(); }
   } else if (up.status == UPLOAD_FILE_END || up.status == UPLOAD_FILE_ABORTED) {
     if (upFile) upFile.close();
