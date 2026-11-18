@@ -4,8 +4,19 @@
     {
       "name": "site",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["-e", "const h=require('http'),f=require('fs'),p=require('path');const r=p.join(process.cwd(),'docs');const t={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.gif':'image/gif','.svg':'image/svg+xml'};h.createServer((q,s)=>{let u=decodeURIComponent(q.url.split('?')[0]);if(u.endsWith('/'))u+='index.html';const fp=p.join(r,u);if(!fp.startsWith(r))return s.writeHead(403).end();f.readFile(fp,(e,d)=>{if(e)return s.writeHead(404).end('not found');s.writeHead(200,{'Content-Type':t[p.extname(fp)]||'application/octet-stream'});s.end(d)})}).listen(8080,()=>console.log('http://localhost:8080'))"],
+      "runtimeArgs": [
+        "-e",
+        "const h=require('http'),f=require('fs'),p=require('path');const r=p.join(process.cwd(),'docs');const t={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.gif':'image/gif','.svg':'image/svg+xml'};h.createServer((q,s)=>{let u=decodeURIComponent(q.url.split('?')[0]);if(u.endsWith('/'))u+='index.html';const fp=p.join(r,u);if(!fp.startsWith(r))return s.writeHead(403).end();f.readFile(fp,(e,d)=>{if(e)return s.writeHead(404).end('not found');s.writeHead(200,{'Content-Type':t[p.extname(fp)]||'application/octet-stream'});s.end(d)})}).listen(8080,()=>console.log('http://localhost:8080'))"
+      ],
       "port": 8080
+    },
+    {
+      "name": "fake-card",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "tools/fake-card.mjs"
+      ],
+      "port": 8090
     }
   ]
 }

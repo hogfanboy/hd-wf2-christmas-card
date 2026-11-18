@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pocket Jumbotron</title>
+<style>
+  :root { --bg:#0b0b12; --bg2:#15151f; --line:#2a2a3a; --text:#ecebf5; --muted:#a3a2b8; --gold:#ffbe3c; --cyan:#5ac8ff; --red:#ff5a6e; --green:#4ee08a; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  main { max-width:560px; margin:0 auto; padding:16px 16px 40px; }
+  h1 { font-size:22px; margin:4px 0 2px; color:var(--gold); letter-spacing:.3px; }
+  h1 span { color:var(--cyan); }
+  h2 { font-size:17px; margin:0 0 10px; }
+  .muted { color:var(--muted); font-size:14px; }
+  .box { background:var(--bg2); border:1px solid var(--line); border-radius:14px; padding:16px; margin-top:14px; }
+  button, .btn { font:600 16px system-ui,sans-serif; border:0; border-radius:12px; padding:13px 16px; cursor:pointer; width:100%; display:block; text-align:center; }
+  .primary { background:var(--gold); color:#1a1300; }
+  .secondary { background:#24243a; color:var(--text); border:1px solid var(--line); }
+  .ghost { background:none; color:var(--muted); width:auto; padding:6px 10px; font-size:14px; }
+  button:disabled { opacity:.45; cursor:default; }
+  input[type=file] { display:none; }
+  .items { display:grid; gap:10px; margin-top:12px; }
+  .item { display:grid; grid-template-columns:128px 1fr; gap:12px; align-items:center; background:#101019; border:1px solid var(--line); border-radius:12px; padding:8px; }
+  .item canvas { width:128px; height:64px; border-radius:4px; background:#07070b; image-rendering:pixelated; }
+  .item .name { font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .item .meta { font-size:12px; color:var(--muted); }
+  .item .row { display:flex; gap:6px; margin-top:4px; flex-wrap:wrap; }
+  .chip { font:600 12px system-ui,sans-serif; padding:5px 10px; border-radius:999px; border:1px solid var(--line); background:none; color:var(--muted); width:auto; }
+  .chip.on { background:var(--cyan); color:#001520; border-color:var(--cyan); }
+  .chip.del { color:var(--red); }
+  .bar { height:10px; border-radius:999px; background:#22222f; overflow:hidden; margin:8px 0 4px; }
+  .bar i { display:block; height:100%; width:0; background:var(--green); transition:width .2s; }
+  .bar.over i { background:var(--red); }
+  .preview { width:100%; aspect-ratio:2/1; display:block; border-radius:8px; background:#07070b; }
+  .frame { padding:8px; border-radius:12px; background:linear-gradient(160deg,#b31d2c,#7d1220); }
+  input[type=range] { width:100%; accent-color:var(--gold); }
+  details summary { cursor:pointer; color:var(--muted); }
+  .status { margin-top:10px; font-size:14px; min-height:21px; }
+  .ok { color:var(--green); } .err { color:var(--red); }
+  .stack > * + * { margin-top:10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Pocket <span>Jumbotron</span></h1>
+  <div class="muted" id="cardInfo">Connecting to your screen…</div>
+
+  <div class="box">
+    <div class="frame"><canvas id="big" class="preview" width="768" height="384"></canvas></div>
+    <div class="muted" style="margin-top:8px" id="bigLabel">Preview: this is how it will look on the screen.</div>
+  </div>
+
+  <div class="box stack">
+    <h2>1. Pick pictures</h2>
+    <div class="muted">Photos or animated GIFs. They're resized on this phone to fit the screen.</div>
+    <label class="btn secondary" for="files">+ Add pictures</label>
+    <input id="files" type="file" accept="image/*" multiple>
+    <div class="items" id="items"></div>
+    <div>
+      <div class="bar" id="bar"><i></i></div>
+      <div class="muted" id="space"></div>
+    </div>
+  </div>
+
+  <div class="box stack">
+    <h2>2. Send to screen</h2>
+    <div class="muted">This <b>replaces everything</b> currently on the screen.</div>
+    <button class="primary" id="send" disabled>Send to screen</button>
+    <div class="status" id="sendStatus"></div>
+  </div>
+
+  <div class="box stack">
+    <h2>Brightness</h2>
+    <input type="range" id="bright" min="10" max="100" step="5" value="100">
+    <div class="muted" id="brightLabel"></div>
+  </div>
+
+  <div class="box stack">
+    <button class="secondary" id="done">Done: back to playing</button>
+    <details>
+      <summary>Advanced: install a software update</summary>
+      <div class="stack" style="margin-top:10px">
+        <div class="muted">Only use a file you were sent for the Pocket Jumbotron (ends in <b>.bin</b>).</div>
+        <label class="btn secondary" for="fw">Choose update file</label>
+        <input id="fw" type="file" accept=".bin">
+        <div class="status" id="fwStatus"></div>
+      </div>
+    </details>
+  </div>
+</main>
+
+<!--VENDOR-->
+<script>
+'use strict';
+const W = 128, H = 64, MAX_FRAMES = 150;
+const $ = (id) => document.getElementById(id);
+let card = { total: 0, used: 0, brightness: 100, fw: '?' };
+const items = [];                 // { name, src, fit, frames:[{img:ImageData, delay}], blob }
+let selected = null;
+
+// ---------- LED-look preview of the big canvas ----------
+const big = $('big'), bctx = big.getContext('2d');
+const S = big.width / W;          // 6
+const mask = (() => {
+  const m = document.createElement('canvas'); m.width = big.width; m.height = big.height;
+  const c = m.getContext('2d'); c.fillStyle = '#07070b'; c.fillRect(0, 0, m.width, m.height);
+  c.globalCompositeOperation = 'destination-out';
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { c.beginPath(); c.arc(x * S + S / 2, y * S + S / 2, S * 0.42, 0, 6.2832); c.fill(); }
+  return m;
+})();
+const small = document.createElement('canvas'); small.width = W; small.height = H;
+const sctx = small.getContext('2d');
+function drawLED(img) {
+  sctx.putImageData(img, 0, 0);
+  bctx.imageSmoothingEnabled = false;
+  bctx.drawImage(small, 0, 0, big.width, big.height);
+  bctx.drawImage(mask, 0, 0);
+}
+function blank() { bctx.fillStyle = '#07070b'; bctx.fillRect(0, 0, big.width, big.height); }
+blank();
+
+// Animate the selected item on the big preview, and every item's thumbnail.
+let tick = 0;
+function animate(now) {
+  for (const it of items) {
+    if (!it.frames.length) continue;
+    if (now >= (it.next || 0)) {
+      it.fi = ((it.fi ?? -1) + 1) % it.frames.length;
+      it.next = now + it.frames[it.fi].delay;
+      it.thumb.getContext('2d').putImageData(it.frames[it.fi].img, 0, 0);
+      if (it === selected) drawLED(it.frames[it.fi].img);
+    }
+  }
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+// ---------- Decoding ----------
+// Returns full-size frames as canvases + delays (ms). Handles GIF disposal.
+async function decode(file) {
+  const buf = new Uint8Array(await file.arrayBuffer());
+  const isGif = buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46;
+  if (!isGif) {
+    const bmp = await createImageBitmap(file);
+    const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height;
+    c.getContext('2d').drawImage(bmp, 0, 0);
+    return [{ canvas: c, delay: 10000 }];
+  }
+  const r = new GifReader(buf);
+  const n = r.numFrames(), step = Math.max(1, Math.ceil(n / MAX_FRAMES));
+  const rgba = new Uint8ClampedArray(r.width * r.height * 4);
+  const out = [];
+  let prevInfo = null, saved = null;
+  for (let i = 0; i < n; i++) {
+    const info = r.frameInfo(i);
+    if (prevInfo && prevInfo.disposal === 2) clearRect(rgba, r.width, prevInfo);
+    if (prevInfo && prevInfo.disposal === 3 && saved) rgba.set(saved);
+    if (info.disposal === 3) saved = rgba.slice();
+    r.decodeAndBlitFrameRGBA(i, rgba);
+    prevInfo = info;
+    const delay = Math.max(20, (info.delay || 10) * 10);
+    if (i % step === 0) {
+      const c = document.createElement('canvas'); c.width = r.width; c.height = r.height;
+      c.getContext('2d').putImageData(new ImageData(rgba.slice(), r.width, r.height), 0, 0);
+      out.push({ canvas: c, delay: delay * step });
+    }
+  }
+  return out;
+}
+function clearRect(rgba, w, f) {
+  for (let y = f.y; y < f.y + f.height; y++) rgba.fill(0, (y * w + f.x) * 4, (y * w + f.x + f.width) * 4);
+}
+
+// Scale one source frame into a 128x64 ImageData (fill = crop to cover, fit = letterbox on black).
+const work = document.createElement('canvas'); work.width = W; work.height = H;
+const wctx = work.getContext('2d', { willReadFrequently: true });
+function scale(src, fit) {
+  const sw = src.width, sh = src.height;
+  const k = fit === 'fill' ? Math.max(W / sw, H / sh) : Math.min(W / sw, H / sh);
+  const dw = sw * k, dh = sh * k;
+  wctx.fillStyle = '#000'; wctx.fillRect(0, 0, W, H);
+  wctx.imageSmoothingEnabled = true; wctx.imageSmoothingQuality = 'high';
+  wctx.drawImage(src, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  return wctx.getImageData(0, 0, W, H);
+}
+
+function encode(frames) {
+  const { GIFEncoder, quantize, applyPalette } = gifenc;
+  const g = GIFEncoder();
+  for (const f of frames) {
+    const pal = quantize(f.img.data, 255);
+    pal.push([0, 0, 0]);                   // always keep exact black (letterbox bars)
+    g.writeFrame(applyPalette(f.img.data, pal), W, H, { palette: pal, delay: f.delay });
+  }
+  g.finish();
+  return new Blob([g.bytes()], { type: 'image/gif' });
+}
+
+async function build(it) {
+  it.frames = it.src.map(s => ({ img: scale(s.canvas, it.fit), delay: s.delay }));
+  it.fi = -1; it.next = 0;
+  it.blob = encode(it.frames);
+  it.metaEl.textContent = `${it.frames.length} frame${it.frames.length > 1 ? 's' : ''} · ${kb(it.blob.size)}`;
+  updateSpace();
+}
+
+// ---------- List UI ----------
+const kb = (b) => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.round(b / 1024) + ' KB';
+$('files').addEventListener('change', async (e) => {
+  for (const file of e.target.files) {
+    const it = { name: file.name, fit: 'auto', frames: [], blob: null };
+    const el = document.createElement('div'); el.className = 'item';
+    el.innerHTML = `<canvas width="128" height="64"></canvas><div><div class="name"></div><div class="meta">Converting…</div>
+      <div class="row"><button class="chip" data-fit="fill">Fill</button><button class="chip" data-fit="fit">Fit</button><button class="chip del">Remove</button></div></div>`;
+    el.querySelector('.name').textContent = file.name;
+    it.el = el; it.thumb = el.querySelector('canvas'); it.metaEl = el.querySelector('.meta');
+    $('items').appendChild(el);
+    items.push(it);
+    el.querySelector('canvas').onclick = () => { selected = it; $('bigLabel').textContent = 'Preview: ' + it.name; };
+    el.querySelectorAll('[data-fit]').forEach(b => b.onclick = async () => { it.fit = b.dataset.fit; markFit(it); await build(it); selected = it; });
+    el.querySelector('.del').onclick = () => { items.splice(items.indexOf(it), 1); el.remove(); if (selected === it) { selected = items[0] || null; if (!selected) blank(); } updateSpace(); };
+    try {
+      it.src = await decode(file);
+      const r = it.src[0].canvas.width / it.src[0].canvas.height;
+      it.fit = r >= 1.6 ? 'fill' : 'fit';
+      markFit(it);
+      await build(it);
+      if (!selected) selected = it;
+    } catch (err) {
+      it.metaEl.innerHTML = '<span class="err">Couldn\'t read this picture</span>';
+      it.failed = true; updateSpace();
+    }
+  }
+  e.target.value = '';
+});
+function markFit(it) { it.el.querySelectorAll('[data-fit]').forEach(b => b.classList.toggle('on', b.dataset.fit === it.fit)); }
+
+const ready = () => items.filter(i => i.blob && !i.failed);
+function updateSpace() {
+  const need = ready().reduce((s, i) => s + i.blob.size + 4096, 0);
+  const cap = Math.max(1, card.total - 64 * 1024);
+  const pct = Math.min(100, need / cap * 100);
+  $('bar').querySelector('i').style.width = pct + '%';
+  $('bar').classList.toggle('over', need > cap);
+  $('space').textContent = card.total ? `${kb(need)} of ${kb(cap)} space${need > cap ? ': too much, remove some' : ''}` : '';
+  $('send').disabled = !ready().length || need > cap;
+}
+
+// ---------- Talking to the screen ----------
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error((await r.text()) || r.status);
+  return r.headers.get('content-type')?.includes('json') ? r.json() : r.text();
+}
+async function loadInfo() {
+  try {
+    card = await api('/api/info');
+    $('cardInfo').textContent = `Connected · ${card.files} picture${card.files === 1 ? '' : 's'} on the screen · version ${card.fw}`;
+    $('bright').value = card.brightness;
+    $('brightLabel').textContent = card.brightness + '%';
+  } catch { $('cardInfo').textContent = 'Can\'t reach the screen. Are you on its WiFi?'; }
+  updateSpace();
+}
+loadInfo();
+
+$('send').onclick = async () => {
+  const list = ready();
+  if (!confirm(`Replace everything on the screen with these ${list.length} picture${list.length > 1 ? 's' : ''}?`)) return;
+  const st = $('sendStatus'); st.className = 'status';
+  $('send').disabled = true;
+  try {
+    st.textContent = 'Clearing old pictures…';
+    await api('/api/clear', { method: 'POST' });
+    for (let i = 0; i < list.length; i++) {
+      st.textContent = `Sending ${i + 1} of ${list.length}…`;
+      const fd = new FormData();
+      fd.append('file', list[i].blob, String(i + 1).padStart(2, '0') + '.gif');
+      await api('/api/upload', { method: 'POST', body: fd });
+    }
+    await api('/api/play', { method: 'POST' });
+    st.className = 'status ok'; st.textContent = `Done! ${list.length} picture${list.length > 1 ? 's are' : ' is'} now playing.`;
+  } catch (err) {
+    st.className = 'status err'; st.textContent = 'Something went wrong: ' + err.message + '. Try again.';
+  }
+  $('send').disabled = false;
+  loadInfo();
+};
+
+let brightTimer;
+$('bright').oninput = (e) => {
+  $('brightLabel').textContent = e.target.value + '%';
+  clearTimeout(brightTimer);
+  brightTimer = setTimeout(() => api('/api/brightness?v=' + e.target.value, { method: 'POST' }).catch(() => {}), 250);
+};
+
+$('done').onclick = async () => {
+  try { await api('/api/done', { method: 'POST' }); } catch {}
+  document.querySelector('main').innerHTML = '<h1>Pocket <span>Jumbotron</span></h1><div class="box">All set! The screen is playing again. You can switch your phone back to your normal WiFi.</div>';
+};
+
+$('fw').onchange = async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  const st = $('fwStatus'); st.className = 'status';
+  if (!confirm(`Install update "${f.name}"? The screen restarts when it's done.`)) { e.target.value = ''; return; }
+  st.textContent = 'Installing… keep this page open.';
+  try {
+    const fd = new FormData(); fd.append('firmware', f, f.name);
+    await api('/api/update', { method: 'POST', body: fd });
+    st.className = 'status ok'; st.textContent = 'Update installed. The screen is restarting.';
+  } catch (err) { st.className = 'status err'; st.textContent = 'Update failed: ' + err.message; }
+  e.target.value = '';
+};
+</script>
+</body>
+</html>
