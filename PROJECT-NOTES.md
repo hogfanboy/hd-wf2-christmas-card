@@ -32,9 +32,11 @@ Custom firmware + website for ~15 LED "Christmas cards" already mailed out last 
 - Planned: WiFi cards fetch a fresh content pack from GitHub daily during the season.
 
 ## ⚠️ Panel driver chips differ between cards (found 2026-11-17)
-- Card 1 panel: plain shift-register drivers → works with ESP32-HUB75-MatrixPanel-DMA.
+- Card 1 panel: **FM6124C** shift-register drivers → works with ESP32-HUB75-MatrixPanel-DMA.
 - **Card 2 panel: RUL6024 = S-PWM driver** (on-chip frame memory + PWM). Listed as NOT supported by the library (README "Unsupported Panels": RUL6024, MBI6024, ICN2053...). Browser install on card 2 worked (log shows the player running), but **the panel stays dark**. Card 2's Huidu firmware was NOT backed up before the install.
 - The ICN2053 fork (github.com/LAutour/ESP32-HUB75-MatrixPanel-DMA-ICN2053, 2023) uses the original ESP32's I2S parallel mode, so it **doesn't run on the ESP32-S3** (LCD_CAM) without a port. No public RUL6024 datasheet found.
+- **S-PWM probe results** (`firmware/spwm_probe`, slow bit-bang, card 2 MAC e8:06:90:fd:5d:f8): the RUL6024 accepts the ICN2053-style commands (LAT width: 14 pre-activate, 12 enable, 4/6/8/10 write config, 3 vsync), and the whole panel lights. Chain order is chip 0 = left 16 columns ... chip 7 = right; R1/G1/B1 = top half, R2/G2/B2 = bottom half. **But per-pixel data doesn't stick**: only patterns uniform across a whole chip appear (probe 3: one latch per channel after the whole 128-bit chain; probe 2: latch after every 16-bit word gave partial blocks). So the RUL6024's data-latch / SRAM-write sequence differs from the ICN2053/MBI5153 one. Also: red drops out when mixed with green/blue (yellow looks green, white looks cyan), and it's dim (slow bit-banged GCLK).
+- Fastest way forward: capture what Huidu firmware sends to a RUL6024 panel with a cheap USB logic analyzer (24 MHz, 8 ch); else keep guessing latch variants.
 - Before mailing the installer: find out which of the 15 cards have which panel chip; the install page should warn/check and **back up Huidu first** (esptool-js read-flash → download).
 
 ## Gotchas (learned the hard way)
