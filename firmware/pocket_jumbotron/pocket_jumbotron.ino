@@ -7,7 +7,7 @@
 #include <vector>
 #include <algorithm>
 
-// ---- Hardware (confirmed on WF2 V7.2, see WF2-friday-plan.md) ----
+// ---- Hardware (confirmed on WF2 V7.2, see PROJECT-NOTES.md) ----
 static const HUB75_I2S_CFG::i2s_pins PINS = {
   /*R1*/ 2, /*G1*/ 6, /*B1*/ 10, /*R2*/ 3, /*G2*/ 7, /*B2*/ 11,
   /*A*/ 39, /*B*/ 38, /*C*/ 37, /*D*/ 36, /*E*/ 21, /*LAT*/ 33, /*OE*/ 35, /*CLK*/ 34};
