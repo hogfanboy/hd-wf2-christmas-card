@@ -17,4 +17,6 @@ At the end of a session: promote what was built and verified to PROJECT-NOTES.md
 3 boards ordered (N32R16, microSD, ES8311 audio, USB-C; no speaker included, so a 4–8 Ω speaker is needed). Idea: MJPEG video + audio from SD. Confirm it drives a 128x64 panel (2x 64x64 chained). Don't mix assumptions with the WF2 (it has no PSRAM). Distribute only your own family video, not commercial specials.
 
 ## Parking Lot
-- 
+- **Show builder on GitHub Pages** (like LedArt): build a playlist mixing pictures/GIFs and text programs, e.g. birthday-cake GIF 10 s → scrolling "Happy Birthday!" → fireworks animation. Needs per-item duration and a text renderer (on the card, or pre-rendered to GIF in the browser).
+- **"Get latest content" button on the card's web page**: pull the content pack currently being sent out to cards (ties in with daily content packs).
+- **Phone-only first install over a USB OTG cable**: for owners with no PC. Android Chrome has WebUSB but no Web Serial, so the installer would need a WebUSB serial polyfill; iPhone can't do it. Still has to catch the Huidu USB port at power-up / hold S1.
