@@ -88,19 +88,37 @@ static void showHotspotScreen(const char *status) {
   if (doubleBuffered) panel->flipDMABuffer();
 }
 
-// QR code at the left of the panel: lit background (the "white" of the code), dark modules, 2 px per
-// module, with a quiet border. Uses the QR encoder that ships with the ESP32 core.
+// QR code at the left of the panel, drawn in one of several styles while we find what phone cameras
+// read best on an LED panel (S1 presses while the address is up step through them; the number shows
+// bottom right). Uses the QR encoder that ships with the ESP32 core.
+struct QrStyle { bool upper; uint8_t quiet, light; bool invert, fullPwm; };
+static const QrStyle QR_STYLES[] = {
+  {false, 2, 200, false, false},   // 1: 0.7.1 look: version 2, thin quiet zone
+  {true,  4, 200, false, false},   // 2: "HTTP://..." in capitals = smaller version 1 code, proper 4-module quiet zone
+  {true,  4, 200, true,  false},   // 3: like 2, inverted (lit modules on black)
+  {true,  4,  90, false, true},    // 4: like 2, dim white but panel at full PWM (less flicker for cameras)
+  {true,  4, 255, false, true},    // 5: like 2, bright white, full PWM
+  {false, 3, 200, false, true},    // 6: lower-case version 2, 3-module quiet zone, full PWM
+};
+static const int QR_COUNT = sizeof(QR_STYLES) / sizeof(QR_STYLES[0]);
+int qrVariant = 1;
+static const QrStyle *qrs = &QR_STYLES[0];
 static void qrDraw(const uint8_t *q) {        // q is an esp_qrcode_handle_t
-  int n = esp_qrcode_get_size(q), px = n * 2 <= 56 ? 2 : 1;
-  int sz = n * px + 8, x0 = 2, y0 = (64 - sz) / 2;
-  panel->fillRect(x0, y0, sz, sz, C(200, 200, 200));
+  int n = esp_qrcode_get_size(q), qz = qrs->quiet, px = (n + 2 * qz) * 2 <= 64 ? 2 : 1;
+  int sz = (n + 2 * qz) * px, x0 = 1, y0 = (64 - sz) / 2;
+  uint16_t light = C(qrs->light, qrs->light, qrs->light), dark = 0;
+  if (qrs->invert) { uint16_t t = light; light = dark; dark = t; }
+  panel->fillRect(x0, y0, sz, sz, light);
   for (int y = 0; y < n; y++)
     for (int x = 0; x < n; x++)
-      if (esp_qrcode_get_module(q, x, y)) panel->fillRect(x0 + 4 + x * px, y0 + 4 + y * px, px, px, 0);
+      if (esp_qrcode_get_module(q, x, y)) panel->fillRect(x0 + (qz + x) * px, y0 + (qz + y) * px, px, px, dark);
 }
-static bool drawQr(const char *url) {
+static bool drawQr(String url) {
+  qrs = &QR_STYLES[(qrVariant - 1) % QR_COUNT];
+  if (qrs->upper) url.toUpperCase();
+  if (qrs->fullPwm) panel->setBrightness8(MAX_BRIGHTNESS); else applyBrightness();
   esp_qrcode_config_t cfg = {qrDraw, 3, ESP_QRCODE_ECC_LOW};
-  return esp_qrcode_generate(&cfg, url) == ESP_OK;
+  return esp_qrcode_generate(&cfg, url.c_str()) == ESP_OK;
 }
 
 // Shown at startup once WiFi connects, and on a short S1 press.
@@ -116,7 +134,7 @@ void showAddress(uint32_t ms) {
     // A QR code of the page address: point the phone camera at it, no typing.
     String ip = WiFi.localIP().toString();
     panel->clearScreen();
-    if (!drawQr(("http://" + ip).c_str())) {
+    if (!drawQr("http://" + ip)) {
       text(12, "On your phone, open:", C(150, 150, 170));
       text(30, ip.c_str(), C(255, 255, 255));
     } else {
@@ -129,6 +147,8 @@ void showAddress(uint32_t ms) {
       int dot = ip.lastIndexOf('.', ip.lastIndexOf('.') - 1);   // split 192.168. / 50.16
       panel->setCursor(64, 38); panel->print(ip.substring(0, dot + 1));
       panel->setCursor(64, 47); panel->print(ip.substring(dot + 1));
+      panel->setTextColor(C(90, 90, 110));
+      panel->setCursor(110, 56); panel->print(qrVariant); panel->print("/"); panel->print(QR_COUNT);
     }
   } else {
     text(12, "Can't join WiFi:", C(255, 90, 110));

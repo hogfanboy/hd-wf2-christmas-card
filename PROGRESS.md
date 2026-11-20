@@ -1,6 +1,6 @@
 # PROGRESS
 
-## Working state (fw 0.7.2, 2026-11-20; card 1 updated over WiFi, card 2 still 0.6.2)
+## Working state (fw 0.7.3, 2026-11-20; card 1 updated over WiFi, card 2 still 0.6.2)
 - One firmware for every card, both panel chips (FM6124C and RUL6024). CI builds the installer + packs on push to main.
 - Card 1 (FM6124C): 192.168.50.16 / pocketjumbo-eed0. Card 2 (RUL6024): 192.168.50.199 / pocketjumbo-5df8.
 - **Show** (`show.ino`, `/show.txt`, tab-separated lines): pictures, messages (4 fonts, rainbow, snow/sparkle),
@@ -33,4 +33,4 @@
 
 ## Next
 - User checks on card 1 by eye: QR scan, message/clock/countdown look, full-color test picture, night mode.
-- Set up the private repo + deploy key (needs user OK), then move private pictures there. Next: news + weather items, Improv WiFi in the installer.
+- QR not scanning on the phone: 0.7.3 has 6 QR styles (S1 presses while the address shows); user reports which number works. Next: news + weather items, Improv WiFi in the installer.

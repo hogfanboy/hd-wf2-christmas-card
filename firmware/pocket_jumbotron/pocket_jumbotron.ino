@@ -18,7 +18,7 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "0.7.2";
+static const char *FW_VERSION = "0.7.3";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
@@ -33,6 +33,7 @@ volatile ButtonAction buttonAction = BTN_NONE;
 bool portalActive = false;                     // WiFi setup hotspot running
 bool holdPlayback = false;                     // phone is replacing pictures: stop playing
 bool playing = false;                          // a GIF file is open
+extern int qrVariant;                          // QR style on the address screen (net.ino)
 uint32_t addrUntil = 0;                        // showing the web address on the panel until then
 size_t playIdx = 0;
 MatrixPanel_I2S_DMA *panel = nullptr;
@@ -320,10 +321,15 @@ void loop() {
   netService();
   if (buttonAction == BTN_LONG) { buttonAction = BTN_NONE; portalActive ? portalStop() : portalStart(); }
   if (portalActive) { buttonAction = BTN_NONE; delay(2); return; }
-  if (buttonAction == BTN_SHORT) { buttonAction = BTN_NONE; showAddress(10000); }
+  if (buttonAction == BTN_SHORT) {                   // another press while the address is up: next QR style
+    buttonAction = BTN_NONE;
+    if (addrUntil) qrVariant = qrVariant % 6 + 1;
+    showAddress(addrUntil ? 30000 : 10000);
+  }
   if (addrUntil) {                                   // address screen is up
     if ((int32_t)(millis() - addrUntil) < 0) { delay(5); return; }
     addrUntil = 0;
+    applyBrightness();                               // some QR styles use full panel brightness
   }
   if (holdPlayback || playlist.empty()) { delay(5); return; }
   if (playIdx >= playlist.size()) playIdx = 0;
