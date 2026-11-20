@@ -51,6 +51,9 @@ jobs:
       - name: Build install image
         run: node tools/build-install.mjs
 
+      - name: Build picture packs
+        run: node tools/build-packs.mjs
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs

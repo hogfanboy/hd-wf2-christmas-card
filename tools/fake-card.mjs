@@ -23,7 +23,7 @@ http.createServer((req, res) => {
   if (url.pathname === '/api/wifi' || url.pathname === '/api/forget-wifi') { let b = ''; req.on('data', c => b += c); req.on('end', () => { log(b); json(res, { ok: true }); }); return; }
   if (url.pathname === '/api/info') {
     const used = files().reduce((s, f) => s + fs.statSync(path.join(store, f)).size, 0);
-    return json(res, { fw: 'fake', total: TOTAL, used, files: files().length, brightness });
+    return json(res, { fw: 'fake', name: 'pocketjumbo-fake', total: TOTAL, used, files: files().length, brightness });
   }
   if (url.pathname === '/api/clear' && (globalThis.busy = !globalThis.busy)) { log('503 busy'); res.writeHead(503); return res.end('busy'); }
   if (url.pathname === '/api/clear') { files().forEach(f => fs.unlinkSync(path.join(store, f))); log(); return json(res, { ok: true }); }
@@ -43,6 +43,12 @@ http.createServer((req, res) => {
       json(res, { ok: true });
     });
     return;
+  }
+  // Picture packs: serves docs/packs/ (run node tools/build-packs.mjs first).
+  if (url.pathname.startsWith('/packs/')) {
+    const f = path.join(root, 'docs', path.normalize(decodeURIComponent(url.pathname)));
+    if (f.startsWith(path.join(root, 'docs', 'packs')) && fs.existsSync(f) && fs.statSync(f).isFile()) {
+      res.writeHead(200, { 'Content-Type': f.endsWith('.json') ? 'application/json' : f.endsWith('.gif') ? 'image/gif' : f.endsWith('.webp') ? 'image/webp' : 'application/octet-stream' }); return res.end(fs.readFileSync(f)); }
   }
   // Test helper: /test/<file> serves sample media from media/ so the page can be fed files in tests.
   if (url.pathname.startsWith('/test/')) {

@@ -23,3 +23,6 @@ tools/node_modules/
 
 # Built by tools/build-install.mjs (published by GitHub Actions, not committed)
 docs/firmware/
+
+# Built by tools/build-packs.mjs from content/ (published by GitHub Actions)
+docs/packs/

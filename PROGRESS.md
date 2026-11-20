@@ -21,7 +21,14 @@
 ## Key decisions
 - One firmware and one panel setup for every card (no per-chip detection).
 
+## Just built (fw 0.6.3, 2026-11-20; tested on the fake card only)
+- Card page decodes animated WEBP/PNG with `ImageDecoder` (was a still); long animations keep correct timing.
+- Picture packs: `content/<pack>/` → CI `tools/build-packs.mjs` → `docs/packs/` + `manifest.json` on Pages.
+  Card page button "Get the latest Pocket Jumbotron pictures" fetches them (phone needs internet). `cards` in
+  `pack.json` limits a pack to named screens; `/api/info` now returns `name` (needs 0.6.3 on the card).
+- Install page: unplug panel cables, USB into the board first, then hold S1 and plug into the computer.
+
 ## Next
-- User checks card 1 on 0.6.2 by eye: edges, half alignment, lower-left noise during the WiFi text.
-- Confirm the CI installer build for 0.6.2 succeeded.
-- After that, pick the next task from IDEAS.md (backlog).
+- Put 0.6.3 on both cards (page upload of `pocket-jumbotron-app.bin`), test the pack button and an animated WEBP from the phone.
+- Pixel 10a can't open the card page: user runs the test steps (direct IP, `/api/info`, Chrome local-network permission).
+- Decide the stored format (GIF vs JPEG frames) before playlist + text on the card (IDEAS.md big feature 3).

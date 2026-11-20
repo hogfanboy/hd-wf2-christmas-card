@@ -53,9 +53,12 @@
 
   <div class="box stack">
     <h2>1. Pick pictures</h2>
-    <div class="muted">Photos or animated GIFs. They're resized on this phone to fit the screen.</div>
+    <div class="muted">Photos, animated GIFs or WEBPs. They're resized on this phone to fit the screen.</div>
     <label class="btn secondary" for="files">+ Add pictures</label>
     <input id="files" type="file" accept="image/*" multiple>
+    <button class="secondary" id="packBtn">★ Get the latest Pocket Jumbotron pictures</button>
+    <div class="items" id="packs" hidden></div>
+    <div class="status" id="packStatus"></div>
     <div class="items" id="items"></div>
     <div>
       <div class="bar" id="bar"><i></i></div>
@@ -143,20 +146,61 @@ function animate(now) {
 requestAnimationFrame(animate);
 
 // ---------- Decoding ----------
-// Returns full-size frames as canvases + delays (ms). Handles GIF disposal.
+// Returns full-size frames as canvases + delays (ms). Long animations keep every Nth frame, and each kept
+// frame lasts as long as the frames it stands for, so the timing stays right.
+const STILL_MS = 10000;
+function sniffType(buf, fallback) {
+  const s = (a, b) => String.fromCharCode(...buf.slice(a, b));
+  if (s(0, 3) === 'GIF') return 'image/gif';
+  if (s(0, 4) === 'RIFF' && s(8, 12) === 'WEBP') return 'image/webp';
+  if (buf[0] === 0x89 && s(1, 4) === 'PNG') return 'image/png';
+  return fallback || 'image/jpeg';
+}
+function keepFrames(n, delayOf, grab) {        // calls grab(i, totalDelay) for each kept frame
+  const step = Math.max(1, Math.ceil(n / MAX_FRAMES));
+  const out = [];
+  for (let i = 0; i < n; i += step) {
+    let d = 0; for (let k = i; k < Math.min(n, i + step); k++) d += delayOf(k);
+    out.push(grab(i, d));
+  }
+  return out;
+}
+const toCanvas = (src, w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(src, 0, 0); return c; };
+
 async function decode(file) {
   const buf = new Uint8Array(await file.arrayBuffer());
-  const isGif = buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46;
-  if (!isGif) {
-    const bmp = await createImageBitmap(file);
-    const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height;
-    c.getContext('2d').drawImage(bmp, 0, 0);
-    return [{ canvas: c, delay: 10000 }];
+  const type = sniffType(buf, file.type);
+  if (type === 'image/gif') return decodeGif(buf);
+  // Animated WEBP/PNG: ImageDecoder gives fully composited frames (Chrome, Edge, Android). Elsewhere: a still.
+  if ('ImageDecoder' in window && (type === 'image/webp' || type === 'image/png')) {
+    try {
+      const dec = new ImageDecoder({ data: buf, type });
+      await dec.tracks.ready;
+      const n = dec.tracks.selectedTrack.frameCount;
+      if (n > 1) {
+        const step = Math.max(1, Math.ceil(n / MAX_FRAMES));
+        const ms = [], kept = [];
+        for (let i = 0; i < n; i++) {               // draw kept frames right away, close every frame
+          const { image } = await dec.decode({ frameIndex: i });
+          ms.push(Math.max(20, Math.round((image.duration || 100000) / 1000)));
+          if (i % step === 0) kept[i] = toCanvas(image, image.displayWidth, image.displayHeight);
+          image.close();
+        }
+        dec.close();
+        return keepFrames(n, k => ms[k], (i, d) => ({ canvas: kept[i], delay: d }));
+      }
+      dec.close();
+    } catch (e) { console.warn('ImageDecoder failed, using a still', e); }
   }
+  const bmp = await createImageBitmap(file);
+  return [{ canvas: toCanvas(bmp, bmp.width, bmp.height), delay: STILL_MS }];
+}
+
+function decodeGif(buf) {
   const r = new GifReader(buf);
-  const n = r.numFrames(), step = Math.max(1, Math.ceil(n / MAX_FRAMES));
+  const n = r.numFrames();
   const rgba = new Uint8ClampedArray(r.width * r.height * 4);
-  const out = [];
+  const full = [];                               // composite every frame (disposal needs all of them)
   let prevInfo = null, saved = null;
   for (let i = 0; i < n; i++) {
     const info = r.frameInfo(i);
@@ -165,14 +209,16 @@ async function decode(file) {
     if (info.disposal === 3) saved = rgba.slice();
     r.decodeAndBlitFrameRGBA(i, rgba);
     prevInfo = info;
-    const delay = Math.max(20, (info.delay || 10) * 10);
-    if (i % step === 0) {
-      const c = document.createElement('canvas'); c.width = r.width; c.height = r.height;
-      c.getContext('2d').putImageData(new ImageData(rgba.slice(), r.width, r.height), 0, 0);
-      out.push({ canvas: c, delay: delay * step });
-    }
+    full.push({ delay: Math.max(20, (info.delay || 10) * 10), px: null });
+    const step = Math.max(1, Math.ceil(n / MAX_FRAMES));
+    if (i % step === 0) full[i].px = rgba.slice();
   }
-  return out;
+  if (n === 1) full[0].delay = STILL_MS;
+  return keepFrames(n, k => full[k].delay, (i, d) => {
+    const c = document.createElement('canvas'); c.width = r.width; c.height = r.height;
+    c.getContext('2d').putImageData(new ImageData(full[i].px, r.width, r.height), 0, 0);
+    return { canvas: c, delay: d };
+  });
 }
 function clearRect(rgba, w, f) {
   for (let y = f.y; y < f.y + f.height; y++) rgba.fill(0, (y * w + f.x) * 4, (y * w + f.x + f.width) * 4);
@@ -214,7 +260,11 @@ async function build(it) {
 // ---------- List UI ----------
 const kb = (b) => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.round(b / 1024) + ' KB';
 $('files').addEventListener('change', async (e) => {
-  for (const file of e.target.files) {
+  for (const file of e.target.files) await addFile(file);
+  e.target.value = '';
+});
+async function addFile(file) {
+  {
     const it = { name: file.name, fit: 'auto', frames: [], blob: null };
     const el = document.createElement('div'); el.className = 'item';
     el.innerHTML = `<canvas width="128" height="64"></canvas><div><div class="name"></div><div class="meta">Converting…</div>
@@ -238,8 +288,44 @@ $('files').addEventListener('change', async (e) => {
       it.failed = true; updateSpace();
     }
   }
-  e.target.value = '';
-});
+}
+
+// ---------- Picture packs from the Pocket Jumbotron website ----------
+// docs/packs/manifest.json on GitHub Pages: { packs: [{ id, title, about, cards?: ["PocketJumbo-EED0"], files: [...] }] }.
+// A pack with "cards" only shows on those screens. Files are ordinary pictures, converted here like your own.
+const PACKS = location.hostname === 'localhost' ? '/packs/' : 'https://hogfanboy.github.io/hd-wf2-christmas-card/packs/';
+$('packBtn').onclick = async () => {
+  const st = $('packStatus'), box = $('packs');
+  st.className = 'status'; st.textContent = 'Checking for new pictures…';
+  try {
+    const r = await fetch(PACKS + 'manifest.json', { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status);
+    const packs = (await r.json()).packs.filter(p => !p.cards || p.cards.some(c => c.toLowerCase() === (card.name || '').toLowerCase()));
+    if (!packs.length) { st.textContent = 'Nothing new right now.'; return; }
+    st.textContent = '';
+    box.hidden = false; box.innerHTML = '';
+    for (const p of packs) {
+      const el = document.createElement('div'); el.className = 'box'; el.style.marginTop = '0';
+      el.innerHTML = `<b></b><div class="muted"></div><button class="secondary" style="margin-top:8px">Add these ${p.files.length}</button>`;
+      el.querySelector('b').textContent = (p.cards ? '🎁 ' : '') + p.title;
+      el.querySelector('.muted').textContent = p.about || '';
+      const b = el.querySelector('button');
+      b.onclick = async () => {
+        b.disabled = true;
+        for (let i = 0; i < p.files.length; i++) {
+          b.textContent = `Adding ${i + 1} of ${p.files.length}…`;
+          const f = await fetch(PACKS + p.id + '/' + encodeURIComponent(p.files[i]));
+          if (f.ok) await addFile(new File([await f.blob()], p.files[i], { type: f.headers.get('content-type') || '' }));
+        }
+        b.textContent = 'Added. Press Send to put them on the screen.';
+      };
+      box.appendChild(el);
+    }
+  } catch (err) {
+    st.className = 'status err';
+    st.textContent = 'Couldn\'t reach the Pocket Jumbotron website. Is your WiFi connected to the internet?';
+  }
+};
 function markFit(it) { it.el.querySelectorAll('[data-fit]').forEach(b => b.classList.toggle('on', b.dataset.fit === it.fit)); }
 
 const ready = () => items.filter(i => i.blob && !i.failed);

@@ -4,13 +4,11 @@ Raw, untested ideas parked so they don't derail the current task. Not settled tr
 At the end of a session: promote what was built and verified to PROJECT-NOTES.md, move a new direction to PROGRESS.md, delete the rest.
 
 ## Fix first (found in the 2026-11-20 review)
-- **Animated WEBP from the card's web page becomes a still**: `web/index.html` decodes non-GIFs with `createImageBitmap` (first frame only). The PC tool (`make-gifs.mjs`, sharp) handles animated WEBP fine. Fix: decode with `ImageDecoder` (Chrome, Edge, Android Chrome); fall back to a still on Safari.
 - **Website promises things that don't exist**: "photos & videos", "checks for new animations once a day", a "Straight from your phone / no WiFi" upload path (dropped: uploads are home-WiFi only), hotspot named `PocketJumbotron` (it's `PocketJumbo-XXXX` + password on the panel), "press the button" (it's hold 2 s). Rewrite `docs/index.html` for the real flow.
-- Long GIFs over 150 frames: the card page keeps every Nth frame but uses only that frame's delay x N, so timing drifts (the PC tool sums the skipped delays; copy that).
 
 ## Big features (ambitious, roughly in order)
-1. **Content packs from GitHub Pages**: source pictures in a repo folder (e.g. `content/<pack>/`), CI converts them with `make-gifs.mjs` into `docs/packs/<pack>/` + `docs/packs/manifest.json`. Anything there is **public**, so only your own or royalty-free art (no commercial characters). Step 1: "Get latest content" button on the card page (the phone downloads the pack and uploads it, no firmware change). Step 2: card fetches it daily by itself (HTTPS on the card; tight on RAM, so pause the player while downloading).
-2. **Per-family messages**: packs can target one card by its ID (`PocketJumbo-XXXX`), e.g. "Happy Birthday Emma!" on just that card, everyone else gets the shared pack.
+1. **Content packs from GitHub Pages**: source pictures in a repo folder (e.g. `content/<pack>/`), CI converts them with `make-gifs.mjs` into `docs/packs/<pack>/` + `docs/packs/manifest.json`. Anything there is **public**, so only your own or royalty-free art (no commercial characters). Step 1 (button + build-packs) done in 0.6.3. Step 2: card fetches it daily by itself (HTTPS on the card; tight on RAM, so pause the player while downloading).
+2. **Per-family messages**: done in 0.6.3 via `cards` in pack.json. Next: card shows a "new pack for you" hint on the panel.
 3. **Playlist + text on the card**: a `playlist.json` with order and seconds per item, plus text items drawn by the card (scrolling message, font, color). Text costs almost no storage. Then a **show builder** on the card's page (LedArt-like): cake GIF 10 s → scrolling "Happy Birthday!" → fireworks, with a live preview.
 4. **Live widgets** once the card has the time (NTP over WiFi): "12 days until Christmas" countdown, clock, birthday countdown.
 5. **Night schedule**: auto-dim or turn off at set hours (saves the panel, nicer in bedrooms).

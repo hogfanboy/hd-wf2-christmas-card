@@ -130,9 +130,9 @@ static int countPictures() {
 }
 static void handleInfo() {
   touch();
-  char buf[220];
-  snprintf(buf, sizeof(buf), "{\"fw\":\"%s\",\"total\":%u,\"used\":%u,\"files\":%d,\"brightness\":%u,\"heap\":%u}", FW_VERSION,
-           (unsigned)LittleFS.totalBytes(), (unsigned)LittleFS.usedBytes(), countPictures(), brightnessPct,
+  char buf[260];
+  snprintf(buf, sizeof(buf), "{\"fw\":\"%s\",\"name\":\"%s\",\"total\":%u,\"used\":%u,\"files\":%d,\"brightness\":%u,\"heap\":%u}", FW_VERSION,
+           hostName.c_str(), (unsigned)LittleFS.totalBytes(), (unsigned)LittleFS.usedBytes(), countPictures(), brightnessPct,
            (unsigned)ESP.getFreeHeap());
   sendJson(buf);
 }
