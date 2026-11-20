@@ -12,6 +12,7 @@
 #include <Preferences.h>
 #include <Update.h>
 #include <esp_ota_ops.h>
+#include <qrcode.h>
 #include "web_index.h"
 
 static const uint32_t PORTAL_IDLE_MS = 10UL * 60 * 1000;   // hotspot gives up after 10 min idle
@@ -86,6 +87,21 @@ static void showHotspotScreen(const char *status) {
   if (doubleBuffered) panel->flipDMABuffer();
 }
 
+// QR code at the left of the panel: lit background (the "white" of the code), dark modules, 2 px per
+// module, with a quiet border. Uses the QR encoder that ships with the ESP32 core.
+static void qrDraw(const uint8_t *q) {        // q is an esp_qrcode_handle_t
+  int n = esp_qrcode_get_size(q), px = n * 2 <= 56 ? 2 : 1;
+  int sz = n * px + 8, x0 = 2, y0 = (64 - sz) / 2;
+  panel->fillRect(x0, y0, sz, sz, C(200, 200, 200));
+  for (int y = 0; y < n; y++)
+    for (int x = 0; x < n; x++)
+      if (esp_qrcode_get_module(q, x, y)) panel->fillRect(x0 + 4 + x * px, y0 + 4 + y * px, px, px, 0);
+}
+static bool drawQr(const char *url) {
+  esp_qrcode_config_t cfg = {qrDraw, 3, ESP_QRCODE_ECC_LOW};
+  return esp_qrcode_generate(&cfg, url) == ESP_OK;
+}
+
 // Shown at startup once WiFi connects, and on a short S1 press.
 void showAddress(uint32_t ms) {
   panel->clearScreen();
@@ -96,11 +112,23 @@ void showAddress(uint32_t ms) {
     text(26, "Hold the button", C(90, 200, 255));
     text(35, "2 sec to set up.", C(90, 200, 255));
   } else if (WiFi.status() == WL_CONNECTED) {
-    text(12, "On your phone (same", C(150, 150, 170));
-    text(21, "WiFi), open browser:", C(150, 150, 170));
+    // A QR code of the page address: point the phone camera at it, no typing.
     String ip = WiFi.localIP().toString();
-    text(34, ("http://" + ip).c_str(), C(255, 255, 255));
-    text(50, staSsid.c_str(), C(78, 224, 138));
+    panel->clearScreen();
+    if (!drawQr(("http://" + ip).c_str())) {
+      text(12, "On your phone, open:", C(150, 150, 170));
+      text(30, ip.c_str(), C(255, 255, 255));
+    } else {
+      panel->setTextColor(C(255, 190, 60));
+      panel->setCursor(64, 2);  panel->print("Scan with");
+      panel->setCursor(64, 11); panel->print("your phone");
+      panel->setTextColor(C(150, 150, 170));
+      panel->setCursor(64, 28); panel->print("or type:");
+      panel->setTextColor(C(255, 255, 255));
+      int dot = ip.lastIndexOf('.', ip.lastIndexOf('.') - 1);   // split 192.168. / 50.16
+      panel->setCursor(64, 38); panel->print(ip.substring(0, dot + 1));
+      panel->setCursor(64, 47); panel->print(ip.substring(dot + 1));
+    }
   } else {
     text(12, "Can't join WiFi:", C(255, 90, 110));
     text(21, staSsid.c_str(), C(255, 255, 255));

@@ -9,12 +9,20 @@ At the end of a session: promote what was built and verified to PROJECT-NOTES.md
 ## Big features (ambitious, roughly in order)
 1. **Content packs from GitHub Pages**: source pictures in a repo folder (e.g. `content/<pack>/`), CI converts them with `make-gifs.mjs` into `docs/packs/<pack>/` + `docs/packs/manifest.json`. Anything there is **public**, so only your own or royalty-free art (no commercial characters). Step 1 (button + build-packs) done in 0.6.3. Step 2: card fetches it daily by itself (HTTPS on the card; tight on RAM, so pause the player while downloading).
 2. **Per-family messages**: done in 0.6.3 via `cards` in pack.json. Next: card shows a "new pack for you" hint on the panel.
-3. **Playlist + text on the card**: a `playlist.json` with order and seconds per item, plus text items drawn by the card (scrolling message, font, color). Text costs almost no storage. Then a **show builder** on the card's page (LedArt-like): cake GIF 10 s → scrolling "Happy Birthday!" → fireworks, with a live preview.
-4. **Live widgets** once the card has the time (NTP over WiFi): "12 days until Christmas" countdown, clock, birthday countdown.
-5. **Night schedule**: auto-dim or turn off at set hours (saves the panel, nicer in bedrooms).
-6. **Wireless firmware updates from GitHub**: card checks `info.json` and offers "Update available" on its page (today you upload a .bin by hand). Rollback already exists.
-7. **Short videos**: convert on the phone/PC into a JPEG-frame file (full color, unlike GIF's 256 colors), decode with JPEGDEC. Trim clips to fit ~4.3 MB.
+3. **Show builder**: done in 0.7.0 (messages, clock, countdown, seconds per item). Next: more effects (fireworks, confetti), two-line messages, drag to reorder.
+4. **News + weather items** (year-round): weather from Open-Meteo (free, no key; city picked on the page), headlines from RSS digested by a GitHub Actions cron into a small text file on Pages. Card does a small HTTPS GET between items (~40 KB RAM for TLS).
+5. **Night schedule**: done in 0.7.0.
+6. **Updates from GitHub**: one-tap button on the card page done in 0.7.0. Next: card checks by itself.
+7. **Short videos**: the .pjm full-color format exists now; add video input (decode frames from an MP4 in the browser with a <video> element) and trim to fit.
 8. **Built-in effects library**: our own fireworks, snow, confetti, hearts as code (like `docs/panel.js` scenes), free to publish and zero storage if drawn by the card.
+
+## Easier setup (no typing 192.168...)
+- QR code on the address screen: done in 0.7.1.
+- **Improv WiFi in the installer**: after flashing, the install page asks for the home WiFi over USB (Improv Serial, used by ESPHome/WLED). No hotspot step for PC installs.
+- Bluetooth: Web Bluetooth works on Android Chrome only (not iPhone). BLE stack costs ~30-50 KB RAM (we have ~75 KB free with WiFi); flash for it is fine (content has its own 4.3 MB partition). Only worth it for setup, then BLE off.
+
+## Private content
+- GitHub Pages is always public (private Pages needs Enterprise). Options: keep originals in a private repo and publish **encrypted** packs to Pages, unlocked on the card page by a family code (AES in plain JS, since the card page is http); or host packs elsewhere behind an unguessable link (not really private).
 
 ## Smaller improvements
 - **First-install**: installer backs up Huidu first (esptool-js read-flash → download). Panel-chip check no longer needed (one firmware for both).

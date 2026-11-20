@@ -1,10 +1,17 @@
 # PROGRESS
 
-## Working state (fw 0.6.2, 2026-11-18)
-- One firmware for every card, both panel chips (FM6124C and RUL6024). Online installer is built by CI on push to main.
-- Card 1 (FM6124C): 192.168.50.16 / pocketjumbo-eed0.local. Card 2 (RUL6024): 192.168.50.199 / pocketjumbo-5df8.local.
-- Uploads go over home WiFi (`node tools/upload-to-card.mjs <host> <folder>`); sending new content replaces everything. WEBP only.
-- S1 hotspot is only for entering WiFi credentials.
+## Working state (fw 0.7.1, 2026-11-20; card 1 updated over WiFi, card 2 still 0.6.2)
+- One firmware for every card, both panel chips (FM6124C and RUL6024). CI builds the installer + packs on push to main.
+- Card 1 (FM6124C): 192.168.50.16 / pocketjumbo-eed0. Card 2 (RUL6024): 192.168.50.199 / pocketjumbo-5df8.
+- **Show** (`show.ino`, `/show.txt`, tab-separated lines): pictures, messages (4 fonts, rainbow, snow/sparkle),
+  clock, countdown; seconds per item (0 = auto). Without show.txt every picture plays (old behavior).
+- **Pictures**: `.gif` (≤256 colors) or `.pjm` full color (JPEG frames, JPEGDEC 1.8.5). Page picks per picture.
+- **Time**: NTP after WiFi; POSIX TZ worked out by the phone page (`/api/settings`). Night mode hours + level.
+- **Card page**: build/reorder the show, load the current show back (`/api/show`, `/api/file`), packs from the
+  website (`content/` → `docs/packs/`, `cards` in pack.json = one family only), one-tap update from `info.json`.
+- **Address screen**: QR code of `http://<ip>` + the IP (S1 short press, and 10 s after WiFi connects).
+- Android 16+/Chrome: phone needs Chrome's "Nearby devices" permission to open the card page.
+- Uploads over home WiFi only. API: `GET /api/info|show|file?name=`, `POST /api/clear|upload|show|play|brightness|settings|update|forget-wifi`.
 
 ## Verified pins (HD-WF2)
 - HUB75: R1 2, G1 6, B1 10, R2 3, G2 7, B2 11, A 39, B 38, C 37, D 36, E 21, LAT 33, OE 35, CLK 34.
@@ -12,23 +19,15 @@
 
 ## Panel setup (same on every card)
 - ESP32-HUB75-MatrixPanel-DMA 3.1.0, `cfg.driver = DP3246` (3-clock latch), default refresh (60 Hz; 30/45 make whites jitter).
-- After `begin()`: `GPIO.func_out_sel_cfg[CLK].inv_sel = 0` (undo the library's clock inversion; fixes column shift and half misalignment).
-- `panelRegInit()` before `begin()` bit-bangs registers (LAT high for the last N of 128 clocks):
-  LAT 12 = REG1, LAT 13 = REG2 (FM6126A values, smoother grays), LAT 11 = all ones (RUL brightness gain),
-  LAT 14 = 0x0100 (removes RUL noise in lower middle-right, keeps a good gradient). The FM6124C ignores all of them.
-- Registers persist until panel power-off, so test variants per power-up with an NVS counter.
+- After `begin()`: `GPIO.func_out_sel_cfg[CLK].inv_sel = 0` (undo the library's clock inversion).
+- `panelRegInit()`: LAT 12 = REG1, LAT 13 = REG2 (FM6126A values), LAT 11 = all ones, LAT 14 = 0x0100. FM6124C ignores them.
+- Registers persist until panel power-off, so test variants per power-up.
 
 ## Key decisions
 - One firmware and one panel setup for every card (no per-chip detection).
-
-## Just built (fw 0.6.3, 2026-11-20; tested on the fake card only)
-- Card page decodes animated WEBP/PNG with `ImageDecoder` (was a still); long animations keep correct timing.
-- Picture packs: `content/<pack>/` → CI `tools/build-packs.mjs` → `docs/packs/` + `manifest.json` on Pages.
-  Card page button "Get the latest Pocket Jumbotron pictures" fetches them (phone needs internet). `cards` in
-  `pack.json` limits a pack to named screens; `/api/info` now returns `name` (needs 0.6.3 on the card).
-- Install page: unplug panel cables, USB into the board first, then hold S1 and plug into the computer.
+- Card stores GIF or JPEG frames, not WEBP (no small decoder, not enough RAM). WEBP is an input format only.
+- Free heap with WiFi + show playing: ~72-82 KB.
 
 ## Next
-- Put 0.6.3 on both cards (page upload of `pocket-jumbotron-app.bin`), test the pack button and an animated WEBP from the phone.
-- Pixel 10a can't open the card page: user runs the test steps (direct IP, `/api/info`, Chrome local-network permission).
-- Decide the stored format (GIF vs JPEG frames) before playlist + text on the card (IDEAS.md big feature 3).
+- User checks on card 1 by eye: QR scan, message/clock/countdown look, full-color test picture, night mode.
+- User decision: private content (see IDEAS.md). Then: news + weather items, Improv WiFi setup in the installer.
