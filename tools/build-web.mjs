@@ -1,5 +1,5 @@
 // Builds the phone setup page that the card serves:
-//  web/index.html + vendored GIF libs (omggif, gifenc; MIT) -> one self-contained page,
+//  web/index.html + vendored libs (omggif, gifenc, aes-js, js-sha256; MIT) + web/vault.js -> one self-contained page,
 //  gzipped into firmware/pocket_jumbotron/web_index.h. Also writes firmware/build/web/index.html for testing.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,7 +16,13 @@ gifenc = gifenc.replace(/export\{([^}]*)\};?/, (_, list) => {
   const pairs = list.split(',').map(s => s.trim().split(/\s+as\s+/)).map(([local, name]) => `${name || local}:${local}`);
   return `window.gifenc={${pairs.join(',')}};`;
 });
-const vendor = `<script>/* omggif (MIT) */${omggif}</script>\n<script>/* gifenc (MIT, Matt DesLauriers) */(function(){${gifenc}})();</script>`;
+const aesjs = fs.readFileSync(path.join(nm, 'aes-js/index.js'), 'utf8');
+const sha256 = fs.readFileSync(path.join(nm, 'js-sha256/src/sha256.js'), 'utf8');
+const vaultJs = fs.readFileSync(path.join(root, 'web/vault.js'), 'utf8');
+const vendor = `<script>/* aes-js (MIT, Richard Moore) */${aesjs}</script>
+<script>/* js-sha256 (MIT, Chen Yi-Cyuan) */${sha256}</script>
+<script>${vaultJs}</script>
+<script>/* omggif (MIT) */${omggif}</script>\n<script>/* gifenc (MIT, Matt DesLauriers) */(function(){${gifenc}})();</script>`;
 
 const html = fs.readFileSync(path.join(root, 'web/index.html'), 'utf8').replace('<!--VENDOR-->', vendor);
 const outDir = path.join(root, 'firmware/build/web');

@@ -3,8 +3,9 @@
 Each folder here becomes a pack that screens can download from their web page
 ("Get the latest Pocket Jumbotron pictures"). Push to `main` and GitHub Actions publishes it.
 
-**Everything here is public** (the repo and the website). Only your own or royalty-free pictures,
-no commercial characters. Those stay in `media/` and go to your own screens over WiFi.
+**Everything here is public** (the repo and the website). Only your own or royalty-free pictures.
+Anything private goes in the private repo `hogfanboy/pocket-jumbotron-content` (same layout, plus `codes.json`):
+the website only gets encrypted copies, which a screen opens with its family code.
 
 ```
 content/

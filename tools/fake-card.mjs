@@ -32,7 +32,7 @@ http.createServer((req, res) => {
   if (url.pathname === '/api/show' && req.method === 'GET') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end(fs.existsSync(showFile) ? fs.readFileSync(showFile) : files().sort().map(f => 'pic	0	' + f + String.fromCharCode(10)).join('')); }
   if (url.pathname === '/api/show') { let b = ''; req.on('data', c => b += c); req.on('end', () => { fs.writeFileSync(showFile, b); log(b.split(String.fromCharCode(10)).length - 1, 'lines'); json(res, { ok: true }); }); return; }
   if (url.pathname === '/api/file') { const f = path.join(store, path.basename(url.searchParams.get('name') || '')); if (fs.existsSync(f)) { res.writeHead(200); return res.end(fs.readFileSync(f)); } res.writeHead(404); return res.end('not found'); }
-  if (url.pathname === '/api/settings') { const q = url.searchParams; settings = { tz: q.get('tz'), nightFrom: +q.get('nf'), nightTo: +q.get('nt'), nightLevel: +q.get('nl') }; log(JSON.stringify(settings)); return json(res, { ok: true }); }
+  if (url.pathname === '/api/settings') { const q = url.searchParams; for (const [k, n] of [['tz', 'tz'], ['nf', 'nightFrom'], ['nt', 'nightTo'], ['nl', 'nightLevel'], ['fc', 'fc']]) if (q.has(k)) settings[n] = k === 'tz' || k === 'fc' ? q.get(k) : +q.get(k); log(JSON.stringify(settings)); return json(res, { ok: true }); }
   // Firmware info + files for the update check (serves docs/firmware/ when built locally).
   if (url.pathname.startsWith('/firmware/')) { const f = path.join(root, 'docs', path.normalize(url.pathname)); if (f.startsWith(path.join(root, 'docs', 'firmware')) && fs.existsSync(f)) { res.writeHead(200); return res.end(fs.readFileSync(f)); } }
   if (url.pathname === '/api/brightness') { brightness = +url.searchParams.get('v'); log(brightness); return json(res, { ok: true }); }
@@ -53,9 +53,9 @@ http.createServer((req, res) => {
     return;
   }
   // Picture packs: serves docs/packs/ (run node tools/build-packs.mjs first).
-  if (url.pathname.startsWith('/packs/')) {
+  if (url.pathname.startsWith('/packs/') || url.pathname.startsWith('/vault/')) {
     const f = path.join(root, 'docs', path.normalize(decodeURIComponent(url.pathname)));
-    if (f.startsWith(path.join(root, 'docs', 'packs')) && fs.existsSync(f) && fs.statSync(f).isFile()) {
+    if ((f.startsWith(path.join(root, 'docs', 'packs')) || f.startsWith(path.join(root, 'docs', 'vault'))) && fs.existsSync(f) && fs.statSync(f).isFile()) {
       res.writeHead(200, { 'Content-Type': f.endsWith('.json') ? 'application/json' : f.endsWith('.gif') ? 'image/gif' : f.endsWith('.webp') ? 'image/webp' : 'application/octet-stream' }); return res.end(fs.readFileSync(f)); }
   }
   // Test helper: /test/<file> serves sample media from media/ so the page can be fed files in tests.

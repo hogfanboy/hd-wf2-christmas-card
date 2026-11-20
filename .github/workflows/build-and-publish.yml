@@ -6,6 +6,8 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    - cron: '23 * * * *'   # hourly: picks up changes in the private content repo
 
 permissions:
   contents: read
@@ -19,6 +21,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      HAS_PRIVATE: ${{ secrets.CONTENT_DEPLOY_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -53,6 +57,19 @@ jobs:
 
       - name: Build picture packs
         run: node tools/build-packs.mjs
+
+      # Private pictures live in a private repo; only encrypted copies reach the public website.
+      - name: Private content (read-only deploy key)
+        if: env.HAS_PRIVATE == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: hogfanboy/pocket-jumbotron-content
+          ssh-key: ${{ secrets.CONTENT_DEPLOY_KEY }}
+          path: private-content
+
+      - name: Encrypted family packs
+        if: env.HAS_PRIVATE == 'true'
+        run: node tools/build-vault.mjs private-content
 
       - uses: actions/upload-pages-artifact@v3
         with:

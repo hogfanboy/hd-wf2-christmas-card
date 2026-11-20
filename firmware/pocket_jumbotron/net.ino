@@ -21,7 +21,7 @@ static const uint32_t HOLD_IDLE_MS = 2UL * 60 * 1000;      // resume playing if 
 static WebServer *web = nullptr;
 static DNSServer dns;
 static Preferences prefs;
-static String apSsid, apPass, hostName, staSsid, staPass;
+static String apSsid, apPass, hostName, staSsid, staPass, familyCode;
 static String scanJson = "[]";
 static uint32_t lastActivity = 0, staBeganAt = 0;
 static bool webStarted = false, restartRequested = false, staFailShown = false;
@@ -38,6 +38,7 @@ void settingsLoad() {
   staPass = prefs.getString("pass", "");
   apPass = prefs.getString("appass", "");
   tzString = prefs.getString("tz", "UTC0");
+  familyCode = prefs.getString("fc", "");
   nightFrom = prefs.getChar("nfrom", -1);
   nightTo = prefs.getChar("nto", -1);
   nightLevel = prefs.getUChar("nlevel", 0);
@@ -163,12 +164,12 @@ static int countPictures() {
 }
 static void handleInfo() {
   touch();
-  char buf[420];
+  char buf[480];
   snprintf(buf, sizeof(buf), "{\"fw\":\"%s\",\"name\":\"%s\",\"total\":%u,\"used\":%u,\"files\":%d,\"items\":%u,\"brightness\":%u,\"heap\":%u,"
-           "\"tz\":\"%s\",\"nightFrom\":%d,\"nightTo\":%d,\"nightLevel\":%u,\"night\":%s,\"time\":%lu}",
+           "\"tz\":\"%s\",\"nightFrom\":%d,\"nightTo\":%d,\"nightLevel\":%u,\"night\":%s,\"time\":%lu,\"fc\":\"%s\"}",
            FW_VERSION, hostName.c_str(), (unsigned)LittleFS.totalBytes(), (unsigned)LittleFS.usedBytes(), countPictures(),
            (unsigned)playlist.size(), brightnessPct, (unsigned)ESP.getFreeHeap(), tzString.c_str(), nightFrom, nightTo, nightLevel,
-           nightNow ? "true" : "false", timeValid() ? (unsigned long)time(nullptr) : 0UL);
+           nightNow ? "true" : "false", timeValid() ? (unsigned long)time(nullptr) : 0UL, familyCode.c_str());
   sendJson(buf);
 }
 
@@ -273,6 +274,11 @@ static void handleShowPost() {
 static void handleSettings() {
   touch();
   if (web->hasArg("tz") && web->arg("tz").length() < 60) { tzString = web->arg("tz"); prefs.putString("tz", tzString); timeBegin(); }
+  if (web->hasArg("fc")) {                         // family code for encrypted packs: A-Z 0-9 only
+    String c = web->arg("fc"), k;
+    for (char ch : c) if (isalnum((unsigned char)ch) && k.length() < 32) k += (char)toupper(ch);
+    familyCode = k; prefs.putString("fc", familyCode);
+  }
   if (web->hasArg("nf")) { nightFrom = constrain((int)web->arg("nf").toInt(), -1, 23); prefs.putChar("nfrom", nightFrom); }
   if (web->hasArg("nt")) { nightTo = constrain((int)web->arg("nt").toInt(), -1, 23); prefs.putChar("nto", nightTo); }
   if (web->hasArg("nl")) { nightLevel = constrain((int)web->arg("nl").toInt(), 0, 100); prefs.putUChar("nlevel", nightLevel); }

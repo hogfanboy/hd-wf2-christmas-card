@@ -1,6 +1,6 @@
 # PROGRESS
 
-## Working state (fw 0.7.1, 2026-11-20; card 1 updated over WiFi, card 2 still 0.6.2)
+## Working state (fw 0.7.2, 2026-11-20; card 1 updated over WiFi, card 2 still 0.6.2)
 - One firmware for every card, both panel chips (FM6124C and RUL6024). CI builds the installer + packs on push to main.
 - Card 1 (FM6124C): 192.168.50.16 / pocketjumbo-eed0. Card 2 (RUL6024): 192.168.50.199 / pocketjumbo-5df8.
 - **Show** (`show.ino`, `/show.txt`, tab-separated lines): pictures, messages (4 fonts, rainbow, snow/sparkle),
@@ -9,6 +9,9 @@
 - **Time**: NTP after WiFi; POSIX TZ worked out by the phone page (`/api/settings`). Night mode hours + level.
 - **Card page**: build/reorder the show, load the current show back (`/api/show`, `/api/file`), packs from the
   website (`content/` → `docs/packs/`, `cards` in pack.json = one family only), one-tap update from `info.json`.
+- **Family packs (encrypted)**: private repo hogfanboy/pocket-jumbotron-content (`codes.json` + pictures) → CI
+  (deploy key secret `CONTENT_DEPLOY_KEY`, hourly cron) `tools/build-vault.mjs` → `docs/vault/`. Card page unlocks with a
+  family code saved on the card (`/api/settings?fc=`); crypto in `web/vault.js` (aes-js + js-sha256, page is http).
 - **Address screen**: QR code of `http://<ip>` + the IP (S1 short press, and 10 s after WiFi connects).
 - Android 16+/Chrome: phone needs Chrome's "Nearby devices" permission to open the card page.
 - Uploads over home WiFi only. API: `GET /api/info|show|file?name=`, `POST /api/clear|upload|show|play|brightness|settings|update|forget-wifi`.
@@ -30,4 +33,4 @@
 
 ## Next
 - User checks on card 1 by eye: QR scan, message/clock/countdown look, full-color test picture, night mode.
-- User decision: private content (see IDEAS.md). Then: news + weather items, Improv WiFi setup in the installer.
+- Set up the private repo + deploy key (needs user OK), then move private pictures there. Next: news + weather items, Improv WiFi in the installer.

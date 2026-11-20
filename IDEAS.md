@@ -22,7 +22,7 @@ At the end of a session: promote what was built and verified to PROJECT-NOTES.md
 - Bluetooth: Web Bluetooth works on Android Chrome only (not iPhone). BLE stack costs ~30-50 KB RAM (we have ~75 KB free with WiFi); flash for it is fine (content has its own 4.3 MB partition). Only worth it for setup, then BLE off.
 
 ## Private content
-- GitHub Pages is always public (private Pages needs Enterprise). Options: keep originals in a private repo and publish **encrypted** packs to Pages, unlocked on the card page by a family code (AES in plain JS, since the card page is http); or host packs elsewhere behind an unguessable link (not really private).
+- Done in 0.7.2: encrypted family packs + family code (see PROGRESS.md). Later: per-family codes UI, code shown on the panel at setup.
 
 ## Smaller improvements
 - **First-install**: installer backs up Huidu first (esptool-js read-flash → download). Panel-chip check no longer needed (one firmware for both).
