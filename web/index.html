@@ -516,8 +516,58 @@ async function decode(file) {
       dec.close();
     } catch (e) { console.warn('ImageDecoder failed, using a still', e); }
   }
+  // ImageDecoder only exists on https pages; the card page is http, so animated WEBP is split here instead.
+  if (type === 'image/webp') {
+    try { const fr = await decodeWebpAnim(buf); if (fr) return fr; }
+    catch (e) { console.warn('WEBP split failed, using a still', e); }
+  }
   const bmp = await createImageBitmap(file);
   return [{ canvas: toCanvas(bmp, bmp.width, bmp.height), delay: STILL_MS }];
+}
+// Animated WEBP without ImageDecoder: each ANMF frame is wrapped as its own still WEBP, decoded by the
+// browser, then composited (blend + dispose) onto a canvas the size of the animation.
+async function decodeWebpAnim(buf) {
+  const u24 = o => buf[o] | buf[o + 1] << 8 | buf[o + 2] << 16;
+  const u32 = o => (u24(o) | buf[o + 3] << 24) >>> 0;
+  const tag = o => String.fromCharCode(buf[o], buf[o + 1], buf[o + 2], buf[o + 3]);
+  let W = 0, H = 0; const raw = [];
+  for (let p = 12; p + 8 <= buf.length;) {
+    const id = tag(p), len = u32(p + 4), d = p + 8;
+    if (id === 'VP8X') { W = u24(d + 4) + 1; H = u24(d + 7) + 1; }
+    if (id === 'ANMF') raw.push({ x: u24(d) * 2, y: u24(d + 3) * 2, w: u24(d + 6) + 1, h: u24(d + 9) + 1,
+      ms: u24(d + 12), noBlend: (buf[d + 15] & 2) !== 0, dispose: (buf[d + 15] & 1) !== 0, body: buf.subarray(d + 16, d + len) });
+    p = d + len + (len & 1);
+  }
+  if (raw.length < 2 || !W) return null;
+  const chunk = (id, data) => {
+    const out = new Uint8Array(8 + data.length + (data.length & 1));
+    for (let i = 0; i < 4; i++) out[i] = id.charCodeAt(i);
+    new DataView(out.buffer).setUint32(4, data.length, true); out.set(data, 8); return out;
+  };
+  const still = f => {                 // standalone WEBP: VP8X header + the frame's ALPH/VP8/VP8L chunks
+    const hasAlpha = String.fromCharCode(...f.body.subarray(0, 4)) === 'ALPH';
+    const x = new Uint8Array(10); x[0] = hasAlpha ? 0x10 : 0;
+    x[4] = (f.w - 1) & 255; x[5] = (f.w - 1) >> 8 & 255; x[6] = (f.w - 1) >> 16;
+    x[7] = (f.h - 1) & 255; x[8] = (f.h - 1) >> 8 & 255; x[9] = (f.h - 1) >> 16;
+    const vp8x = chunk('VP8X', x), size = 4 + vp8x.length + f.body.length;
+    const out = new Uint8Array(8 + size);
+    out.set([82, 73, 70, 70]); new DataView(out.buffer).setUint32(4, size, true);
+    out.set([87, 69, 66, 80], 8); out.set(vp8x, 12); out.set(f.body, 12 + vp8x.length);
+    return new Blob([out], { type: 'image/webp' });
+  };
+  const n = raw.length, step = Math.max(1, Math.ceil(n / MAX_FRAMES));
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d'); const kept = []; let prev = null;
+  for (let i = 0; i < n; i++) {
+    const f = raw[i];
+    if (prev && prev.dispose) ctx.clearRect(prev.x, prev.y, prev.w, prev.h);
+    const bmp = await createImageBitmap(still(f));
+    if (f.noBlend) ctx.clearRect(f.x, f.y, f.w, f.h);
+    ctx.drawImage(bmp, f.x, f.y); bmp.close();
+    if (i % step === 0) kept[i] = toCanvas(cv, W, H);
+    prev = f;
+  }
+  return keepFrames(n, k => Math.max(20, raw[k].ms || 100), (i, d) => ({ canvas: kept[i], delay: d }));
 }
 function decodeGif(buf) {
   const r = new GifReader(buf);

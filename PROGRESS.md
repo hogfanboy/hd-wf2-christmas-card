@@ -1,6 +1,8 @@
 # PROGRESS
 
-## Working state (fw 0.8.1, 2026-11-20; card 1 on 0.8.1 via WiFi, card 2 still 0.6.2)
+## Working state (fw 0.8.2, 2026-11-20; card 1 on 0.8.2 via WiFi, card 2 still 0.6.2)
+- 0.8.2: animated WEBP now animates from the card page. `ImageDecoder` only exists on https pages, so the page
+  splits WEBP frames itself (`decodeWebpAnim` in `web/index.html`). Tested in the preview; user to try from the PC.
 - One firmware for both panel chips. CI (push to main + hourly) builds firmware, installer, public packs, encrypted packs.
 - Card 1 (FM6124C): 192.168.50.16 / pocketjumbo-eed0 (also on the PC's USB, COM10). Card 2 (RUL6024): 192.168.50.199.
 - Show (`show.ino`, `/show.txt`): pictures, messages, clock, countdown, **effects** (`fx`), **weather**, seconds per item.
