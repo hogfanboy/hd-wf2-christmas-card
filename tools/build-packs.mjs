@@ -21,6 +21,14 @@ execFileSync(process.execPath, [path.join(root, 'tools/make-starter.mjs'), path.
 packs.push({ id: 'holiday-starter', title: 'Holiday starter animations', about: 'Snow, greetings and color tests.', order: 90,
   files: fs.readdirSync(path.join(out, 'holiday-starter')).filter(f => PIC.test(f)).sort() });
 
+// Pictures dropped straight into content/ (e.g. uploaded on github.com) become the "new-pictures" pack.
+const loose = fs.existsSync(src) ? fs.readdirSync(src).filter(f => PIC.test(f) && fs.statSync(path.join(src, f)).isFile()).sort() : [];
+if (loose.length) {
+  fs.mkdirSync(path.join(out, 'new-pictures'));
+  for (const f of loose) fs.copyFileSync(path.join(src, f), path.join(out, 'new-pictures', f));
+  packs.push({ id: 'new-pictures', title: 'New pictures', about: 'The latest additions.', order: 10, files: loose });
+}
+
 if (fs.existsSync(src)) for (const id of fs.readdirSync(src).sort()) {
   const dir = path.join(src, id);
   if (!fs.statSync(dir).isDirectory() || id.startsWith('_')) continue;

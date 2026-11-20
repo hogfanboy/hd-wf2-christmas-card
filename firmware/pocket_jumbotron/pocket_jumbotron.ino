@@ -3,6 +3,7 @@
 // Board: Huidu HD-WF2 (ESP32-S3, 8 MB flash, no PSRAM), one 128x64 1/32-scan HUB75E panel.
 #include <LittleFS.h>
 #include <AnimatedGIF.h>
+#include <JPEGDEC.h>
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
 #include <vector>
 #include <algorithm>
@@ -17,7 +18,7 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "0.6.3";
+static const char *FW_VERSION = "0.7.0";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
@@ -44,7 +45,22 @@ typedef uint8_t PixRow[W][3];
 static const size_t CANVAS_BYTES = sizeof(PixRow) * H;
 PixRow *canvas = nullptr;                      // composited frame (RGB888)
 int offX = 0, offY = 0;                        // centers GIFs smaller than the panel
-std::vector<String> playlist;
+// The show (see show.ino). Declared here because Arduino joins the .ino files in name order.
+struct ShowItem {
+  char type = 'p';                // p = picture, t = text, c = clock, d = countdown
+  uint16_t sec = 0;
+  String file, text, extra;       // extra: clock 12/24, countdown MM-DD
+  uint32_t fg = 0xFFFFFF, bg = 0;
+  bool rainbow = false;
+  uint8_t font = 2, effect = 0;   // effect 0 none, 1 snow, 2 sparkle
+};
+std::vector<ShowItem> playlist;
+// ---------- Settings: time zone + night mode (NVS, see net.ino settingsLoad) ----------
+String tzString = "UTC0";
+int8_t nightFrom = -1, nightTo = -1;          // hours 0-23; -1 = night mode off
+uint8_t nightLevel = 0;                        // % of normal brightness at night (0 = dark)
+bool nightNow = false;
+
 
 // ---- AnimatedGIF file callbacks (stream from LittleFS) ----
 static File gifFile;
@@ -163,18 +179,6 @@ void pushCanvas() {
     }
 }
 
-void loadPlaylist() {
-  playlist.clear();
-  File dir = LittleFS.open("/gifs");
-  if (dir && dir.isDirectory()) {
-    for (File f = dir.openNextFile(); f; f = dir.openNextFile()) {
-      String n = f.name();
-      if (n.endsWith(".gif") || n.endsWith(".GIF")) playlist.push_back(String("/gifs/") + n);
-    }
-  }
-  std::sort(playlist.begin(), playlist.end());
-}
-
 void showMessage(const char *line1, const char *line2) {
   panel->clearScreen();
   panel->setTextColor(panel->color565(255, 190, 60));
@@ -245,7 +249,8 @@ void setup() {
   netBegin();
 }
 
-void playOne(const String &name) {
+// Plays one GIF. sec 0: loops short ones to 8 s, cuts long ones at ~20 s. sec > 0: exactly that long.
+void playOne(const String &name, uint16_t sec) {
   if (!gif.open(name.c_str(), gifOpen, gifClose, gifRead, gifSeek, gifDraw)) {
     Serial.printf("  can't open %s (err %d)\n", name.c_str(), gif.getLastError());
     return;
@@ -267,15 +272,16 @@ void playOne(const String &name) {
     int32_t wait = delayMs - (int32_t)(millis() - t0);
     if (wait > 0 && waitMs(wait)) break;        // button / phone / address screen interrupts
     if (buttonAction || holdPlayback || addrUntil) break;
+    if (sec && millis() - start >= sec * 1000UL) break;
     if (more <= 0) {                             // end of one loop
       loops++;
       uint32_t elapsed = millis() - start;
-      if (elapsed >= MIN_SHOW_MS || more < 0) break;
+      if (more < 0 || (!sec && elapsed >= MIN_SHOW_MS)) break;
       gif.reset();
       memset(canvas, 0, CANVAS_BYTES);       // each loop starts from a blank screen, like browsers do
       pending.method = 0;
-    } else if (millis() - start > MAX_SHOW_MS && loops > 0) break;
-    if (millis() - start > MAX_SHOW_MS * 2) break;  // very long single loop: hard stop
+    } else if (!sec && millis() - start > MAX_SHOW_MS && loops > 0) break;
+    if (!sec && millis() - start > MAX_SHOW_MS * 2) break;  // very long single loop: hard stop
   }
   uint32_t ms = millis() - start;
   Serial.printf("  %-36s %3dx%-3d %4u frames %2u loops %5.1f fps\n", name.c_str(), gif.getCanvasWidth(), gif.getCanvasHeight(),
@@ -302,6 +308,7 @@ bool waitMs(uint32_t ms) {
   while ((int32_t)(end - millis()) > 0) {
     pollButton();
     netService();
+    checkNight();
     if (buttonAction != BTN_NONE || holdPlayback || addrUntil) return true;
     delay(3);
   }
@@ -320,5 +327,5 @@ void loop() {
   }
   if (holdPlayback || playlist.empty()) { delay(5); return; }
   if (playIdx >= playlist.size()) playIdx = 0;
-  playOne(playlist[playIdx++]);
+  playItem(playlist[playIdx++]);
 }

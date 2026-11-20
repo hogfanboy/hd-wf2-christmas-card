@@ -36,6 +36,10 @@ void settingsLoad() {
   staSsid = prefs.getString("ssid", "");
   staPass = prefs.getString("pass", "");
   apPass = prefs.getString("appass", "");
+  tzString = prefs.getString("tz", "UTC0");
+  nightFrom = prefs.getChar("nfrom", -1);
+  nightTo = prefs.getChar("nto", -1);
+  nightLevel = prefs.getUChar("nlevel", 0);
   if (apPass.length() != 8) {                      // first boot: make this card's own hotspot password
     char buf[9];
     for (int i = 0; i < 8; i++) buf[i] = '0' + (esp_random() % 10);
@@ -51,7 +55,8 @@ void settingsLoad() {
   hostName.toLowerCase();
 }
 void applyBrightness() {
-  panel->setBrightness8((uint16_t)MAX_BRIGHTNESS * brightnessPct / 100);
+  uint16_t pct = nightNow ? brightnessPct * nightLevel / 100 : brightnessPct;
+  panel->setBrightness8((uint16_t)MAX_BRIGHTNESS * pct / 100);
 }
 
 // A freshly installed update must confirm itself, or the next reboot goes back to the previous version
@@ -130,10 +135,12 @@ static int countPictures() {
 }
 static void handleInfo() {
   touch();
-  char buf[260];
-  snprintf(buf, sizeof(buf), "{\"fw\":\"%s\",\"name\":\"%s\",\"total\":%u,\"used\":%u,\"files\":%d,\"brightness\":%u,\"heap\":%u}", FW_VERSION,
-           hostName.c_str(), (unsigned)LittleFS.totalBytes(), (unsigned)LittleFS.usedBytes(), countPictures(), brightnessPct,
-           (unsigned)ESP.getFreeHeap());
+  char buf[420];
+  snprintf(buf, sizeof(buf), "{\"fw\":\"%s\",\"name\":\"%s\",\"total\":%u,\"used\":%u,\"files\":%d,\"items\":%u,\"brightness\":%u,\"heap\":%u,"
+           "\"tz\":\"%s\",\"nightFrom\":%d,\"nightTo\":%d,\"nightLevel\":%u,\"night\":%s,\"time\":%lu}",
+           FW_VERSION, hostName.c_str(), (unsigned)LittleFS.totalBytes(), (unsigned)LittleFS.usedBytes(), countPictures(),
+           (unsigned)playlist.size(), brightnessPct, (unsigned)ESP.getFreeHeap(), tzString.c_str(), nightFrom, nightTo, nightLevel,
+           nightNow ? "true" : "false", timeValid() ? (unsigned long)time(nullptr) : 0UL);
   sendJson(buf);
 }
 
@@ -148,6 +155,7 @@ static void handleClear() {
   if (dir && dir.isDirectory()) for (File f = dir.openNextFile(); f; f = dir.openNextFile()) names.push_back(String("/gifs/") + f.name());
   dir.close();
   for (auto &n : names) LittleFS.remove(n);
+  LittleFS.remove("/show.txt");
   LittleFS.mkdir("/gifs");
   playlist.clear();
   upCount = 0;
@@ -166,7 +174,8 @@ static void handleUploadData() {
     if (!holdPlayback || playing) { upError = "not ready"; return; }
     String name = up.filename;
     name.replace("/", ""); name.replace("\\", "");
-    if (!name.endsWith(".gif")) name += ".gif";
+    String low = name; low.toLowerCase();
+    if (!low.endsWith(".gif") && !low.endsWith(".pjm")) name += ".gif";
     upFree = LittleFS.totalBytes() - LittleFS.usedBytes();
     upFile = LittleFS.open("/gifs/" + name, "w");
     if (!upFile) upError = "can't create file";
@@ -196,6 +205,51 @@ static void handlePlay() {
   holdPlayback = false;
   panel->clearScreen();
   if (doubleBuffered) panel->flipDMABuffer();
+  sendJson("{\"ok\":true}");
+}
+
+// The show list (see show.ino), sent as plain text after the pictures.
+static void handleShowGet() {
+  touch();
+  File f = LittleFS.open("/show.txt", "r");
+  if (!f) {                                        // older content: every picture, automatic timing
+    String s;
+    for (auto &it : playlist) if (it.type == 'p') s += "pic\t0\t" + it.file.substring(6) + "\n";
+    web->send(200, "text/plain", s);
+    return;
+  }
+  web->streamFile(f, "text/plain");
+  f.close();
+}
+// One stored picture, so the page can load the current show back for editing.
+static void handleFileGet() {
+  touch();
+  String n = web->arg("name");
+  if (n.indexOf('/') >= 0 || n.indexOf('\\') >= 0 || n.isEmpty()) { web->send(400, "text/plain", "bad name"); return; }
+  File f = LittleFS.open("/gifs/" + n, "r");
+  if (!f) { web->send(404, "text/plain", "not found"); return; }
+  web->streamFile(f, "application/octet-stream");
+  f.close();
+}
+static void handleShowPost() {
+  touch();
+  String body = web->arg("plain");
+  if (body.length() > 16000) { web->send(400, "text/plain", "show too long"); return; }
+  File f = LittleFS.open("/show.txt", "w");
+  if (!f || f.print(body) != body.length()) { web->send(500, "text/plain", "write failed"); return; }
+  f.close();
+  sendJson("{\"ok\":true}");
+}
+
+// Time zone (POSIX TZ string from the page) and night mode hours.
+static void handleSettings() {
+  touch();
+  if (web->hasArg("tz") && web->arg("tz").length() < 60) { tzString = web->arg("tz"); prefs.putString("tz", tzString); timeBegin(); }
+  if (web->hasArg("nf")) { nightFrom = constrain((int)web->arg("nf").toInt(), -1, 23); prefs.putChar("nfrom", nightFrom); }
+  if (web->hasArg("nt")) { nightTo = constrain((int)web->arg("nt").toInt(), -1, 23); prefs.putChar("nto", nightTo); }
+  if (web->hasArg("nl")) { nightLevel = constrain((int)web->arg("nl").toInt(), 0, 100); prefs.putUChar("nlevel", nightLevel); }
+  forceNightCheck();
+  applyBrightness();                               // night level may have changed while it's night
   sendJson("{\"ok\":true}");
 }
 
@@ -249,11 +303,16 @@ static void startHomeWeb() {
   web->on("/api/brightness", HTTP_POST, handleBrightness);
   web->on("/api/update", HTTP_POST, handleUpdateDone, handleUpdateData);
   web->on("/api/forget-wifi", HTTP_POST, handleForgetWifi);
+  web->on("/api/show", HTTP_GET, handleShowGet);
+  web->on("/api/show", HTTP_POST, handleShowPost);
+  web->on("/api/settings", HTTP_POST, handleSettings);
+  web->on("/api/file", HTTP_GET, handleFileGet);
   web->onNotFound([]() { web->send(404, "text/plain", "not found"); });
   web->begin();
   MDNS.begin(hostName.c_str());
   MDNS.addService("http", "tcp", 80);
   webStarted = true;
+  timeBegin();
 }
 
 // ---------- WiFi setup hotspot page + API ----------

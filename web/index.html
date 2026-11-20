@@ -17,18 +17,27 @@
   button, .btn { font:600 16px system-ui,sans-serif; border:0; border-radius:12px; padding:13px 16px; cursor:pointer; width:100%; display:block; text-align:center; }
   .primary { background:var(--gold); color:#1a1300; }
   .secondary { background:#24243a; color:var(--text); border:1px solid var(--line); }
-  .ghost { background:none; color:var(--muted); width:auto; padding:6px 10px; font-size:14px; }
   button:disabled { opacity:.45; cursor:default; }
   input[type=file] { position:absolute; width:1px; height:1px; opacity:0; overflow:hidden; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+  .row2 button { padding:10px 6px; font-size:14px; }
   .items { display:grid; gap:10px; margin-top:12px; }
-  .item { display:grid; grid-template-columns:128px 1fr; gap:12px; align-items:center; background:#101019; border:1px solid var(--line); border-radius:12px; padding:8px; }
-  .item canvas { width:128px; height:64px; border-radius:4px; background:#07070b; image-rendering:pixelated; }
+  .item { display:grid; grid-template-columns:128px 1fr; gap:12px; align-items:start; background:#101019; border:1px solid var(--line); border-radius:12px; padding:8px; }
+  .item.sel { border-color:var(--gold); }
+  .item canvas { width:128px; height:64px; border-radius:4px; background:#07070b; image-rendering:pixelated; cursor:pointer; }
   .item .name { font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .item .meta { font-size:12px; color:var(--muted); }
-  .item .row { display:flex; gap:6px; margin-top:4px; flex-wrap:wrap; }
-  .chip { font:600 12px system-ui,sans-serif; padding:5px 10px; border-radius:999px; border:1px solid var(--line); background:none; color:var(--muted); width:auto; }
+  .item .row { display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; align-items:center; }
+  .item .edit { grid-column:1 / -1; display:grid; gap:8px; }
+  .item .edit label { font-size:13px; color:var(--muted); display:flex; gap:8px; align-items:center; }
+  .item input[type=text], .item select, .item input[type=date], select.s, input.s { background:#1b1b28; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 8px; font:15px system-ui,sans-serif; }
+  .item input[type=text] { width:100%; }
+  .item input[type=color] { width:36px; height:30px; border:0; background:none; padding:0; }
+  .chip { font:600 12px system-ui,sans-serif; padding:5px 10px; border-radius:999px; border:1px solid var(--line); background:none; color:var(--muted); width:auto; display:inline-block; }
   .chip.on { background:var(--cyan); color:#001520; border-color:var(--cyan); }
   .chip.del { color:var(--red); }
+  .tag { font:700 11px system-ui,sans-serif; padding:2px 7px; border-radius:6px; background:#2b2440; color:#d6b8ff; margin-left:4px; }
+  .secs { width:64px; padding:4px 6px !important; font-size:13px !important; }
   .bar { height:10px; border-radius:999px; background:#22222f; overflow:hidden; margin:8px 0 4px; }
   .bar i { display:block; height:100%; width:0; background:var(--green); transition:width .2s; }
   .bar.over i { background:var(--red); }
@@ -39,6 +48,8 @@
   .status { margin-top:10px; font-size:14px; min-height:21px; }
   .ok { color:var(--green); } .err { color:var(--red); }
   .stack > * + * { margin-top:10px; }
+  .flex { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .update { border-color:var(--gold); }
 </style>
 </head>
 <body>
@@ -46,19 +57,31 @@
   <h1>Pocket <span>Jumbotron</span></h1>
   <div class="muted" id="cardInfo">Connecting to your screen…</div>
 
+  <div class="box update stack" id="updBox" hidden>
+    <b>New software for your screen: <span id="updVer"></span></b>
+    <button class="primary" id="updBtn">Update now (about 30 seconds)</button>
+    <div class="status" id="updStatus"></div>
+  </div>
+
   <div class="box">
     <div class="frame"><canvas id="big" class="preview" width="768" height="384"></canvas></div>
-    <div class="muted" style="margin-top:8px" id="bigLabel">Preview: this is how it will look on the screen.</div>
+    <div class="muted" style="margin-top:8px" id="bigLabel">Preview: tap an item to see how it looks on the screen.</div>
   </div>
 
   <div class="box stack">
-    <h2>1. Pick pictures</h2>
-    <div class="muted">Photos, animated GIFs or WEBPs. They're resized on this phone to fit the screen.</div>
-    <label class="btn secondary" for="files">+ Add pictures</label>
+    <h2>1. Build your show</h2>
+    <div class="muted">Items play top to bottom, then start over. Photos, GIFs and WEBPs are resized on this phone.</div>
+    <label class="btn secondary" for="files">+ Pictures</label>
     <input id="files" type="file" accept="image/*" multiple>
+    <div class="row2">
+      <button class="secondary" id="addText">+ Message</button>
+      <button class="secondary" id="addClock">+ Clock</button>
+      <button class="secondary" id="addCount">+ Countdown</button>
+    </div>
     <button class="secondary" id="packBtn">★ Get the latest Pocket Jumbotron pictures</button>
     <div class="items" id="packs" hidden></div>
     <div class="status" id="packStatus"></div>
+    <button class="secondary" id="loadShow">↻ Load what's on the screen now</button>
     <div class="items" id="items"></div>
     <div>
       <div class="bar" id="bar"><i></i></div>
@@ -68,7 +91,7 @@
 
   <div class="box stack">
     <h2>2. Send to screen</h2>
-    <div class="muted">This <b>replaces everything</b> currently on the screen.</div>
+    <div class="muted">This <b>replaces everything</b> on the screen with the show above.</div>
     <button class="primary" id="send" disabled>Send to screen</button>
     <div class="status" id="sendStatus"></div>
   </div>
@@ -80,8 +103,23 @@
   </div>
 
   <div class="box stack">
+    <h2>Clock &amp; night mode</h2>
+    <div class="muted" id="timeInfo">The screen gets the time from the internet.</div>
+    <div class="flex">
+      <span class="muted">At night, from</span>
+      <select class="s" id="nf"></select><span class="muted">to</span><select class="s" id="nt"></select>
+    </div>
+    <div class="flex">
+      <span class="muted">Night brightness</span>
+      <select class="s" id="nl"><option value="0">Off (dark)</option><option value="10">10%</option><option value="25">25%</option><option value="50">50%</option></select>
+    </div>
+    <button class="secondary" id="saveTime">Save (also sets the time zone to this phone's)</button>
+    <div class="status" id="timeStatus"></div>
+  </div>
+
+  <div class="box stack">
     <details>
-      <summary>Advanced: install a software update</summary>
+      <summary>Advanced: install a software update file</summary>
       <div class="stack" style="margin-top:10px">
         <div class="muted">Only use a file you were sent for the Pocket Jumbotron (ends in <b>.bin</b>).</div>
         <label class="btn secondary" for="fw">Choose update file</label>
@@ -102,15 +140,18 @@
 <!--VENDOR-->
 <script>
 'use strict';
-const W = 128, H = 64, MAX_FRAMES = 150;
+const W = 128, H = 64, MAX_FRAMES = 150, STILL_MS = 10000, JPEG_Q = 0.86;
+const SITE = location.hostname === 'localhost' ? '/' : 'https://hogfanboy.github.io/hd-wf2-christmas-card/';
 const $ = (id) => document.getElementById(id);
 let card = { total: 0, used: 0, brightness: 100, fw: '?' };
-const items = [];                 // { name, src, fit, frames:[{img:ImageData, delay}], blob }
+// Show items. Pictures: { kind:'pic', name, src, fit, frames:[{img,delay}], blob, ext }.
+// Others: { kind:'text'|'clock'|'countdown', text, fg, bg, rainbow, font, effect, date, h24 }. All: secs (0 = auto).
+const items = [];
 let selected = null;
 
-// ---------- LED-look preview of the big canvas ----------
+// ---------- LED-look preview ----------
 const big = $('big'), bctx = big.getContext('2d');
-const S = big.width / W;          // 6
+const S = big.width / W;
 const mask = (() => {
   const m = document.createElement('canvas'); m.width = big.width; m.height = big.height;
   const c = m.getContext('2d'); c.fillStyle = '#07070b'; c.fillRect(0, 0, m.width, m.height);
@@ -129,10 +170,78 @@ function drawLED(img) {
 function blank() { bctx.fillStyle = '#07070b'; bctx.fillRect(0, 0, big.width, big.height); }
 blank();
 
-// Animate the selected item on the big preview, and every item's thumbnail.
-let tick = 0;
+// ---------- Text / clock / countdown rendering (a close copy of what the screen draws) ----------
+const tcan = document.createElement('canvas'); tcan.width = W; tcan.height = H;
+const tctx = tcan.getContext('2d', { willReadFrequently: true });
+const CAP = { 1: 14, 2: 17, 3: 25, 4: 34 };       // capital-letter height in pixels of the screen's fonts
+const fontCss = (f) => f == 1 ? `bold ${Math.round(CAP[1] / 0.72)}px monospace` : `bold ${Math.round(CAP[f] / 0.72)}px Arial, Helvetica, sans-serif`;
+const capOf = () => +tctx.font.match(/(d+)px/)[1] * 0.72;
+const hue = (h) => `hsl(${(h % 1536) / 1536 * 360},100%,50%)`;
+const flakeSeed = Array.from({ length: 48 }, (_, i) => ({ x: (i * 977) % (W * 16), y: (i * 613) % (H * 16), spd: 4 + (i * 7) % 10, bri: 90 + (i * 53) % 166 }));
+function paintBg(it, t) {
+  tctx.fillStyle = it.bg; tctx.fillRect(0, 0, W, H);
+  const frame = Math.floor(t / 25);
+  if (it.effect === 'snow') for (const f of flakeSeed) {
+    const y = Math.floor(((f.y + f.spd * frame) % (H * 16)) / 16), x = Math.floor(f.x / 16 + Math.sin(frame / 8 + f.spd) * 1.5 + W) % W;
+    tctx.fillStyle = `rgb(${f.bri},${f.bri},${f.bri})`; tctx.fillRect(x, y, 1, 1);
+  }
+  if (it.effect === 'sparkle') flakeSeed.forEach((f, i) => {
+    const ph = Math.floor(frame * f.spd / 4 + i * 37) % 64, v = (ph < 32 ? ph * 8 : (63 - ph) * 8) / 255;
+    tctx.globalAlpha = v; tctx.fillStyle = hue(i * 200); tctx.fillRect(Math.floor(f.x / 16), Math.floor(f.y / 16), 1, 1); tctx.globalAlpha = 1;
+  });
+}
+function drawStr(it, s, x, y, t) {
+  if (!it.rainbow) { tctx.fillStyle = it.fg; tctx.fillText(s, x, y); return; }
+  for (let i = 0; i < s.length; i++) { tctx.fillStyle = hue(t / 4 + i * 120); tctx.fillText(s[i], x, y); x += tctx.measureText(s[i]).width; }
+}
+function daysUntil(mmdd) {
+  const now = new Date(), [m, d] = mmdd.split('-').map(Number);
+  let tgt = new Date(now.getFullYear(), m - 1, d, 12);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12);
+  if (tgt < today) tgt = new Date(now.getFullYear() + 1, m - 1, d, 12);
+  return Math.round((tgt - today) / 86400000);
+}
+function renderItem(it, t) {      // t = ms since the item started
+  paintBg(it, t);
+  tctx.textBaseline = 'alphabetic';
+  if (it.kind === 'text') {
+    tctx.font = fontCss(it.font);
+    const tw = tctx.measureText(it.text).width;
+    const x = tw > W - 4 ? W - (Math.floor(t / 25) % (W + tw)) : (W - tw) / 2;
+    drawStr(it, it.text, x, Math.round((H + capOf()) / 2), t);
+  } else {
+    let bigS, l1 = '', l2 = '';
+    if (it.kind === 'clock') {
+      const d = new Date(), h = it.h24 ? d.getHours() : (d.getHours() % 12 || 12);
+      bigS = (it.h24 ? String(h).padStart(2, '0') : h) + ':' + String(d.getMinutes()).padStart(2, '0');
+      l2 = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '').toUpperCase() + (it.h24 ? '' : d.getHours() < 12 ? ' AM' : ' PM');
+    } else {
+      const n = daysUntil(it.date);
+      bigS = n ? String(n) : 'TODAY!'; l1 = n ? (n === 1 ? 'DAY UNTIL' : 'DAYS UNTIL') : it.text.toUpperCase(); l2 = n ? it.text.toUpperCase() : '';
+    }
+    tctx.font = fontCss(Math.max(3, it.font));
+    if (tctx.measureText(bigS).width > W - 2) tctx.font = fontCss(3);
+    drawStr(it, bigS, (W - tctx.measureText(bigS).width) / 2, Math.round((40 + capOf()) / 2), t);
+    tctx.font = '8px monospace'; tctx.textBaseline = 'top';
+    if (it.kind === 'clock') { tctx.fillStyle = '#b4b4c8'; tctx.fillText(l2, (W - tctx.measureText(l2).width) / 2, 50); }
+    else { tctx.fillStyle = '#fff'; tctx.fillText(l1, (W - tctx.measureText(l1).width) / 2, 42); tctx.fillStyle = '#ffbe3c'; tctx.fillText(l2, (W - tctx.measureText(l2).width) / 2, 53); }
+  }
+  return tctx.getImageData(0, 0, W, H);
+}
+
+// Animate every thumbnail and the selected item on the big preview.
 function animate(now) {
   for (const it of items) {
+    if (it.kind !== 'pic') {
+      if (now >= (it.next || 0)) {
+        it.t0 ??= now;
+        const img = renderItem(it, now - it.t0);
+        it.thumb.getContext('2d').putImageData(img, 0, 0);
+        if (it === selected) drawLED(img);
+        it.next = now + 40;
+      }
+      continue;
+    }
     if (!it.frames.length) continue;
     if (now >= (it.next || 0)) {
       it.fi = ((it.fi ?? -1) + 1) % it.frames.length;
@@ -145,18 +254,18 @@ function animate(now) {
 }
 requestAnimationFrame(animate);
 
-// ---------- Decoding ----------
+// ---------- Decoding pictures ----------
 // Returns full-size frames as canvases + delays (ms). Long animations keep every Nth frame, and each kept
 // frame lasts as long as the frames it stands for, so the timing stays right.
-const STILL_MS = 10000;
 function sniffType(buf, fallback) {
   const s = (a, b) => String.fromCharCode(...buf.slice(a, b));
   if (s(0, 3) === 'GIF') return 'image/gif';
   if (s(0, 4) === 'RIFF' && s(8, 12) === 'WEBP') return 'image/webp';
   if (buf[0] === 0x89 && s(1, 4) === 'PNG') return 'image/png';
+  if (s(0, 4) === 'PJM1') return 'pjm';
   return fallback || 'image/jpeg';
 }
-function keepFrames(n, delayOf, grab) {        // calls grab(i, totalDelay) for each kept frame
+function keepFrames(n, delayOf, grab) {
   const step = Math.max(1, Math.ceil(n / MAX_FRAMES));
   const out = [];
   for (let i = 0; i < n; i += step) {
@@ -171,6 +280,7 @@ async function decode(file) {
   const buf = new Uint8Array(await file.arrayBuffer());
   const type = sniffType(buf, file.type);
   if (type === 'image/gif') return decodeGif(buf);
+  if (type === 'pjm') return decodePjm(buf);
   // Animated WEBP/PNG: ImageDecoder gives fully composited frames (Chrome, Edge, Android). Elsewhere: a still.
   if ('ImageDecoder' in window && (type === 'image/webp' || type === 'image/png')) {
     try {
@@ -180,7 +290,7 @@ async function decode(file) {
       if (n > 1) {
         const step = Math.max(1, Math.ceil(n / MAX_FRAMES));
         const ms = [], kept = [];
-        for (let i = 0; i < n; i++) {               // draw kept frames right away, close every frame
+        for (let i = 0; i < n; i++) {
           const { image } = await dec.decode({ frameIndex: i });
           ms.push(Math.max(20, Math.round((image.duration || 100000) / 1000)));
           if (i % step === 0) kept[i] = toCanvas(image, image.displayWidth, image.displayHeight);
@@ -195,12 +305,11 @@ async function decode(file) {
   const bmp = await createImageBitmap(file);
   return [{ canvas: toCanvas(bmp, bmp.width, bmp.height), delay: STILL_MS }];
 }
-
 function decodeGif(buf) {
   const r = new GifReader(buf);
-  const n = r.numFrames();
+  const n = r.numFrames(), step = Math.max(1, Math.ceil(n / MAX_FRAMES));
   const rgba = new Uint8ClampedArray(r.width * r.height * 4);
-  const full = [];                               // composite every frame (disposal needs all of them)
+  const full = [];
   let prevInfo = null, saved = null;
   for (let i = 0; i < n; i++) {
     const info = r.frameInfo(i);
@@ -209,9 +318,7 @@ function decodeGif(buf) {
     if (info.disposal === 3) saved = rgba.slice();
     r.decodeAndBlitFrameRGBA(i, rgba);
     prevInfo = info;
-    full.push({ delay: Math.max(20, (info.delay || 10) * 10), px: null });
-    const step = Math.max(1, Math.ceil(n / MAX_FRAMES));
-    if (i % step === 0) full[i].px = rgba.slice();
+    full.push({ delay: Math.max(20, (info.delay || 10) * 10), px: i % step === 0 ? rgba.slice() : null });
   }
   if (n === 1) full[0].delay = STILL_MS;
   return keepFrames(n, k => full[k].delay, (i, d) => {
@@ -219,6 +326,16 @@ function decodeGif(buf) {
     c.getContext('2d').putImageData(new ImageData(full[i].px, r.width, r.height), 0, 0);
     return { canvas: c, delay: d };
   });
+}
+async function decodePjm(buf) {           // our own full-color format, read back from the screen
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength), out = [];
+  for (let p = 4; p + 8 <= buf.length;) {
+    const len = dv.getUint32(p, true), delay = dv.getUint16(p + 4, true);
+    const bmp = await createImageBitmap(new Blob([buf.slice(p + 8, p + 8 + len)], { type: 'image/jpeg' }));
+    out.push({ canvas: toCanvas(bmp, bmp.width, bmp.height), delay });
+    p += 8 + len;
+  }
+  return out;
 }
 function clearRect(rgba, w, f) {
   for (let y = f.y; y < f.y + f.height; y++) rgba.fill(0, (y * w + f.x) * 4, (y * w + f.x + f.width) * 4);
@@ -237,68 +354,266 @@ function scale(src, fit) {
   return wctx.getImageData(0, 0, W, H);
 }
 
-function encode(frames) {
+// ---------- Encoding for the screen ----------
+// GIF: up to 256 colors per frame, lossless, small for cartoons/text. Full color (.pjm): JPEG per frame,
+// best for photos, gradients and WEBP animations. "auto" picks full color when a frame has many colors.
+function colorCount(img, cap) {
+  const seen = new Set(), d = img.data;
+  for (let i = 0; i < d.length; i += 4) { seen.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]); if (seen.size > cap) break; }
+  return seen.size;
+}
+function encodeGif(frames) {
   const { GIFEncoder, quantize, applyPalette } = gifenc;
   const g = GIFEncoder();
   for (const f of frames) {
     const pal = quantize(f.img.data, 255);
-    pal.push([0, 0, 0]);                   // always keep exact black (letterbox bars)
+    pal.push([0, 0, 0]);
     g.writeFrame(applyPalette(f.img.data, pal), W, H, { palette: pal, delay: f.delay });
   }
   g.finish();
   return new Blob([g.bytes()], { type: 'image/gif' });
 }
-
+async function encodePjm(frames) {
+  const parts = [new TextEncoder().encode('PJM1')];
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const cx = c.getContext('2d');
+  for (const f of frames) {
+    cx.putImageData(f.img, 0, 0);
+    const jpg = new Uint8Array(await (await new Promise(r => c.toBlob(r, 'image/jpeg', JPEG_Q))).arrayBuffer());
+    const hdr = new DataView(new ArrayBuffer(8));
+    hdr.setUint32(0, jpg.length, true); hdr.setUint16(4, Math.min(65535, Math.round(f.delay)), true);
+    parts.push(new Uint8Array(hdr.buffer), jpg);
+  }
+  return new Blob(parts, { type: 'application/octet-stream' });
+}
 async function build(it) {
   it.frames = it.src.map(s => ({ img: scale(s.canvas, it.fit), delay: s.delay }));
   it.fi = -1; it.next = 0;
-  it.blob = encode(it.frames);
-  it.metaEl.textContent = `${it.frames.length} frame${it.frames.length > 1 ? 's' : ''} · ${kb(it.blob.size)}`;
+  const full = it.format === 'full' || (it.format === 'auto' && it.frames.some(f => colorCount(f.img, 400) > 400));
+  it.ext = full ? 'pjm' : 'gif';
+  it.blob = full ? await encodePjm(it.frames) : encodeGif(it.frames);
+  it.metaEl.innerHTML = `${it.frames.length} frame${it.frames.length > 1 ? 's' : ''} · ${kb(it.blob.size)}<span class="tag">${full ? 'Full color' : 'GIF'}</span>`;
   updateSpace();
 }
 
-// ---------- List UI ----------
+// ---------- Show list UI ----------
 const kb = (b) => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.round(b / 1024) + ' KB';
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function select(it) {
+  selected = it;
+  items.forEach(i => i.el.classList.toggle('sel', i === it));
+  $('bigLabel').textContent = 'Preview: ' + label(it);
+  if (it && it.kind !== 'pic') it.t0 = performance.now();
+}
+const label = (it) => it.kind === 'pic' ? it.name : it.kind === 'text' ? '“' + it.text + '”' : it.kind === 'clock' ? 'Clock' : 'Countdown to ' + it.text;
+function move(it, d) {
+  const i = items.indexOf(it), j = i + d;
+  if (j < 0 || j >= items.length) return;
+  items.splice(i, 1); items.splice(j, 0, it);
+  const box = $('items'); items.forEach(x => box.appendChild(x.el));
+}
+function remove(it) {
+  items.splice(items.indexOf(it), 1); it.el.remove();
+  if (selected === it) { selected = null; items[0] ? select(items[0]) : blank(); }
+  updateSpace();
+}
+function baseEl(it) {
+  const el = document.createElement('div'); el.className = 'item';
+  el.innerHTML = `<canvas width="128" height="64"></canvas><div><div class="name"></div><div class="meta"></div>
+    <div class="row"><span class="muted" style="font-size:12px">Seconds</span><input class="s secs" type="number" min="0" max="600" placeholder="auto">
+    <button class="chip" data-mv="-1">▲</button><button class="chip" data-mv="1">▼</button><button class="chip del">Remove</button></div></div>`;
+  it.el = el; it.thumb = el.querySelector('canvas'); it.metaEl = el.querySelector('.meta');
+  el.querySelector('.name').textContent = label(it);
+  const secs = el.querySelector('.secs');
+  secs.value = it.secs || ''; secs.oninput = () => { it.secs = Math.max(0, Math.min(600, +secs.value || 0)); };
+  it.thumb.onclick = () => select(it);
+  el.querySelectorAll('[data-mv]').forEach(b => b.onclick = () => move(it, +b.dataset.mv));
+  el.querySelector('.del').onclick = () => remove(it);
+  $('items').appendChild(el);
+  items.push(it);
+  return el;
+}
+
 $('files').addEventListener('change', async (e) => {
   for (const file of e.target.files) await addFile(file);
   e.target.value = '';
 });
-async function addFile(file) {
-  {
-    const it = { name: file.name, fit: 'auto', frames: [], blob: null };
-    const el = document.createElement('div'); el.className = 'item';
-    el.innerHTML = `<canvas width="128" height="64"></canvas><div><div class="name"></div><div class="meta">Converting…</div>
-      <div class="row"><button class="chip" data-fit="fill">Fill</button><button class="chip" data-fit="fit">Fit</button><button class="chip del">Remove</button></div></div>`;
-    el.querySelector('.name').textContent = file.name;
-    it.el = el; it.thumb = el.querySelector('canvas'); it.metaEl = el.querySelector('.meta');
-    $('items').appendChild(el);
-    items.push(it);
-    el.querySelector('canvas').onclick = () => { selected = it; $('bigLabel').textContent = 'Preview: ' + it.name; };
-    el.querySelectorAll('[data-fit]').forEach(b => b.onclick = async () => { it.fit = b.dataset.fit; markFit(it); await build(it); selected = it; });
-    el.querySelector('.del').onclick = () => { items.splice(items.indexOf(it), 1); el.remove(); if (selected === it) { selected = items[0] || null; if (!selected) blank(); } updateSpace(); };
-    try {
-      it.src = await decode(file);
-      const r = it.src[0].canvas.width / it.src[0].canvas.height;
-      it.fit = r >= 1.6 ? 'fill' : 'fit';
-      markFit(it);
-      await build(it);
-      if (!selected) selected = it;
-    } catch (err) {
-      it.metaEl.innerHTML = '<span class="err">Couldn\'t read this picture</span>';
-      it.failed = true; updateSpace();
-    }
+async function addFile(file, secs = 0, fromCard = false) {
+  const it = { kind: 'pic', name: file.name, fit: 'auto', format: 'auto', frames: [], blob: null, secs };
+  const el = baseEl(it);
+  it.metaEl.textContent = 'Converting…';
+  const row = document.createElement('div'); row.className = 'row';
+  row.innerHTML = `<button class="chip" data-fit="fill">Fill</button><button class="chip" data-fit="fit">Fit</button>
+    <button class="chip" data-fmt="gif">GIF</button><button class="chip" data-fmt="full">Full color</button>`;
+  el.children[1].appendChild(row);
+  row.querySelectorAll('[data-fit]').forEach(b => b.onclick = async () => { it.fit = b.dataset.fit; marks(it); await build(it); select(it); });
+  row.querySelectorAll('[data-fmt]').forEach(b => b.onclick = async () => { it.format = b.dataset.fmt; marks(it); await build(it); select(it); });
+  try {
+    it.src = await decode(file);
+    const r = it.src[0].canvas.width / it.src[0].canvas.height;
+    it.fit = fromCard || r >= 1.6 ? 'fill' : 'fit';
+    await build(it);
+    if (fromCard) { it.format = it.ext === 'pjm' ? 'full' : 'gif'; }
+    marks(it);
+    if (!selected) select(it);
+  } catch (err) {
+    console.warn(err);
+    it.metaEl.innerHTML = '<span class="err">Couldn\'t read this picture</span>';
+    it.failed = true; updateSpace();
   }
 }
+function marks(it) {
+  it.el.querySelectorAll('[data-fit]').forEach(b => b.classList.toggle('on', b.dataset.fit === it.fit));
+  it.el.querySelectorAll('[data-fmt]').forEach(b => b.classList.toggle('on', b.dataset.fmt === (it.format === 'auto' ? (it.ext === 'pjm' ? 'full' : 'gif') : it.format)));
+}
+
+// Message / clock / countdown items with their own little editor.
+const COLORS = { fg: '#ffbe3c', bg: '#000000' };
+function addDrawn(kind, o = {}) {
+  const it = Object.assign({ kind, secs: 0, fg: kind === 'clock' ? '#5ac8ff' : COLORS.fg, bg: COLORS.bg, rainbow: false,
+    font: kind === 'text' ? 3 : 4, effect: kind === 'countdown' ? 'snow' : 'none',
+    text: kind === 'text' ? 'Happy Birthday!' : kind === 'countdown' ? 'Christmas' : '', date: '12-25',
+    h24: !new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12 }, o);
+  const el = baseEl(it);
+  it.metaEl.textContent = kind === 'text' ? 'Message' : kind === 'clock' ? 'Shows the time (needs internet)' : 'Counts the days (needs internet)';
+  const ed = document.createElement('div'); ed.className = 'edit';
+  ed.innerHTML = `
+    ${kind !== 'clock' ? `<input type="text" maxlength="${kind === 'text' ? 120 : 21}" data-k="text" placeholder="${kind === 'text' ? 'Your message' : 'What for, e.g. Christmas'}">` : ''}
+    ${kind === 'countdown' ? `<label>Date <input type="date" data-k="date"></label>` : ''}
+    ${kind === 'clock' ? `<label><input type="checkbox" data-k="h24"> 24-hour clock</label>` : ''}
+    <label>Color <input type="color" data-k="fg"> <input type="checkbox" data-k="rainbow"> Rainbow
+      &nbsp; Background <input type="color" data-k="bg"></label>
+    <label>Size <select data-k="font"><option value="1">Pixel</option><option value="2">Small</option><option value="3">Medium</option><option value="4">Big</option></select>
+      &nbsp; Effect <select data-k="effect"><option value="none">None</option><option value="snow">Snow</option><option value="sparkle">Sparkle</option></select></label>`;
+  el.appendChild(ed);
+  ed.querySelectorAll('[data-k]').forEach(inp => {
+    const k = inp.dataset.k;
+    if (inp.type === 'checkbox') inp.checked = !!it[k];
+    else if (k === 'date') inp.value = new Date().getFullYear() + '-' + it.date;
+    else inp.value = it[k];
+    inp.oninput = () => {
+      it[k] = inp.type === 'checkbox' ? inp.checked : k === 'font' ? +inp.value : k === 'date' ? inp.value.slice(5) : inp.value;
+      el.querySelector('.name').textContent = label(it);
+      it.t0 = performance.now(); updateSpace();
+    };
+  });
+  select(it);
+  updateSpace();
+  return it;
+}
+$('addText').onclick = () => addDrawn('text');
+$('addClock').onclick = () => addDrawn('clock');
+$('addCount').onclick = () => addDrawn('countdown');
+
+const ready = () => items.filter(i => i.kind !== 'pic' || (i.blob && !i.failed));
+function updateSpace() {
+  const pics = ready().filter(i => i.kind === 'pic');
+  const need = pics.reduce((s, i) => s + i.blob.size + 4096, 0);
+  const cap = Math.max(1, card.total - 64 * 1024);
+  const pct = Math.min(100, need / cap * 100);
+  $('bar').querySelector('i').style.width = pct + '%';
+  $('bar').classList.toggle('over', need > cap);
+  $('space').textContent = card.total ? `${kb(need)} of ${kb(cap)} space${need > cap ? ': too much, remove some' : ''}` : '';
+  $('send').disabled = !ready().length || need > cap || items.some(i => i.kind === 'pic' && !i.blob && !i.failed);
+}
+
+// ---------- Talking to the screen ----------
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error((await r.text()) || r.status);
+  return r.headers.get('content-type')?.includes('json') ? r.json() : r.text();
+}
+const newer = (a, b) => { const p = s => String(s).split('.').map(Number); const x = p(a), y = p(b); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return false; };
+async function loadInfo() {
+  try {
+    card = await api('/api/info');
+    $('cardInfo').textContent = `Connected to ${card.name || 'your screen'} · ${card.items ?? card.files} item${(card.items ?? card.files) === 1 ? '' : 's'} playing · version ${card.fw}`;
+    $('bright').value = card.brightness;
+    $('brightLabel').textContent = card.brightness + '%';
+    showTime();
+    checkUpdate();
+  } catch { $('cardInfo').textContent = 'Can\'t reach the screen. Are you on the same WiFi?'; }
+  updateSpace();
+}
+loadInfo();
+
+// Load the current show back from the screen, so it can be changed instead of rebuilt.
+$('loadShow').onclick = async () => {
+  const st = $('packStatus'); st.className = 'status'; st.textContent = 'Reading the screen…';
+  try {
+    const lines = (await api('/api/show')).split('\n').filter(Boolean);
+    if (!lines.length) { st.textContent = 'The screen has nothing to load (or older software).'; return; }
+    items.slice().forEach(remove);
+    for (const ln of lines) {
+      const f = ln.split('\t'), secs = +f[1] || 0;
+      if (f[0] === 'pic') {
+        const r = await fetch('/api/file?name=' + encodeURIComponent(f[2]));
+        if (r.ok) await addFile(new File([await r.blob()], f[2]), secs, true);
+      } else {
+        const o = { secs, fg: f[2] === 'rainbow' ? '#ffffff' : '#' + f[2], rainbow: f[2] === 'rainbow', bg: '#' + f[3], font: +f[4], effect: f[5] };
+        if (f[0] === 'text') addDrawn('text', { ...o, text: f[6] });
+        if (f[0] === 'clock') addDrawn('clock', { ...o, h24: f[6] === '24' });
+        if (f[0] === 'countdown') addDrawn('countdown', { ...o, date: f[6], text: f[7] || '' });
+      }
+    }
+    st.className = 'status ok'; st.textContent = `Loaded ${lines.length} item${lines.length > 1 ? 's' : ''} from the screen.`;
+    items.forEach(i => { const s = i.el.querySelector('.secs'); s.value = i.secs || ''; });
+  } catch (err) { st.className = 'status err'; st.textContent = 'Couldn\'t read the screen: ' + err.message; }
+};
+
+const hex6 = (c) => c.replace('#', '').toUpperCase();
+const clean = (s) => String(s).replace(/[\t\r\n]/g, ' ').trim();
+function showLine(it, fileName) {
+  const sec = it.secs || 0;
+  if (it.kind === 'pic') return ['pic', sec, fileName].join('\t');
+  const common = [sec, it.rainbow ? 'rainbow' : hex6(it.fg), hex6(it.bg), it.font, it.effect];
+  if (it.kind === 'text') return ['text', ...common, clean(it.text) || ' '].join('\t');
+  if (it.kind === 'clock') return ['clock', ...common, it.h24 ? '24' : '12'].join('\t');
+  return ['countdown', ...common, it.date, clean(it.text)].join('\t');
+}
+
+$('send').onclick = async () => {
+  const list = ready();
+  if (!confirm(`Replace everything on the screen with these ${list.length} item${list.length > 1 ? 's' : ''}?`)) return;
+  const st = $('sendStatus'); st.className = 'status';
+  $('send').disabled = true;
+  try {
+    st.textContent = 'Clearing old pictures…';
+    for (let tries = 0; ; tries++) {          // the screen finishes its current frame first (503 = busy)
+      const r = await fetch('/api/clear', { method: 'POST' });
+      if (r.ok) break;
+      if (r.status !== 503 || tries > 30) throw new Error(await r.text());
+      await new Promise(res => setTimeout(res, 300));
+    }
+    const lines = [];
+    let n = 0;
+    const pics = list.filter(i => i.kind === 'pic');
+    for (const it of list) {
+      if (it.kind !== 'pic') { lines.push(showLine(it)); continue; }
+      n++;
+      st.textContent = `Sending picture ${n} of ${pics.length}…`;
+      const name = String(n).padStart(2, '0') + '.' + it.ext;
+      const fd = new FormData();
+      fd.append('file', it.blob, name);
+      await api('/api/upload', { method: 'POST', body: fd });
+      lines.push(showLine(it, name));
+    }
+    await api('/api/show', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: lines.join('\n') + '\n' });
+    await api('/api/play', { method: 'POST' });
+    st.className = 'status ok'; st.textContent = `Done! ${list.length} item${list.length > 1 ? 's are' : ' is'} now playing.`;
+  } catch (err) {
+    st.className = 'status err'; st.textContent = 'Something went wrong: ' + err.message + '. Try again.';
+  }
+  $('send').disabled = false;
+  loadInfo();
+};
 
 // ---------- Picture packs from the Pocket Jumbotron website ----------
-// docs/packs/manifest.json on GitHub Pages: { packs: [{ id, title, about, cards?: ["PocketJumbo-EED0"], files: [...] }] }.
-// A pack with "cards" only shows on those screens. Files are ordinary pictures, converted here like your own.
-const PACKS = location.hostname === 'localhost' ? '/packs/' : 'https://hogfanboy.github.io/hd-wf2-christmas-card/packs/';
 $('packBtn').onclick = async () => {
   const st = $('packStatus'), box = $('packs');
   st.className = 'status'; st.textContent = 'Checking for new pictures…';
   try {
-    const r = await fetch(PACKS + 'manifest.json', { cache: 'no-store' });
+    const r = await fetch(SITE + 'packs/manifest.json', { cache: 'no-store' });
     if (!r.ok) throw new Error(r.status);
     const packs = (await r.json()).packs.filter(p => !p.cards || p.cards.some(c => c.toLowerCase() === (card.name || '').toLowerCase()));
     if (!packs.length) { st.textContent = 'Nothing new right now.'; return; }
@@ -314,7 +629,7 @@ $('packBtn').onclick = async () => {
         b.disabled = true;
         for (let i = 0; i < p.files.length; i++) {
           b.textContent = `Adding ${i + 1} of ${p.files.length}…`;
-          const f = await fetch(PACKS + p.id + '/' + encodeURIComponent(p.files[i]));
+          const f = await fetch(SITE + 'packs/' + p.id + '/' + encodeURIComponent(p.files[i]));
           if (f.ok) await addFile(new File([await f.blob()], p.files[i], { type: f.headers.get('content-type') || '' }));
         }
         b.textContent = 'Added. Press Send to put them on the screen.';
@@ -326,69 +641,72 @@ $('packBtn').onclick = async () => {
     st.textContent = 'Couldn\'t reach the Pocket Jumbotron website. Is your WiFi connected to the internet?';
   }
 };
-function markFit(it) { it.el.querySelectorAll('[data-fit]').forEach(b => b.classList.toggle('on', b.dataset.fit === it.fit)); }
 
-const ready = () => items.filter(i => i.blob && !i.failed);
-function updateSpace() {
-  const need = ready().reduce((s, i) => s + i.blob.size + 4096, 0);
-  const cap = Math.max(1, card.total - 64 * 1024);
-  const pct = Math.min(100, need / cap * 100);
-  $('bar').querySelector('i').style.width = pct + '%';
-  $('bar').classList.toggle('over', need > cap);
-  $('space').textContent = card.total ? `${kb(need)} of ${kb(cap)} space${need > cap ? ': too much, remove some' : ''}` : '';
-  $('send').disabled = !ready().length || need > cap;
-}
-
-// ---------- Talking to the screen ----------
-async function api(path, opts) {
-  const r = await fetch(path, opts);
-  if (!r.ok) throw new Error((await r.text()) || r.status);
-  return r.headers.get('content-type')?.includes('json') ? r.json() : r.text();
-}
-async function loadInfo() {
+// ---------- Software updates from the website ----------
+let latest = null;
+async function checkUpdate() {
   try {
-    card = await api('/api/info');
-    $('cardInfo').textContent = `Connected · ${card.files} picture${card.files === 1 ? '' : 's'} on the screen · version ${card.fw}`;
-    $('bright').value = card.brightness;
-    $('brightLabel').textContent = card.brightness + '%';
-  } catch { $('cardInfo').textContent = 'Can\'t reach the screen. Are you on its WiFi?'; }
-  updateSpace();
+    latest = await (await fetch(SITE + 'firmware/info.json', { cache: 'no-store' })).json();
+    if (card.fw && newer(latest.version, card.fw)) { $('updVer').textContent = 'version ' + latest.version; $('updBox').hidden = false; }
+  } catch { /* no internet: no update check */ }
 }
-loadInfo();
-
-$('send').onclick = async () => {
-  const list = ready();
-  if (!confirm(`Replace everything on the screen with these ${list.length} picture${list.length > 1 ? 's' : ''}?`)) return;
-  const st = $('sendStatus'); st.className = 'status';
-  $('send').disabled = true;
+$('updBtn').onclick = async () => {
+  const st = $('updStatus'); st.className = 'status';
+  $('updBtn').disabled = true;
   try {
-    st.textContent = 'Clearing old pictures…';
-    for (let tries = 0; ; tries++) {          // the screen finishes its current frame first (503 = busy)
-      const r = await fetch('/api/clear', { method: 'POST' });
-      if (r.ok) break;
-      if (r.status !== 503 || tries > 30) throw new Error(await r.text());
-      await new Promise(res => setTimeout(res, 300));
-    }
-    for (let i = 0; i < list.length; i++) {
-      st.textContent = `Sending ${i + 1} of ${list.length}…`;
-      const fd = new FormData();
-      fd.append('file', list[i].blob, String(i + 1).padStart(2, '0') + '.gif');
-      await api('/api/upload', { method: 'POST', body: fd });
-    }
-    await api('/api/play', { method: 'POST' });
-    st.className = 'status ok'; st.textContent = `Done! ${list.length} picture${list.length > 1 ? 's are' : ' is'} now playing.`;
-  } catch (err) {
-    st.className = 'status err'; st.textContent = 'Something went wrong: ' + err.message + '. Try again.';
-  }
-  $('send').disabled = false;
-  loadInfo();
+    st.textContent = 'Downloading…';
+    const bin = await (await fetch(SITE + 'firmware/' + latest.app.file, { cache: 'no-store' })).blob();
+    if (bin.size !== latest.app.size) throw new Error('download incomplete');
+    st.textContent = 'Installing… keep this page open.';
+    const fd = new FormData(); fd.append('firmware', bin, latest.app.file);
+    await api('/api/update', { method: 'POST', body: fd });
+    st.className = 'status ok'; st.textContent = 'Installed. The screen is restarting; this page reloads in 20 seconds.';
+    setTimeout(() => location.reload(), 20000);
+  } catch (err) { st.className = 'status err'; st.textContent = 'Update failed: ' + err.message; $('updBtn').disabled = false; }
 };
 
+// ---------- Brightness, time zone, night mode ----------
 let brightTimer;
 $('bright').oninput = (e) => {
   $('brightLabel').textContent = e.target.value + '%';
   clearTimeout(brightTimer);
   brightTimer = setTimeout(() => api('/api/brightness?v=' + e.target.value, { method: 'POST' }).catch(() => {}), 250);
+};
+for (const id of ['nf', 'nt']) $(id).innerHTML = '<option value="-1">—</option>' +
+  Array.from({ length: 24 }, (_, h) => `<option value="${h}">${new Date(2000, 0, 1, h).toLocaleTimeString([], { hour: 'numeric' })}</option>`).join('');
+function showTime() {
+  $('nf').value = card.nightFrom ?? -1; $('nt').value = card.nightTo ?? -1; $('nl').value = card.nightLevel ?? 0;
+  if (card.time === undefined) { $('timeInfo').textContent = 'Needs newer screen software.'; return; }
+  $('timeInfo').textContent = card.time ? 'The screen\'s clock is set' + (card.night ? ' (night mode is on now).' : '.') : 'The screen hasn\'t got the time yet (needs internet).';
+}
+// The screen needs a POSIX time zone rule; work it out from this phone's own daylight-saving changes.
+function posixTZ() {
+  const y = new Date().getFullYear(), offAt = (t) => new Date(t).getTimezoneOffset();
+  const fmt = (m) => (m < 0 ? '-' : '') + Math.floor(Math.abs(m) / 60) + (Math.abs(m) % 60 ? ':' + String(Math.abs(m) % 60).padStart(2, '0') : '');
+  const jan = offAt(Date.UTC(y, 0, 1)), jul = offAt(Date.UTC(y, 6, 1));
+  const std = Math.max(jan, jul), dst = Math.min(jan, jul);
+  if (std === dst) return 'STD' + fmt(std);
+  const rules = [];
+  let prev = offAt(Date.UTC(y, 0, 1));
+  for (let t = Date.UTC(y, 0, 1); t < Date.UTC(y + 1, 0, 1) && rules.length < 2; t += 900000) {
+    const o = offAt(t);
+    if (o === prev) continue;
+    const wall = new Date(t - prev * 60000);       // local clock time just as the change happens (old offset)
+    const d = wall.getUTCDate(), m = wall.getUTCMonth() + 1, dim = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const wk = d + 7 > dim ? 5 : Math.ceil(d / 7);
+    rules.push({ toDst: o < prev, r: `M${m}.${wk}.${wall.getUTCDay()}/${wall.getUTCHours()}${wall.getUTCMinutes() ? ':' + wall.getUTCMinutes() : ''}` });
+    prev = o;
+  }
+  const start = rules.find(r => r.toDst), end = rules.find(r => !r.toDst);
+  return `STD${fmt(std)}DST${dst === std - 60 ? '' : fmt(dst)}` + (start && end ? `,${start.r},${end.r}` : '');
+}
+$('saveTime').onclick = async () => {
+  const st = $('timeStatus'); st.className = 'status';
+  try {
+    await api(`/api/settings?tz=${encodeURIComponent(posixTZ())}&nf=${$('nf').value}&nt=${$('nt').value}&nl=${$('nl').value}`, { method: 'POST' });
+    st.className = 'status ok'; st.textContent = 'Saved.';
+    setTimeout(loadInfo, 3000);
+  } catch (err) { st.className = 'status err'; st.textContent = 'Couldn\'t save: ' + err.message; }
 };
 
 $('forget').onclick = async () => {

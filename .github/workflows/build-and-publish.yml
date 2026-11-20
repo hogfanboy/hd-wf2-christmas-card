@@ -46,7 +46,7 @@ jobs:
           arduino-cli config set board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
           arduino-cli core update-index
           arduino-cli core install esp32:esp32@3.3.13
-          arduino-cli lib install "ESP32 HUB75 LED MATRIX PANEL DMA Display@3.1.0" "Adafruit GFX Library@1.13.0" "Adafruit BusIO@1.17.4" "AnimatedGIF@2.2.0"
+          arduino-cli lib install "ESP32 HUB75 LED MATRIX PANEL DMA Display@3.1.0" "Adafruit GFX Library@1.13.0" "Adafruit BusIO@1.17.4" "AnimatedGIF@2.2.0" "JPEGDEC@1.8.5"
 
       - name: Build install image
         run: node tools/build-install.mjs

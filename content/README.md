@@ -24,3 +24,6 @@ content/
 - `order`: lower numbers are listed first (default 50).
 
 Folders starting with `_` are skipped. Files play in name order, so number them.
+
+Pictures put straight into `content/` (not in a folder) become the "New pictures" pack, listed first.
+That is the easy way when uploading on github.com.

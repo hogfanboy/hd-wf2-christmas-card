@@ -12,7 +12,9 @@ let brightness = 100;
 const TOTAL = 0x460000;
 
 const json = (res, o) => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
-const files = () => fs.readdirSync(store).filter(f => f.endsWith('.gif'));
+const files = () => fs.readdirSync(store).filter(f => /.(gif|pjm)$/.test(f));
+let settings = { tz: 'UTC0', nightFrom: -1, nightTo: -1, nightLevel: 0 };
+const showFile = path.join(store, 'show.txt');
 
 http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
@@ -23,10 +25,16 @@ http.createServer((req, res) => {
   if (url.pathname === '/api/wifi' || url.pathname === '/api/forget-wifi') { let b = ''; req.on('data', c => b += c); req.on('end', () => { log(b); json(res, { ok: true }); }); return; }
   if (url.pathname === '/api/info') {
     const used = files().reduce((s, f) => s + fs.statSync(path.join(store, f)).size, 0);
-    return json(res, { fw: 'fake', name: 'pocketjumbo-fake', total: TOTAL, used, files: files().length, brightness });
+    return json(res, { fw: '0.0.1', name: 'pocketjumbo-fake', total: TOTAL, used, files: files().length, items: fs.existsSync(showFile) ? fs.readFileSync(showFile, 'utf8').split(String.fromCharCode(10)).filter(Boolean).length : files().length, brightness, ...settings, night: false, time: Math.floor(Date.now() / 1000) });
   }
   if (url.pathname === '/api/clear' && (globalThis.busy = !globalThis.busy)) { log('503 busy'); res.writeHead(503); return res.end('busy'); }
-  if (url.pathname === '/api/clear') { files().forEach(f => fs.unlinkSync(path.join(store, f))); log(); return json(res, { ok: true }); }
+  if (url.pathname === '/api/clear') { files().forEach(f => fs.unlinkSync(path.join(store, f))); fs.rmSync(showFile, { force: true }); log(); return json(res, { ok: true }); }
+  if (url.pathname === '/api/show' && req.method === 'GET') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end(fs.existsSync(showFile) ? fs.readFileSync(showFile) : files().sort().map(f => 'pic	0	' + f + String.fromCharCode(10)).join('')); }
+  if (url.pathname === '/api/show') { let b = ''; req.on('data', c => b += c); req.on('end', () => { fs.writeFileSync(showFile, b); log(b.split(String.fromCharCode(10)).length - 1, 'lines'); json(res, { ok: true }); }); return; }
+  if (url.pathname === '/api/file') { const f = path.join(store, path.basename(url.searchParams.get('name') || '')); if (fs.existsSync(f)) { res.writeHead(200); return res.end(fs.readFileSync(f)); } res.writeHead(404); return res.end('not found'); }
+  if (url.pathname === '/api/settings') { const q = url.searchParams; settings = { tz: q.get('tz'), nightFrom: +q.get('nf'), nightTo: +q.get('nt'), nightLevel: +q.get('nl') }; log(JSON.stringify(settings)); return json(res, { ok: true }); }
+  // Firmware info + files for the update check (serves docs/firmware/ when built locally).
+  if (url.pathname.startsWith('/firmware/')) { const f = path.join(root, 'docs', path.normalize(url.pathname)); if (f.startsWith(path.join(root, 'docs', 'firmware')) && fs.existsSync(f)) { res.writeHead(200); return res.end(fs.readFileSync(f)); } }
   if (url.pathname === '/api/brightness') { brightness = +url.searchParams.get('v'); log(brightness); return json(res, { ok: true }); }
   if (url.pathname === '/api/play' || url.pathname === '/api/done') { log(); return json(res, { ok: true }); }
   if (url.pathname === '/api/upload' || url.pathname === '/api/update') {
