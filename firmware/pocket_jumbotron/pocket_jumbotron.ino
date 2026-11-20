@@ -19,7 +19,7 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "0.8.2";
+static const char *FW_VERSION = "0.8.3";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
@@ -205,8 +205,28 @@ void playerFree() {
   free(shown); shown = nullptr;
 }
 
-bool startPanel(bool dbl) {
+// Fast scan (QR screen): the panel normally sends 8 bit planes per row, so a phone camera's rolling shutter
+// catches bands. A QR code is black and white, so the address screen restarts the panel at 2-bit color,
+// which refreshes about 10x faster, and goes back to full color after.
+// The library never frees its GDMA channel on delete, so we free it ourselves (members reached through the
+// standard explicit-instantiation access trick; no library edits, CI uses the stock library).
+#include "esp_private/gdma.h"
+template <typename Tag, typename Tag::type M> struct Reach { friend typename Tag::type get(Tag) { return M; } };
+struct BusTag  { typedef Bus_Parallel16 MatrixPanel_I2S_DMA::*type; friend type get(BusTag); };
+struct ChanTag { typedef gdma_channel_handle_t Bus_Parallel16::*type; friend type get(ChanTag); };
+template struct Reach<BusTag, &MatrixPanel_I2S_DMA::dma_bus>;
+template struct Reach<ChanTag, &Bus_Parallel16::dma_chan>;
+bool panelFast = false;
+static void panelStop() {
+  panel->stopDMAoutput();
+  gdma_channel_handle_t ch = (panel->*get(BusTag())).*get(ChanTag());
+  if (ch) { gdma_disconnect(ch); gdma_del_channel(ch); }
+  delete panel; panel = nullptr;
+}
+
+bool startPanel(bool dbl, bool fast = false) {
   HUB75_I2S_CFG cfg(W, H, 1, PINS);
+  if (fast) { cfg.setPixelColorDepthBits(2); cfg.min_refresh_rate = 300; }
   // One setup for both panel types the cards came with (FM6124C and RUL6024), tested 2026-11-18:
   // the library's DP3246 mode gives the 3-clock latch the RUL6024 needs, but it also inverts the clock,
   // which shifts the RUL6024 image one column and misaligns the FM6124C's two halves. So after begin()
@@ -217,10 +237,25 @@ bool startPanel(bool dbl) {
   if (panel->begin()) {
     GPIO.func_out_sel_cfg[PINS.clk].inv_sel = 0;
     doubleBuffered = dbl;
+    panelFast = fast;
     return true;
   }
-  delete panel; panel = nullptr;
+  delete panel; panel = nullptr;                    // (its DMA channel may never have been set up)
   return false;
+}
+// Switches between full color and fast scan. If the panel can't restart, the card reboots.
+void panelSetFast(bool on) {
+  if (!panel || on == panelFast) return;
+  bool dbl = doubleBuffered;
+  uint32_t t = millis();
+  panelStop();
+  if (!startPanel(dbl, on) && !startPanel(false, on)) { Serial.println("Panel restart failed, rebooting"); ESP.restart(); }
+  panelRegInit();
+  applyBrightness();
+  panel->clearScreen();
+  shownValid = false;
+  Serial.printf("Panel %s: %d Hz (%u ms), free heap %u\n", on ? "fast scan" : "full color",
+                panel->calculated_refresh_rate, (unsigned)(millis() - t), (unsigned)ESP.getFreeHeap());
 }
 
 void setup() {
@@ -353,6 +388,7 @@ void loop() {
   if (addrUntil) {                                   // address screen is up
     if ((int32_t)(millis() - addrUntil) < 0) { delay(5); return; }
     addrUntil = 0;
+    panelSetFast(false);                             // back to full color after the QR screen
     applyBrightness();                               // some QR styles use full panel brightness
   }
   if (holdPlayback || playlist.empty()) { delay(5); return; }

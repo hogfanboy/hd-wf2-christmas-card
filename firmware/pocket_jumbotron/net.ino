@@ -139,6 +139,7 @@ void showAddress(uint32_t ms) {
   } else if (WiFi.status() == WL_CONNECTED) {
     // A QR code of the page address: point the phone camera at it, no typing.
     String ip = WiFi.localIP().toString();
+    panelSetFast(true);                       // fast scan for phone cameras (back to full color after)
     panel->clearScreen();
     if (!drawQr(ip)) {
       text(12, "On your phone, open:", C(150, 150, 170));
@@ -154,6 +155,7 @@ void showAddress(uint32_t ms) {
       panel->setCursor(64, 38); panel->print(ip.substring(0, dot + 1));
       panel->setCursor(64, 47); panel->print(ip.substring(dot + 1));
       panel->setTextColor(C(90, 90, 110));
+      panel->setCursor(64, 56); panel->print(panel->calculated_refresh_rate); panel->print("Hz");
       panel->setCursor(110, 56); panel->print(qrVariant); panel->print("/"); panel->print(QR_COUNT);
     }
   } else {
@@ -190,6 +192,9 @@ static int countPictures() {
 }
 static void handleInfo() {
   touch();
+  // Test: lets the website read this directly where the browser allows it (Chrome "local network access").
+  web->sendHeader("Access-Control-Allow-Origin", "https://hogfanboy.github.io");
+  web->sendHeader("Access-Control-Allow-Private-Network", "true");
   char buf[480];
   snprintf(buf, sizeof(buf), "{\"fw\":\"%s\",\"name\":\"%s\",\"total\":%u,\"used\":%u,\"files\":%d,\"items\":%u,\"brightness\":%u,\"heap\":%u,"
            "\"tz\":\"%s\",\"nightFrom\":%d,\"nightTo\":%d,\"nightLevel\":%u,\"night\":%s,\"time\":%lu,\"fc\":\"%s\"}",
@@ -353,9 +358,37 @@ static void handleForgetWifi() {
   restartRequested = true;
 }
 
+// Bridge (test): the website (https) can't call the card (http) directly, so it opens this page in a tab
+// and posts requests to it; the page runs them against the card's own API and posts the answers back.
+// Only the website's origin (and the local preview) is listened to.
+static const char BRIDGE_HTML[] PROGMEM = R"HTML(<!doctype html><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1"><title>Pocket Jumbotron bridge</title>
+<body style="font:15px system-ui,sans-serif;background:#111;color:#ccc;padding:16px">
+<p id=s>Connecting to the website... keep this tab open.</p><script>
+const OK=['https://hogfanboy.github.io','http://localhost:8080'],out=window.opener,s=document.getElementById('s');
+let peer=null,n=0;
+function say(m){if(out&&peer)out.postMessage(m,peer);}
+addEventListener('message',async e=>{
+ if(!OK.includes(e.origin))return;
+ if(!peer){peer=e.origin;}
+ const d=e.data||{};
+ if(d.hello){say({ready:true,host:location.host});s.textContent='Connected to '+peer+'. Keep this tab open.';return;}
+ if(d.probe){say({id:d.id,bytes:d.probe.byteLength});return;}
+ if(typeof d.path!=='string'||!d.path.startsWith('/api/'))return say({id:d.id,error:'bad path'});
+ try{let b=d.body;
+  if(d.fields){b=new FormData();for(const f of d.fields)f.name?b.append(f.key,new Blob([f.value]),f.name):b.append(f.key,f.value);}
+  const r=await fetch(d.path,{method:d.method||'GET',body:b});
+  say({id:d.id,status:r.status,text:await r.text()});s.textContent='Connected to '+peer+'. Requests: '+(++n);
+ }catch(err){say({id:d.id,error:String(err)});}
+});
+if(out)for(const o of OK)try{out.postMessage({ready:false,host:location.host},o)}catch(e){}
+</script>)HTML";
+static void handleBridge() { touch(); web->sendHeader("Cache-Control", "no-store"); web->send_P(200, "text/html", BRIDGE_HTML); }
+
 static void startHomeWeb() {
   web = new WebServer(80);
   web->on("/", HTTP_GET, handleIndex);
+  web->on("/bridge", HTTP_GET, handleBridge);
   web->on("/api/info", HTTP_GET, handleInfo);
   web->on("/api/clear", HTTP_POST, handleClear);
   web->on("/api/upload", HTTP_POST, handleUploadDone, handleUploadData);
