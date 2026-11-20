@@ -9,6 +9,7 @@
 #include <algorithm>
 #include "soc/gpio_struct.h"
 #include "driver/gpio.h"
+#include "intro_gif.h"
 
 // ---- Hardware (confirmed on WF2 V7.2, see PROJECT-NOTES.md) ----
 static const HUB75_I2S_CFG::i2s_pins PINS = {
@@ -18,7 +19,7 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "0.8.0";
+static const char *FW_VERSION = "0.8.1";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
@@ -246,8 +247,9 @@ void setup() {
   playerAlloc();
   loadPlaylist();
   Serial.printf("%u GIFs in playlist\n", (unsigned)playlist.size());
-  if (playlist.empty()) showMessage("POCKET", "JUMBOTRON");
   markAppValid();                 // we started fine: cancel automatic rollback of a fresh update
+  playIntro();
+  if (playlist.empty()) showMessage("POCKET", "JUMBOTRON");
   netBegin();
 }
 
@@ -291,6 +293,27 @@ void playOne(const String &name, uint16_t sec) {
   gif.close();
   playing = false;
   if (saved) { free(saved); saved = nullptr; }
+}
+
+// Startup screen: the "POCKET JUMBOTRON" arcade marquee, built into the firmware (intro_gif.h), two loops
+// (~5 s). A button press skips it.
+void playIntro() {
+  if (!gif.open((uint8_t *)INTRO_GIF, INTRO_GIF_LEN, gifDraw)) return;
+  offX = (W - gif.getCanvasWidth()) / 2;
+  offY = (H - gif.getCanvasHeight()) / 2;
+  memset(canvas, 0, CANVAS_BYTES);
+  pending.method = 0;
+  shownValid = false;
+  for (int loops = 0; loops < 2;) {
+    uint32_t t0 = millis();
+    int delayMs = 0;
+    if (gif.playFrame(false, &delayMs) <= 0) { loops++; gif.reset(); memset(canvas, 0, CANVAS_BYTES); pending.method = 0; }
+    pushCanvas();
+    if (delayMs < 20) delayMs = 100;
+    while ((int32_t)(millis() - t0) < delayMs) { if (digitalRead(BUTTON_PIN) == LOW) loops = 2; delay(2); }
+  }
+  gif.close();
+  while (digitalRead(BUTTON_PIN) == LOW) delay(5);   // don't count the skip press as a button action
 }
 
 // ---- S1 button: short press = show the web address, hold 2 s = WiFi setup hotspot ----

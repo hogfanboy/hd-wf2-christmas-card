@@ -185,7 +185,7 @@ const capOf = () => +tctx.font.match(/(\d+)px/)[1] * 0.72;
 const hue = (h) => `hsl(${(h % 1536) / 1536 * 360},100%,50%)`;
 // ---------- Effects: a JS copy of the card's effects library (show.ino), for the preview ----------
 const FX = { none: 'None', snow: 'Snow', sparkle: 'Sparkle', hearts: 'Hearts', confetti: 'Confetti', fireworks: 'Fireworks',
-  stars: 'Starfield', fire: 'Fire', plasma: 'Plasma', matrix: 'Code rain' };
+  stars: 'Starfield', fire: 'Fire', matrix: 'Code rain' };
 const fxOptions = () => Object.entries(FX).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
 const rand = (n) => Math.floor(Math.random() * n);
 const sin8 = (a) => 128 + Math.trunc(127 * Math.sin((a & 255) * 6.2832 / 256));
@@ -303,16 +303,6 @@ function fxStep(s, d, behind) {
         if (h[i] < 2) continue;
         const t = h[i] * 255 / 36;
         d[i * 4] = t * 3; d[i * 4 + 1] = (t - 85) * 3; d[i * 4 + 2] = (t - 190) * 4;
-      }
-      break;
-    }
-    case 'plasma': {
-      if (!d) break;
-      const t = (frame * 2) & 255, t2 = (frame * 3) & 255, k = behind ? 70 / 255 : 1;
-      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-        const v = sin8(x * 4 + t) + sin8(y * 7 - t2) + sin8((x + y) * 3 + t2) + sin8((x - y) * 2 - t);
-        const c = hsvRGB(tr(v * 3 / 2) + frame * 4), i = (y * W + x) * 4;
-        d[i] = c[0] * k; d[i + 1] = c[1] * k; d[i + 2] = c[2] * k;
       }
       break;
     }
@@ -819,11 +809,11 @@ $('loadShow').onclick = async () => {
         const r = await fetch('/api/file?name=' + encodeURIComponent(f[2]));
         if (r.ok) await addFile(new File([await r.blob()], f[2]), secs, true);
       } else {
-        const o = { secs, fg: f[2] === 'rainbow' ? '#ffffff' : '#' + f[2], rainbow: f[2] === 'rainbow', bg: '#' + f[3], font: +f[4], effect: f[5] };
+        const o = { secs, fg: f[2] === 'rainbow' ? '#ffffff' : '#' + f[2], rainbow: f[2] === 'rainbow', bg: '#' + f[3], font: +f[4], effect: FX[f[5]] ? f[5] : 'none' };
         if (f[0] === 'text') addDrawn('text', { ...o, text: f[6] });
         if (f[0] === 'clock') addDrawn('clock', { ...o, h24: f[6] === '24' });
         if (f[0] === 'countdown') addDrawn('countdown', { ...o, date: f[6], text: f[7] || '' });
-        if (f[0] === 'fx') addDrawn('fx', o);
+        if (f[0] === 'fx' && o.effect !== 'none') addDrawn('fx', o);
         if (f[0] === 'weather') addDrawn('weather', { ...o, unit: f[6] || 'F', lat: f[7] || '', lon: f[8] || '', place: f[9] || '' });
       }
     }

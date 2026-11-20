@@ -8,7 +8,7 @@
 //     weather   <sec> <fg> <bg> <font> <effect> <F|C> <lat> <lon> <place>
 //   sec 0 = automatic (pictures: 8-20 s by their own length; scrolling text: one pass; others: 8-10 s).
 //   fg/bg are RRGGBB hex, fg may be "rainbow". effect: one of FX_NAMES (none, snow, sparkle, hearts, confetti,
-//   fireworks, stars, fire, plasma, matrix).
+//   fireworks, stars, fire, matrix). Unknown names (e.g. the removed "plasma") play as none.
 //   Without /show.txt every file in /gifs plays in name order (the old behavior).
 // Picture files: .gif (AnimatedGIF) or .pjm = full-color JPEG frames:
 //   "PJM1", then per frame: u32 jpeg length, u16 delay ms, u16 0, the JPEG (128x64 baseline).
@@ -40,8 +40,8 @@ void checkNight() {
 }
 
 // ---------- Show list ----------
-const char *const FX_NAMES[] = {"none", "snow", "sparkle", "hearts", "confetti", "fireworks", "stars", "fire", "plasma", "matrix"};
-enum { FX_NONE, FX_SNOW, FX_SPARKLE, FX_HEARTS, FX_CONFETTI, FX_FIREWORKS, FX_STARS, FX_FIRE, FX_PLASMA, FX_MATRIX, FX_COUNT };
+const char *const FX_NAMES[] = {"none", "snow", "sparkle", "hearts", "confetti", "fireworks", "stars", "fire", "matrix"};
+enum { FX_NONE, FX_SNOW, FX_SPARKLE, FX_HEARTS, FX_CONFETTI, FX_FIREWORKS, FX_STARS, FX_FIRE, FX_MATRIX, FX_COUNT };
 static uint8_t fxByName(const String &s) { for (int i = 0; i < FX_COUNT; i++) if (s == FX_NAMES[i]) return i; return FX_NONE; }
 
 static bool isPicture(const String &n) { String l = n; l.toLowerCase(); return l.endsWith(".gif") || l.endsWith(".pjm"); }
@@ -74,6 +74,7 @@ void loadPlaylist() {
         if (it.type == 't') it.text = f[6];
         if (it.type == 'c') it.extra = f[6];
         if (it.type == 'd') { it.extra = f[6]; it.text = f[7]; }
+        if (it.type == 'f' && it.effect == FX_NONE) continue;          // removed effect
         if (it.type == 'w') { it.extra = f[6] + "," + f[7] + "," + f[8]; it.text = f[9]; if (f[7].isEmpty()) continue; }
       }
       playlist.push_back(it);
@@ -138,7 +139,7 @@ static void drawText(const String &s, int x, int y, const ShowItem &it, uint32_t
 // Used full screen (the "fx" item) or behind a message / clock / countdown / weather. Positions are in
 // 1/16 pixel so slow things move smoothly. Fire borrows an 8 KB heat map only while it plays.
 
-static uint32_t rs = 0x9E3779B9;                 // fast xorshift: fire/plasma touch every pixel each frame
+static uint32_t rs = 0x9E3779B9;                 // fast xorshift: fire touches every pixel each frame
 static inline uint32_t rnd() { rs ^= rs << 13; rs ^= rs >> 17; rs ^= rs << 5; return rs; }
 static inline uint32_t rnd(uint32_t n) { return rnd() % n; }
 static inline void px(int x, int y, uint32_t c) {
@@ -245,17 +246,6 @@ static void fxFire(bool behind) {
     }
 }
 
-static void fxPlasma(uint32_t frame, bool behind) {
-  uint8_t t = frame * 2, t2 = frame * 3;
-  for (int y = 0; y < H; y++)
-    for (int x = 0; x < W; x++) {
-      int v = sin8(x * 4 + t) + sin8(y * 7 - t2) + sin8((x + y) * 3 + t2) + sin8((x - y) * 2 - t);
-      uint32_t c = hsv((v * 3 / 2 + frame * 4) % 1536);
-      int k = behind ? 70 : 255;
-      canvas[y][x][0] = ((c >> 16) & 255) * k / 255; canvas[y][x][1] = ((c >> 8) & 255) * k / 255; canvas[y][x][2] = (c & 255) * k / 255;
-    }
-}
-
 static void fxMatrix(uint32_t frame) {
   const GFXfont *keep = cg.font(); uint8_t ks = cg.size();
   cg.setFont(nullptr); cg.setTextSize(1);
@@ -340,7 +330,6 @@ static void paintBackground(const ShowItem &it, uint32_t frame) {
       }
       break;
     case FX_FIRE: fxFire(behind); break;
-    case FX_PLASMA: fxPlasma(frame, behind); break;
     case FX_MATRIX: fxMatrix(frame); break;
   }
 }

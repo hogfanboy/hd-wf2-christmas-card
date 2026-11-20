@@ -1,17 +1,19 @@
 # PROGRESS
 
-## Working state (fw 0.8.0, 2026-11-20; card 1 on 0.8.0 via WiFi, card 2 still 0.6.2)
+## Working state (fw 0.8.1, 2026-11-20; card 1 on 0.8.1 via WiFi, card 2 still 0.6.2)
 - One firmware for both panel chips. CI (push to main + hourly) builds firmware, installer, public packs, encrypted packs.
 - Card 1 (FM6124C): 192.168.50.16 / pocketjumbo-eed0 (also on the PC's USB, COM10). Card 2 (RUL6024): 192.168.50.199.
 - Show (`show.ino`, `/show.txt`): pictures, messages, clock, countdown, **effects** (`fx`), **weather**, seconds per item.
   Pictures are `.gif` or full-color `.pjm`. NTP time + phone's time zone; night mode.
-- 0.8.0 effects library (drawn by the card, no storage): snow, sparkle, hearts, confetti, fireworks, starfield, fire,
-  plasma, code rain. Full screen as an item, or behind any message/clock/countdown/weather. The card page has a JS
+- Effects library (drawn by the card, no storage): snow, sparkle, hearts, confetti, fireworks, starfield, fire,
+  code rain. User loves them all (judged by eye on card 1); plasma removed at their request (0.8.1). Full screen as an item, or behind any message/clock/countdown/weather. The card page has a JS
   copy of each for the preview (keep `show.ino` and the page's `fxStep` in step).
 - 0.8.0 weather: Open-Meteo over plain http (no key, no TLS RAM), refreshed at most every 15 min; town picked on the
   page (Open-Meteo geocoding), stored in the show line. Animated icon, temp, condition, high/low, town.
 - Ran 3+ loops on card 1 (serial log): no resets, heap ~81 KB, largest block ~31 KB. Fixed: `.pjm` buffer now sized
   to the file's biggest frame (fixed 24 KB failed with "no memory for jpeg" after weather fetches).
+- Startup screen (0.8.1): the "POCKET JUMBOTRON" arcade marquee (`firmware/intro.gif` → `tools/make-intro.mjs` →
+  `intro_gif.h`), 2 loops (~5 s), S1 skips it.
 - Card page: show builder (+ Effect, + Weather), load show back, packs, 🔒 family packs, one-tap update.
 - Website: homepage text rewritten for the real flow; `go.html` = QR target that forwards to `http://<ip>` and
   remembers the screen (home-screen icon via `go.webmanifest`); `go.html?test` shows QR codes for a camera test.
@@ -33,12 +35,14 @@
   the build and silently keeps the old .bin).
 
 ## Active issue: QR code
-- Pixel 10a's own Camera app offers no link for the `http://<ip>` QR styles 1-6 (Google Lens reads them).
-- 0.8.0 adds styles 7-8: `https://hogfanboy.github.io/hd-wf2-christmas-card/go#<ip>` (version 4 code = 1 LED per
-  module). User test: (a) `go.html?test` on the PC monitor, Pixel camera on code A vs B; (b) panel styles 7 and 8.
-  If https works but the panel code is too fine: shorter URL needed (e.g. a `hogfanboy.github.io` user site).
+- Camera test on the PC monitor (go.html?test): the Pixel camera app offers both the http://<ip> and the https go
+  link. So the link type is fine; the panel's QR rendering is what the camera app won't read.
+- 0.8.0 styles 7-8 never drew (QR encoder capped at version 3); fixed in 0.8.1 (max version 5). Style 8 is now dim
+  white at full PWM (camera glare idea). User test: styles 7 and 8 on the panel.
+- Idea under discussion: card page app hosted on GitHub Pages (see Next).
 
 ## Next
-- User judges card 1 by eye (test show is on it now: weather Chicago, every effect, "Happy New Year!" over
-  fireworks, "Love you!" over hearts, then the pictures); earlier: clock/countdown, full color, night mode.
+- User checks the startup screen and QR styles 7-8 on card 1. Still unjudged: full color, night mode, weather look.
+- Decide: card serves a tiny shell page that loads the app from GitHub Pages (same-origin API calls, app updates
+  without firmware). A pure https GitHub page can't call the card (mixed content + no way to find it by ID).
 - QR test above, then keep one style. Then: news headlines item, Improv WiFi in the installer, update card 2.

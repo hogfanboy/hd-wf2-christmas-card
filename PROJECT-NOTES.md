@@ -11,7 +11,8 @@ Custom firmware + website for ~15 LED "Christmas cards" already mailed out last 
 
 ## Features (verified on the cards)
 - **Show** (fw 0.7.0+, `show.ino`): `/show.txt` lists items (tab-separated): `pic`, `text` (4 fonts, color or rainbow, snow/sparkle background), `clock`, `countdown` (MM-DD + label), each with seconds (0 = auto). Without show.txt every picture in `/gifs` plays in name order. Auto timing: short animations loop for ≥8 s; long ones stop at ~20 s at the end of a loop.
-- **Effects + weather** (fw 0.8.0): `fx` items and effect backgrounds (snow, sparkle, hearts, confetti, fireworks, stars, fire, plasma, matrix) drawn by the card; `weather` items fetch Open-Meteo over plain http (~150 ms, no TLS), at most every 15 min. Ran for several loops on card 1 with no resets, heap steady ~81 KB.
+- **Startup screen** (0.8.1): the arcade "POCKET JUMBOTRON" marquee from `firmware/intro.gif`, built into the firmware.
+- **Effects + weather** (fw 0.8.0): `fx` items and effect backgrounds (snow, sparkle, hearts, confetti, fireworks, stars, fire, matrix; plasma removed in 0.8.1) drawn by the card; `weather` items fetch Open-Meteo over plain http (~150 ms, no TLS), at most every 15 min. Ran for several loops on card 1 with no resets, heap steady ~81 KB.
 - **Pictures**: `.gif` (AnimatedGIF, ≤256 colors/frame) or `.pjm` full color = `PJM1` + per frame [u32 len, u16 delay ms, u16 0, baseline JPEG], decoded with JPEGDEC 1.8.5 (RGB8888). The card page converts any input (JPG/PNG/GIF/WEBP, animated WEBP via `ImageDecoder`) and picks GIF or full color per picture (>400 colors → full color).
 - **Time**: NTP after WiFi joins; POSIX TZ string worked out by the phone page from its own DST changes. Night mode: hours + brightness level (NVS).
 - **Player**: **Single-buffered** (redraws only changed pixels), 8-bit color, brightness capped at 55% of full (`MAX_BRIGHTNESS` 140); the user's % setting is saved in NVS.

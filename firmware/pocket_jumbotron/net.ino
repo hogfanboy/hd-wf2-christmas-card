@@ -102,7 +102,7 @@ static const QrStyle QR_STYLES[] = {
   // 7-8: an https link to the website's forwarding page (go.html), which opens http://<ip> on the phone.
   // Camera apps may not offer plain http links to a local address. Longer = version 4 = 1 LED per module.
   {false, 4, 200, false, false, true},   // 7: website link
-  {false, 4, 255, false, true,  true},   // 8: website link, bright, full PWM
+  {false, 4,  70, false, true,  true},   // 8: website link, dim white at full PWM (less camera glare)
 };
 static const int QR_COUNT = sizeof(QR_STYLES) / sizeof(QR_STYLES[0]);
 int qrVariant = 1;
@@ -123,7 +123,7 @@ static bool drawQr(String ip) {
   String url = qrs->web ? "https://hogfanboy.github.io/hd-wf2-christmas-card/go#" + ip : "http://" + ip;
   if (qrs->upper) url.toUpperCase();
   if (qrs->fullPwm) panel->setBrightness8(MAX_BRIGHTNESS); else applyBrightness();
-  esp_qrcode_config_t cfg = {qrDraw, 3, ESP_QRCODE_ECC_LOW};
+  esp_qrcode_config_t cfg = {qrDraw, 5, ESP_QRCODE_ECC_LOW};   // max version 5: the website link needs 4
   return esp_qrcode_generate(&cfg, url.c_str()) == ESP_OK;
 }
 
