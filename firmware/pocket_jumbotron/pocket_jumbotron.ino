@@ -18,7 +18,7 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "0.7.3";
+static const char *FW_VERSION = "0.8.0";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
@@ -48,14 +48,15 @@ PixRow *canvas = nullptr;                      // composited frame (RGB888)
 int offX = 0, offY = 0;                        // centers GIFs smaller than the panel
 // The show (see show.ino). Declared here because Arduino joins the .ino files in name order.
 struct ShowItem {
-  char type = 'p';                // p = picture, t = text, c = clock, d = countdown
+  char type = 'p';                // p picture, t text, c clock, d countdown, f effect, w weather
   uint16_t sec = 0;
-  String file, text, extra;       // extra: clock 12/24, countdown MM-DD
+  String file, text, extra;       // extra: clock 12/24, countdown MM-DD, weather "F,lat,lon"
   uint32_t fg = 0xFFFFFF, bg = 0;
   bool rainbow = false;
-  uint8_t font = 2, effect = 0;   // effect 0 none, 1 snow, 2 sparkle
+  uint8_t font = 2, effect = 0;   // effect: index into FX_NAMES (show.ino)
 };
 std::vector<ShowItem> playlist;
+struct Flake { int16_t x, y; uint8_t spd, bri; };   // effect particles (show.ino)
 // ---------- Settings: time zone + night mode (NVS, see net.ino settingsLoad) ----------
 String tzString = "UTC0";
 int8_t nightFrom = -1, nightTo = -1;          // hours 0-23; -1 = night mode off
@@ -323,7 +324,7 @@ void loop() {
   if (portalActive) { buttonAction = BTN_NONE; delay(2); return; }
   if (buttonAction == BTN_SHORT) {                   // another press while the address is up: next QR style
     buttonAction = BTN_NONE;
-    if (addrUntil) qrVariant = qrVariant % 6 + 1;
+    if (addrUntil) qrNext();
     showAddress(addrUntil ? 30000 : 10000);
   }
   if (addrUntil) {                                   // address screen is up

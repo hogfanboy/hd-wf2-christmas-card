@@ -39,7 +39,7 @@ fs.mkdirSync(out, { recursive: true });
 
 // 1. Web pages -> web_index.h, then compile.
 run(process.execPath, [path.join(root, 'tools/build-web.mjs')]);
-run(arduinoCli, ['compile', '-b', FQBN, '--output-dir', appOut, sketch]);
+run(arduinoCli, ['compile', '-b', FQBN, '--build-property', 'upload.maximum_size=1835008', '--output-dir', appOut, sketch]);   // our app slot is 1.75 MB (partitions.csv)
 const version = /FW_VERSION = "([^"]+)"/.exec(fs.readFileSync(path.join(sketch, 'pocket_jumbotron.ino'), 'utf8'))[1];
 
 // 2. Starter pack -> LittleFS image (must match partitions.csv: spiffs @0x390000, 0x460000).

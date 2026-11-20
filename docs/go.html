@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Open my Pocket Jumbotron</title>
+<meta name="description" content="Opens your Pocket Jumbotron's page on your home WiFi.">
+<meta name="theme-color" content="#0b0b12">
+<link rel="manifest" href="go.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root { --bg: #0b0b12; --bg2: #13131d; --line: #262636; --text: #ecebf5; --muted: #a3a2b8; --gold: #ffbe3c; --cyan: #5ac8ff; --green: #4ee08a; --red: #ff4d6a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.55 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  main { max-width: 520px; margin: 0 auto; padding: 28px 16px 48px; }
+  h1 { font-size: 26px; margin: 0 0 6px; }
+  h1 span { color: var(--gold); }
+  p { color: var(--muted); margin: 8px 0; }
+  .box { background: var(--bg2); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin-top: 18px; }
+  a.btn, button { display: block; width: 100%; text-align: center; font: 600 17px system-ui, sans-serif; padding: 14px; border-radius: 12px;
+    border: 0; background: var(--gold); color: #1a1205; text-decoration: none; cursor: pointer; margin-top: 10px; }
+  .card { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+  .card a.btn { margin: 0; flex: 1; text-align: left; background: #1d1d2b; color: var(--text); border: 1px solid var(--line); }
+  .card a.btn small { display: block; color: var(--muted); font-weight: 400; font-size: 14px; }
+  .card button { width: auto; margin: 0; padding: 10px 12px; background: transparent; color: var(--muted); border: 1px solid var(--line); font-size: 14px; }
+  input { width: 100%; font: 17px system-ui, sans-serif; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: #0e0e16; color: var(--text); }
+  .qr { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+  .qr div { background: #fff; padding: 14px; border-radius: 10px; display: flex; justify-content: center; }
+  .qr p { text-align: center; font-size: 14px; word-break: break-all; }
+  .hint { font-size: 14px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Pocket <span>Jumbotron</span></h1>
+
+  <section id="going" hidden>
+    <p>Opening your screen's page…</p>
+    <a class="btn" id="goBtn" href="#">Open it</a>
+    <p class="hint">If nothing happens: make sure this phone is on the same WiFi as the screen. On Android, Chrome may ask to find
+      devices on your network ("Nearby devices"): allow it.</p>
+  </section>
+
+  <section id="home">
+    <p>Opens your screen's page on your home WiFi, so you can change what it shows.</p>
+    <div class="box" id="mine" hidden>
+      <b>Your screens</b>
+      <div id="list"></div>
+      <p class="hint">Tip: add this page to your home screen (browser menu → <i>Add to Home screen</i>). Then it's one tap.</p>
+    </div>
+    <div class="box">
+      <b>First time?</b>
+      <p>Press the button on the back of your screen once. It shows a QR code: point your phone's camera at it.
+        Or type the number it shows here:</p>
+      <input id="addr" placeholder="e.g. 192.168.1.23" inputmode="decimal" autocomplete="off">
+      <button id="open">Open</button>
+    </div>
+  </section>
+
+  <section id="test" hidden>
+    <div class="box">
+      <b>QR test (for us, on a computer screen)</b>
+      <p>Point the phone's own camera app at each code. Which one offers to open a link?</p>
+      <input id="tip" placeholder="Screen address, e.g. 192.168.1.23">
+      <div class="qr"><div id="qa"></div><div id="qb"></div></div>
+      <div class="qr"><p id="la"></p><p id="lb"></p></div>
+    </div>
+  </section>
+</main>
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const KEY = 'pj-screens';
+// A screen's address: a private IPv4 address or its pocketjumbo-XXXX name.
+const valid = (a) => /^(10\.\d{1,3}|172\.(1[6-9]|2\d|3[01])|192\.168)\.\d{1,3}\.\d{1,3}$/.test(a) || /^pocketjumbo-[0-9a-f]{4}(\.local)?$/i.test(a);
+function load() { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; } }
+function save(list) { try { localStorage.setItem(KEY, JSON.stringify(list.slice(0, 8))); } catch {} }
+function remember(addr) { save([{ addr, at: Date.now() }, ...load().filter(s => s.addr !== addr)]); }
+function go(addr) { remember(addr); location.href = 'http://' + addr + '/'; }
+
+function showList() {
+  const list = load();
+  $('mine').hidden = !list.length;
+  $('list').textContent = '';
+  for (const s of list) {
+    const row = document.createElement('div'); row.className = 'card';
+    const a = document.createElement('a'); a.className = 'btn'; a.href = 'http://' + s.addr + '/';
+    a.innerHTML = '<span></span><small></small>';
+    a.firstChild.textContent = 'Open ' + s.addr;
+    a.lastChild.textContent = 'Last opened ' + new Date(s.at).toLocaleDateString();
+    a.onclick = () => remember(s.addr);
+    const x = document.createElement('button'); x.textContent = 'Forget';
+    x.onclick = () => { save(load().filter(t => t.addr !== s.addr)); showList(); };
+    row.append(a, x); $('list').appendChild(row);
+  }
+}
+
+const addr = decodeURIComponent(location.hash.slice(1)).trim();
+if (new URLSearchParams(location.search).has('test')) {
+  $('home').hidden = true; $('test').hidden = false;
+  const s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+  s.onload = () => {
+    const draw = () => {
+      const ip = $('tip').value.trim() || '192.168.1.23';
+      const a = 'http://' + ip, b = location.origin + location.pathname.replace(/\.html$/, '') + '#' + ip;
+      for (const [id, url] of [['qa', a], ['qb', b]]) { $(id).textContent = ''; new QRCode($(id), { text: url, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.L }); }
+      $('la').textContent = 'A: ' + a; $('lb').textContent = 'B: ' + b;
+    };
+    $('tip').oninput = draw; draw();
+  };
+  document.head.appendChild(s);
+} else if (valid(addr)) {
+  $('home').hidden = true; $('going').hidden = false;
+  $('goBtn').href = 'http://' + addr + '/';
+  $('goBtn').onclick = () => remember(addr);
+  setTimeout(() => go(addr), 300);
+} else {
+  showList();
+}
+$('open').onclick = () => {
+  const a = $('addr').value.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  if (valid(a)) go(a); else { $('addr').focus(); $('addr').placeholder = 'That doesn\'t look like a screen address'; $('addr').value = ''; }
+};
+</script>
+</body>
+</html>

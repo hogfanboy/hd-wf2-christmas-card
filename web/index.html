@@ -77,6 +77,8 @@
       <button class="secondary" id="addText">+ Message</button>
       <button class="secondary" id="addClock">+ Clock</button>
       <button class="secondary" id="addCount">+ Countdown</button>
+      <button class="secondary" id="addFx">+ Effect</button>
+      <button class="secondary" id="addWx">+ Weather</button>
     </div>
     <button class="secondary" id="packBtn">★ Get the latest Pocket Jumbotron pictures</button>
     <details id="codeBox"><summary id="codeSum">🔒 Have a family code? It unlocks your family's pictures.</summary>
@@ -179,20 +181,221 @@ const tcan = document.createElement('canvas'); tcan.width = W; tcan.height = H;
 const tctx = tcan.getContext('2d', { willReadFrequently: true });
 const CAP = { 1: 14, 2: 17, 3: 25, 4: 34 };       // capital-letter height in pixels of the screen's fonts
 const fontCss = (f) => f == 1 ? `bold ${Math.round(CAP[1] / 0.72)}px monospace` : `bold ${Math.round(CAP[f] / 0.72)}px Arial, Helvetica, sans-serif`;
-const capOf = () => +tctx.font.match(/(d+)px/)[1] * 0.72;
+const capOf = () => +tctx.font.match(/(\d+)px/)[1] * 0.72;
 const hue = (h) => `hsl(${(h % 1536) / 1536 * 360},100%,50%)`;
-const flakeSeed = Array.from({ length: 48 }, (_, i) => ({ x: (i * 977) % (W * 16), y: (i * 613) % (H * 16), spd: 4 + (i * 7) % 10, bri: 90 + (i * 53) % 166 }));
+// ---------- Effects: a JS copy of the card's effects library (show.ino), for the preview ----------
+const FX = { none: 'None', snow: 'Snow', sparkle: 'Sparkle', hearts: 'Hearts', confetti: 'Confetti', fireworks: 'Fireworks',
+  stars: 'Starfield', fire: 'Fire', plasma: 'Plasma', matrix: 'Code rain' };
+const fxOptions = () => Object.entries(FX).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+const rand = (n) => Math.floor(Math.random() * n);
+const sin8 = (a) => 128 + Math.trunc(127 * Math.sin((a & 255) * 6.2832 / 256));
+const tr = Math.trunc;
+function hsvRGB(h) {
+  h = ((h % 1536) + 1536) % 1536; const x = h & 255;
+  return [[255, x, 0], [255 - x, 255, 0], [0, 255, x], [0, 255 - x, 255], [x, 0, 255], [255, 0, 255 - x]][h >> 8];
+}
+const GLYPHS = '0123456789ABCDEFXZ$#@%&*+=<>';
+function starReset(f) { f.x = rand(1024) - 512; f.y = rand(512) - 256; f.bri = 200 + rand(56); f.spd = 1 + rand(3); }
+function fxNew(effect) {
+  const s = { effect, frame: 0, sparks: [], rockets: [{}, {}, {}], glyphs: [],
+    flakes: Array.from({ length: 48 }, () => ({ x: rand(W * 16), y: rand(H * 16), spd: 4 + rand(10), bri: 90 + rand(166) })),
+    heat: effect === 'fire' ? new Uint8Array(W * H) : null,
+    cols: Array.from({ length: 21 }, () => ({ head: rand(40), len: 3 + rand(5), spd: 1 + rand(3), g: Array.from({ length: 8 }, () => GLYPHS[rand(GLYPHS.length)]) })) };
+  if (effect === 'stars') s.flakes.forEach(f => { starReset(f); f.bri = 30 + rand(225); });
+  if (effect === 'hearts') s.flakes.forEach(f => f.y = rand(H * 24));
+  return s;
+}
+const COS = [64,63,59,53,45,36,24,12,0,-12,-24,-36,-45,-53,-59,-63,-64,-63,-59,-53,-45,-36,-24,-12,0,12,24,36,45,53,59,63];
+const HEART_BIG = [0x36, 0x7F, 0x7F, 0x3E, 0x1C, 0x08], HEART_SMALL = [0x5, 0x7, 0x2];
+// One step of the effect. d = RGBA pixels to draw into, or null to only move things along.
+function fxStep(s, d, behind) {
+  const frame = s.frame++;
+  const px = (x, y, c) => { x = tr(x); y = tr(y); if (!d || x < 0 || y < 0 || x >= W || y >= H) return; const i = (y * W + x) * 4; d[i] = c[0]; d[i + 1] = c[1]; d[i + 2] = c[2]; };
+  const add = (x, y, c, v) => { x = tr(x); y = tr(y); if (!d || x < 0 || y < 0 || x >= W || y >= H) return; const i = (y * W + x) * 4; d[i] += c[0] * v / 255; d[i + 1] += c[1] * v / 255; d[i + 2] += c[2] * v / 255; };
+  const WHITE = [255, 255, 255];
+  s.glyphs = [];
+  switch (s.effect) {
+    case 'snow':
+      for (const f of s.flakes) {
+        f.y += f.spd; f.x = (f.x + (((frame + f.spd) % 16 < 8) ? 1 : -1) + W * 16) % (W * 16);
+        if (f.y >= H * 16) { f.y = 0; f.x = rand(W * 16); }
+        const x = (tr(f.x / 16) + W) % W, y = tr(f.y / 16);
+        px(x, y, [f.bri, f.bri, f.bri]);
+        if (!behind && f.spd > 10) { add(x + 1, y, WHITE, f.bri / 2); add(x, y + 1, WHITE, f.bri / 2); }
+      }
+      break;
+    case 'sparkle':
+      s.flakes.forEach((f, i) => {
+        const ph = tr(frame * f.spd / 4 + i * 37) % 64, v = ph < 32 ? ph * 8 : (63 - ph) * 8;
+        if (ph === 63) { f.x = rand(W * 16); f.y = rand(H * 16); }
+        add(f.x / 16, f.y / 16, hsvRGB(i * 200), v);
+      });
+      break;
+    case 'hearts':
+      for (let i = 0; i < (behind ? 10 : 18); i++) {
+        const f = s.flakes[i];
+        f.y -= tr(f.spd / 2) + 1;
+        if (f.y < -8 * 16) { f.y = H * 16 + rand(64); f.x = rand(W * 16); }
+        const x = tr(f.x / 16) + tr((sin8(frame * 3 + i * 40) - 128) / 40), y = tr(f.y / 16);
+        const c = [255, 30 + (i * 37) % 90, 90 + (i * 53) % 120], big = f.spd > 8, rows = big ? HEART_BIG : HEART_SMALL, w = big ? 7 : 3;
+        rows.forEach((bits, r) => { for (let b = 0; b < w; b++) if ((bits >> (w - 1 - b)) & 1) px(x + b, y + r, c); });
+      }
+      break;
+    case 'confetti':
+      s.flakes.forEach((f, i) => {
+        f.y += tr(f.spd / 2) + 2;
+        if (f.y >= H * 16) { f.y = -16; f.x = rand(W * 16); }
+        const x = tr(f.x / 16) + tr((sin8(frame * 4 + i * 23) - 128) / 50), y = tr(f.y / 16), c = hsvRGB(i * 97), o = (tr(frame / 4) + i) % 3;
+        px(x, y, c); if (o === 0) px(x + 1, y, c); else if (o === 1) px(x, y + 1, c);
+      });
+      break;
+    case 'fireworks': {
+      let any = s.rockets.some(r => r.on);
+      for (const r of s.rockets) if (!r.on && (frame === 0 || (!any && rand(12) === 0) || rand(70) === 0)) {
+        Object.assign(r, { x: (14 + rand(W - 28)) * 16, y: H * 16, vy: -(34 + rand(13)), hue: rand(1536), on: true }); any = true; break;
+      }
+      for (const r of s.rockets) {
+        if (!r.on) continue;
+        r.y += r.vy; r.vy += 1;
+        const x = tr(r.x / 16), y = tr(r.y / 16);
+        add(x, y, [255, 240, 192], 255); add(x, y + 1, [255, 144, 48], 150); add(x, y + 2, [255, 96, 16], 70);
+        if (r.vy >= -3 || r.y < 5 * 16) {
+          r.on = false;
+          const speed = 14 + rand(10);
+          for (let n = 0; n < 28; n++) {
+            const a = tr(n * 32 / 28), sp = speed + rand(5), life = 28 + rand(18);
+            s.sparks.push({ x: r.x, y: r.y, vx: tr(COS[a] * sp / 64), vy: tr(COS[(a + 24) & 31] * sp / 64), life, max: life, hue: (r.hue + rand(120)) % 1536 });
+          }
+        }
+      }
+      for (const p of s.sparks) {
+        p.x += p.vx; p.y += p.vy;
+        if (frame & 1) p.vy += 1;
+        if ((frame & 3) === 0) { p.vx = tr(p.vx * 7 / 8); p.vy = tr(p.vy * 7 / 8); }
+        p.life--;
+        const v = 255 * p.life / p.max;
+        if (p.life < 8 && rand(3) === 0) continue;
+        const c = p.life > p.max - 4 ? WHITE : hsvRGB(p.hue);
+        add(p.x / 16, p.y / 16, c, v); add((p.x - p.vx * 2) / 16, (p.y - p.vy * 2) / 16, c, v / 3);
+      }
+      s.sparks = s.sparks.filter(p => p.life > 0).slice(-96);
+      break;
+    }
+    case 'stars':
+      for (const f of s.flakes) {
+        const z0 = f.bri;
+        f.bri = z0 > f.spd * 2 ? z0 - f.spd * 2 : 0;
+        if (f.bri < 8) { starReset(f); continue; }
+        const x = W / 2 + tr(f.x * 16 / f.bri), y = H / 2 + tr(f.y * 16 / f.bri), x0 = W / 2 + tr(f.x * 16 / z0), y0 = H / 2 + tr(f.y * 16 / z0);
+        if (x < 0 || y < 0 || x >= W || y >= H) { starReset(f); continue; }
+        const v = 255 - f.bri;
+        add(x, y, [220, 230, 255], v); if (x0 !== x || y0 !== y) add(x0, y0, [220, 230, 255], v / 3);
+      }
+      break;
+    case 'fire': {
+      const h = s.heat;
+      for (let x = 0; x < W; x++) h[(H - 1) * W + x] = rand(3) ? 36 : 12 + rand(20);
+      for (let y = 0; y < H - 1; y++) for (let x = 0; x < W; x++) {
+        const sx = Math.max(0, Math.min(W - 1, x + rand(3) - 1)), dd = rand(4), decay = behind ? (dd < 2 ? dd : 2) : (dd ? 1 : 0);
+        h[y * W + x] = Math.max(0, h[(y + 1) * W + sx] - decay);
+      }
+      if (d) for (let i = 0; i < W * H; i++) {
+        if (h[i] < 2) continue;
+        const t = h[i] * 255 / 36;
+        d[i * 4] = t * 3; d[i * 4 + 1] = (t - 85) * 3; d[i * 4 + 2] = (t - 190) * 4;
+      }
+      break;
+    }
+    case 'plasma': {
+      if (!d) break;
+      const t = (frame * 2) & 255, t2 = (frame * 3) & 255, k = behind ? 70 / 255 : 1;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const v = sin8(x * 4 + t) + sin8(y * 7 - t2) + sin8((x + y) * 3 + t2) + sin8((x - y) * 2 - t);
+        const c = hsvRGB(tr(v * 3 / 2) + frame * 4), i = (y * W + x) * 4;
+        d[i] = c[0] * k; d[i + 1] = c[1] * k; d[i + 2] = c[2] * k;
+      }
+      break;
+    }
+    case 'matrix':
+      s.cols.forEach((c, ci) => {
+        if (frame % c.spd === 0) c.head++;
+        const head = tr(c.head / 4);
+        if (head - c.len > 8) { c.head = 0; c.len = 3 + rand(6); c.spd = 1 + rand(3); }
+        if (rand(6) === 0) c.g[rand(8)] = GLYPHS[rand(GLYPHS.length)];
+        for (let r = 0; r < 8; r++) {
+          const age = head - r;
+          if (age < 0 || age > c.len) continue;
+          const v = 255 - tr(age * 200 / (c.len + 1));
+          s.glyphs.push([c.g[r], ci * 6 + 1, r * 8, age === 0 ? 'rgb(200,255,200)' : `rgb(${tr(v / 6)},${v},${tr(v / 5)})`]);
+        }
+      });
+      break;
+  }
+}
 function paintBg(it, t) {
   tctx.fillStyle = it.bg; tctx.fillRect(0, 0, W, H);
-  const frame = Math.floor(t / 25);
-  if (it.effect === 'snow') for (const f of flakeSeed) {
-    const y = Math.floor(((f.y + f.spd * frame) % (H * 16)) / 16), x = Math.floor(f.x / 16 + Math.sin(frame / 8 + f.spd) * 1.5 + W) % W;
-    tctx.fillStyle = `rgb(${f.bri},${f.bri},${f.bri})`; tctx.fillRect(x, y, 1, 1);
+  if (!it.effect || it.effect === 'none') return;
+  if (!it.fx || it.fx.t0 !== it.t0 || it.fx.effect !== it.effect) { it.fx = fxNew(it.effect); it.fx.t0 = it.t0; }
+  const per = it.kind === 'text' ? 25 : it.kind === 'fx' ? 30 : 40, behind = it.kind !== 'fx';
+  const n = Math.max(1, Math.min(4, Math.floor(t / per) + 1 - it.fx.frame));
+  for (let i = 1; i < n; i++) fxStep(it.fx, null, behind);
+  const img = tctx.getImageData(0, 0, W, H);
+  fxStep(it.fx, img.data, behind);
+  tctx.putImageData(img, 0, 0);
+  if (it.fx.glyphs.length) {
+    const keep = tctx.font, kb = tctx.textBaseline;
+    tctx.font = '8px monospace'; tctx.textBaseline = 'top';
+    for (const [ch, x, y, col] of it.fx.glyphs) { tctx.fillStyle = col; tctx.fillText(ch, x, y); }
+    tctx.font = keep; tctx.textBaseline = kb;
   }
-  if (it.effect === 'sparkle') flakeSeed.forEach((f, i) => {
-    const ph = Math.floor(frame * f.spd / 4 + i * 37) % 64, v = (ph < 32 ? ph * 8 : (63 - ph) * 8) / 255;
-    tctx.globalAlpha = v; tctx.fillStyle = hue(i * 200); tctx.fillRect(Math.floor(f.x / 16), Math.floor(f.y / 16), 1, 1); tctx.globalAlpha = 1;
-  });
+}
+
+// ---------- Weather (same look as the card; the preview fetches the real weather too) ----------
+const wxKind = (c) => c <= 1 ? 'sun' : c === 2 ? 'partly' : c === 3 ? 'cloud' : c === 45 || c === 48 ? 'fog'
+  : (c >= 71 && c <= 77) || c === 85 || c === 86 ? 'snow' : c >= 95 ? 'storm' : 'rain';
+const wxWord = (c) => c === 0 ? 'CLEAR' : c === 1 ? 'MOSTLY CLEAR' : c === 2 ? 'PARTLY CLOUDY' : c === 3 ? 'CLOUDY' : c === 45 || c === 48 ? 'FOG'
+  : c >= 51 && c <= 57 ? 'DRIZZLE' : c >= 61 && c <= 67 ? 'RAIN' : c >= 71 && c <= 77 ? 'SNOW' : c >= 80 && c <= 82 ? 'SHOWERS'
+  : c === 85 || c === 86 ? 'SNOW SHOWERS' : c >= 95 ? 'THUNDERSTORM' : '';
+const disc = (x, y, r) => { tctx.beginPath(); tctx.arc(x + 0.5, y + 0.5, r + 0.5, 0, 6.2832); tctx.fill(); };
+function wxCloud(x, y, col) { tctx.fillStyle = col; disc(x - 7, y + 2, 6); disc(x + 1, y - 3, 8); disc(x + 9, y + 2, 6); tctx.fillRect(x - 7, y + 2, 16, 7); }
+function wxSun(x, y, r, f) {
+  tctx.fillStyle = tctx.strokeStyle = '#ffc828'; disc(x, y, r); tctx.lineWidth = 1;
+  for (let i = 0; i < 8; i++) {
+    const a = i * 0.7854 + f * 0.02; tctx.beginPath();
+    tctx.moveTo(x + 0.5 + Math.cos(a) * (r + 3), y + 0.5 + Math.sin(a) * (r + 3)); tctx.lineTo(x + 0.5 + Math.cos(a) * (r + 6), y + 0.5 + Math.sin(a) * (r + 6)); tctx.stroke();
+  }
+}
+function wxMoon(x, y, it, f) {
+  tctx.fillStyle = '#e6e6c8'; disc(x, y, 10); tctx.fillStyle = it.bg; disc(x + 6, y - 4, 9);
+  for (let i = 0; i < 4; i++) { const v = sin8(f * 4 + i * 64); tctx.fillStyle = `rgb(${v},${v},${v})`; tctx.fillRect(x - 14 + i * 9, y - 12 + (i * 7) % 20, 1, 1); }
+}
+function wxIcon(kind, day, it, f) {
+  const cx = 23, cy = 22, drift = tr((sin8(f * 2) - 128) / 64);
+  if (kind === 'sun') day ? wxSun(cx, cy, 9, f) : wxMoon(cx, cy, it, f);
+  else if (kind === 'partly') { day ? wxSun(cx - 6, cy - 6, 7, f) : wxMoon(cx - 5, cy - 6, it, f); wxCloud(cx + 3 + drift, cy + 5, '#dcdce6'); }
+  else if (kind === 'cloud') { wxCloud(cx - 4 - drift, cy - 4, '#8c8c9b'); wxCloud(cx + 3 + drift, cy + 4, '#dcdce6'); }
+  else if (kind === 'fog') { wxCloud(cx, cy - 4, '#8c8c9b'); tctx.fillStyle = '#b4b4be'; for (let i = 0; i < 3; i++) tctx.fillRect(cx - 14 + (tr(f / 6) + i * 3) % 6, cy + 9 + i * 4, 24, 1); }
+  else {
+    for (let i = 0; i < 6; i++) {
+      const x = cx - 11 + i * 4 + (i & 1), y = cy + 6 + (tr(f * (kind === 'snow' ? 1 : 3) / 2) + i * 7) % 16;
+      if (kind === 'snow') { tctx.fillStyle = 'rgba(255,255,255,.35)'; tctx.fillRect(x - 1, y, 3, 1); tctx.fillStyle = '#fff'; tctx.fillRect(x, y, 1, 1); }
+      else { tctx.fillStyle = '#50a0ff'; tctx.fillRect(x, y, 1, 3); }
+    }
+    if (kind === 'storm' && tr(f / 4) % 10 < 2) {
+      tctx.strokeStyle = '#fff050'; tctx.lineWidth = 1; tctx.beginPath();
+      tctx.moveTo(cx + 2.5, cy + 4.5); tctx.lineTo(cx - 2.5, cy + 13.5); tctx.lineTo(cx + 2.5, cy + 13.5); tctx.lineTo(cx - 2.5, cy + 22.5); tctx.stroke();
+    }
+    wxCloud(cx, cy - 4, kind === 'storm' ? '#6e6e7d' : '#aaaab9');
+  }
+}
+const SAMPLE_WX = { temp: 72, hi: 75, lo: 58, code: 2, day: true };
+async function wxFetch(it) {
+  if (!it.lat) return;
+  try {
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${it.lat}&longitude=${it.lon}&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1${it.unit === 'F' ? '&temperature_unit=fahrenheit' : ''}`);
+    const j = await r.json();
+    it.wx = { temp: j.current.temperature_2m, code: j.current.weather_code, day: !!j.current.is_day, hi: j.daily.temperature_2m_max[0], lo: j.daily.temperature_2m_min[0] };
+  } catch { it.wx = null; }
 }
 function drawStr(it, s, x, y, t) {
   if (!it.rainbow) { tctx.fillStyle = it.fg; tctx.fillText(s, x, y); return; }
@@ -208,6 +411,23 @@ function daysUntil(mmdd) {
 function renderItem(it, t) {      // t = ms since the item started
   paintBg(it, t);
   tctx.textBaseline = 'alphabetic';
+  if (it.kind === 'fx') return tctx.getImageData(0, 0, W, H);
+  if (it.kind === 'weather') {
+    const w = it.wx || SAMPLE_WX, f = Math.floor(t / 40);
+    wxIcon(wxKind(w.code), w.day, it, f);
+    const temp = String(Math.round(w.temp));
+    tctx.font = fontCss(Math.max(3, it.font));
+    if (tctx.measureText(temp).width > 70) tctx.font = fontCss(3);
+    const tw = tctx.measureText(temp).width, x = 48 + Math.floor((80 - tw - 8) / 2), base = Math.round(2 + (38 + capOf()) / 2);
+    drawStr(it, temp, x, base, t);
+    tctx.strokeStyle = it.rainbow ? hue(t / 4) : it.fg; tctx.lineWidth = 1.5;
+    tctx.beginPath(); tctx.arc(x + tw + 4.5, base - capOf() + 3.5, 2, 0, 6.2832); tctx.stroke();
+    tctx.font = '8px monospace'; tctx.textBaseline = 'top';
+    const word = wxWord(w.code), l2 = `H${Math.round(w.hi)} L${Math.round(w.lo)} ${(it.place || '').toUpperCase()}`.slice(0, 21);
+    tctx.fillStyle = '#ffbe3c'; tctx.fillText(word, 48 + (80 - tctx.measureText(word).width) / 2, 44);
+    tctx.fillStyle = '#b4b4c8'; tctx.fillText(l2, (W - tctx.measureText(l2).width) / 2, 55);
+    return tctx.getImageData(0, 0, W, H);
+  }
   if (it.kind === 'text') {
     tctx.font = fontCss(it.font);
     const tw = tctx.measureText(it.text).width;
@@ -409,7 +629,8 @@ function select(it) {
   $('bigLabel').textContent = 'Preview: ' + label(it);
   if (it && it.kind !== 'pic') it.t0 = performance.now();
 }
-const label = (it) => it.kind === 'pic' ? it.name : it.kind === 'text' ? '“' + it.text + '”' : it.kind === 'clock' ? 'Clock' : 'Countdown to ' + it.text;
+const label = (it) => it.kind === 'pic' ? it.name : it.kind === 'text' ? '“' + it.text + '”' : it.kind === 'clock' ? 'Clock'
+  : it.kind === 'fx' ? (FX[it.effect] || 'Effect') : it.kind === 'weather' ? 'Weather' + (it.place ? ' in ' + it.place : '') : 'Countdown to ' + it.text;
 function move(it, d) {
   const i = items.indexOf(it), j = i + d;
   if (j < 0 || j >= items.length) return;
@@ -473,22 +694,36 @@ function marks(it) {
 
 // Message / clock / countdown items with their own little editor.
 const COLORS = { fg: '#ffbe3c', bg: '#000000' };
+const META = { text: 'Message', clock: 'Shows the time (needs internet)', countdown: 'Counts the days (needs internet)',
+  fx: 'Drawn by the screen itself: takes no space', weather: 'Pick your town below' };
+const usesF = () => /^en-(US|LR|MM)$/i.test(navigator.language) || /-(US)$/i.test(navigator.language);
 function addDrawn(kind, o = {}) {
-  const it = Object.assign({ kind, secs: 0, fg: kind === 'clock' ? '#5ac8ff' : COLORS.fg, bg: COLORS.bg, rainbow: false,
-    font: kind === 'text' ? 3 : 4, effect: kind === 'countdown' ? 'snow' : 'none',
+  const it = Object.assign({ kind, secs: 0, fg: kind === 'clock' ? '#5ac8ff' : kind === 'weather' ? '#ffffff' : COLORS.fg, bg: COLORS.bg, rainbow: false,
+    font: kind === 'text' ? 3 : 4, effect: kind === 'countdown' ? 'snow' : kind === 'fx' ? 'fireworks' : 'none',
     text: kind === 'text' ? 'Happy Birthday!' : kind === 'countdown' ? 'Christmas' : '', date: '12-25',
+    unit: usesF() ? 'F' : 'C', lat: '', lon: '', place: '',
     h24: !new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12 }, o);
   const el = baseEl(it);
-  it.metaEl.textContent = kind === 'text' ? 'Message' : kind === 'clock' ? 'Shows the time (needs internet)' : 'Counts the days (needs internet)';
+  it.metaEl.textContent = META[kind];
+  if (kind === 'weather' && it.place) it.metaEl.textContent = `Weather for ${it.place} (needs internet)`;
   const ed = document.createElement('div'); ed.className = 'edit';
-  ed.innerHTML = `
-    ${kind !== 'clock' ? `<input type="text" maxlength="${kind === 'text' ? 120 : 21}" data-k="text" placeholder="${kind === 'text' ? 'Your message' : 'What for, e.g. Christmas'}">` : ''}
+  const colors = `<label>Color <input type="color" data-k="fg"> <input type="checkbox" data-k="rainbow"> Rainbow
+      &nbsp; Background <input type="color" data-k="bg"></label>`;
+  const sizes = kind === 'weather' ? '<option value="3">Medium</option><option value="4">Big</option>'
+    : '<option value="1">Pixel</option><option value="2">Small</option><option value="3">Medium</option><option value="4">Big</option>';
+  ed.innerHTML = kind === 'fx'
+    ? `<label>Effect <select data-k="effect">${fxOptions().replace('<option value="none">None</option>', '')}</select>
+       &nbsp; Background <input type="color" data-k="bg"></label>`
+    : `
+    ${kind === 'text' || kind === 'countdown' ? `<input type="text" maxlength="${kind === 'text' ? 120 : 21}" data-k="text" placeholder="${kind === 'text' ? 'Your message' : 'What for, e.g. Christmas'}">` : ''}
     ${kind === 'countdown' ? `<label>Date <input type="date" data-k="date"></label>` : ''}
     ${kind === 'clock' ? `<label><input type="checkbox" data-k="h24"> 24-hour clock</label>` : ''}
-    <label>Color <input type="color" data-k="fg"> <input type="checkbox" data-k="rainbow"> Rainbow
-      &nbsp; Background <input type="color" data-k="bg"></label>
-    <label>Size <select data-k="font"><option value="1">Pixel</option><option value="2">Small</option><option value="3">Medium</option><option value="4">Big</option></select>
-      &nbsp; Effect <select data-k="effect"><option value="none">None</option><option value="snow">Snow</option><option value="sparkle">Sparkle</option></select></label>`;
+    ${kind === 'weather' ? `<div class="flex"><input type="text" class="wq" placeholder="Your town" style="flex:1;min-width:0"><button class="chip wfind">Find</button></div>
+      <div class="row wres"></div>
+      <label>Units <select data-k="unit"><option value="F">°F</option><option value="C">°C</option></select></label>` : ''}
+    ${colors}
+    <label>Size <select data-k="font">${sizes}</select>
+      &nbsp; Effect <select data-k="effect">${fxOptions()}</select></label>`;
   el.appendChild(ed);
   ed.querySelectorAll('[data-k]').forEach(inp => {
     const k = inp.dataset.k;
@@ -498,9 +733,36 @@ function addDrawn(kind, o = {}) {
     inp.oninput = () => {
       it[k] = inp.type === 'checkbox' ? inp.checked : k === 'font' ? +inp.value : k === 'date' ? inp.value.slice(5) : inp.value;
       el.querySelector('.name').textContent = label(it);
+      if (k === 'unit') wxFetch(it);
       it.t0 = performance.now(); updateSpace();
     };
   });
+  if (kind === 'weather') {
+    const q = ed.querySelector('.wq'), res = ed.querySelector('.wres');
+    q.value = it.place;
+    const find = async () => {
+      res.textContent = 'Looking…';
+      try {
+        const j = await (await fetch('https://geocoding-api.open-meteo.com/v1/search?count=6&language=en&format=json&name=' + encodeURIComponent(q.value.trim()))).json();
+        res.textContent = j.results?.length ? '' : 'No town by that name. Try the nearest city.';
+        for (const p of j.results || []) {
+          const b = document.createElement('button'); b.className = 'chip';
+          b.textContent = [p.name, p.admin1, p.country_code].filter(Boolean).join(', ');
+          b.onclick = async () => {
+            Object.assign(it, { lat: p.latitude.toFixed(3), lon: p.longitude.toFixed(3), place: p.name });
+            q.value = p.name; res.textContent = '';
+            it.metaEl.textContent = `Weather for ${p.name} (needs internet)`;
+            el.querySelector('.name').textContent = label(it);
+            await wxFetch(it); it.t0 = performance.now(); updateSpace();
+          };
+          res.appendChild(b);
+        }
+      } catch { res.textContent = 'Couldn\'t look that up. Is this phone online?'; }
+    };
+    ed.querySelector('.wfind').onclick = find;
+    q.onkeydown = (e) => { if (e.key === 'Enter') find(); };
+    wxFetch(it);
+  }
   select(it);
   updateSpace();
   return it;
@@ -508,8 +770,10 @@ function addDrawn(kind, o = {}) {
 $('addText').onclick = () => addDrawn('text');
 $('addClock').onclick = () => addDrawn('clock');
 $('addCount').onclick = () => addDrawn('countdown');
+$('addFx').onclick = () => addDrawn('fx');
+$('addWx').onclick = () => addDrawn('weather');
 
-const ready = () => items.filter(i => i.kind !== 'pic' || (i.blob && !i.failed));
+const ready = () => items.filter(i => i.kind === 'pic' ? i.blob && !i.failed : i.kind !== 'weather' || i.lat);
 function updateSpace() {
   const pics = ready().filter(i => i.kind === 'pic');
   const need = pics.reduce((s, i) => s + i.blob.size + 4096, 0);
@@ -559,6 +823,8 @@ $('loadShow').onclick = async () => {
         if (f[0] === 'text') addDrawn('text', { ...o, text: f[6] });
         if (f[0] === 'clock') addDrawn('clock', { ...o, h24: f[6] === '24' });
         if (f[0] === 'countdown') addDrawn('countdown', { ...o, date: f[6], text: f[7] || '' });
+        if (f[0] === 'fx') addDrawn('fx', o);
+        if (f[0] === 'weather') addDrawn('weather', { ...o, unit: f[6] || 'F', lat: f[7] || '', lon: f[8] || '', place: f[9] || '' });
       }
     }
     st.className = 'status ok'; st.textContent = `Loaded ${lines.length} item${lines.length > 1 ? 's' : ''} from the screen.`;
@@ -574,6 +840,8 @@ function showLine(it, fileName) {
   const common = [sec, it.rainbow ? 'rainbow' : hex6(it.fg), hex6(it.bg), it.font, it.effect];
   if (it.kind === 'text') return ['text', ...common, clean(it.text) || ' '].join('\t');
   if (it.kind === 'clock') return ['clock', ...common, it.h24 ? '24' : '12'].join('\t');
+  if (it.kind === 'fx') return ['fx', ...common, ''].join('\t');
+  if (it.kind === 'weather') return ['weather', ...common, it.unit, it.lat, it.lon, clean(it.place)].join('\t');
   return ['countdown', ...common, it.date, clean(it.text)].join('\t');
 }
 

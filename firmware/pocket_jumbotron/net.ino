@@ -91,7 +91,7 @@ static void showHotspotScreen(const char *status) {
 // QR code at the left of the panel, drawn in one of several styles while we find what phone cameras
 // read best on an LED panel (S1 presses while the address is up step through them; the number shows
 // bottom right). Uses the QR encoder that ships with the ESP32 core.
-struct QrStyle { bool upper; uint8_t quiet, light; bool invert, fullPwm; };
+struct QrStyle { bool upper; uint8_t quiet, light; bool invert, fullPwm, web; };
 static const QrStyle QR_STYLES[] = {
   {false, 2, 200, false, false},   // 1: 0.7.1 look: version 2, thin quiet zone
   {true,  4, 200, false, false},   // 2: "HTTP://..." in capitals = smaller version 1 code, proper 4-module quiet zone
@@ -99,6 +99,10 @@ static const QrStyle QR_STYLES[] = {
   {true,  4,  90, false, true},    // 4: like 2, dim white but panel at full PWM (less flicker for cameras)
   {true,  4, 255, false, true},    // 5: like 2, bright white, full PWM
   {false, 3, 200, false, true},    // 6: lower-case version 2, 3-module quiet zone, full PWM
+  // 7-8: an https link to the website's forwarding page (go.html), which opens http://<ip> on the phone.
+  // Camera apps may not offer plain http links to a local address. Longer = version 4 = 1 LED per module.
+  {false, 4, 200, false, false, true},   // 7: website link
+  {false, 4, 255, false, true,  true},   // 8: website link, bright, full PWM
 };
 static const int QR_COUNT = sizeof(QR_STYLES) / sizeof(QR_STYLES[0]);
 int qrVariant = 1;
@@ -113,8 +117,10 @@ static void qrDraw(const uint8_t *q) {        // q is an esp_qrcode_handle_t
     for (int x = 0; x < n; x++)
       if (esp_qrcode_get_module(q, x, y)) panel->fillRect(x0 + (qz + x) * px, y0 + (qz + y) * px, px, px, dark);
 }
-static bool drawQr(String url) {
+void qrNext() { qrVariant = qrVariant % QR_COUNT + 1; }
+static bool drawQr(String ip) {
   qrs = &QR_STYLES[(qrVariant - 1) % QR_COUNT];
+  String url = qrs->web ? "https://hogfanboy.github.io/hd-wf2-christmas-card/go#" + ip : "http://" + ip;
   if (qrs->upper) url.toUpperCase();
   if (qrs->fullPwm) panel->setBrightness8(MAX_BRIGHTNESS); else applyBrightness();
   esp_qrcode_config_t cfg = {qrDraw, 3, ESP_QRCODE_ECC_LOW};
@@ -134,7 +140,7 @@ void showAddress(uint32_t ms) {
     // A QR code of the page address: point the phone camera at it, no typing.
     String ip = WiFi.localIP().toString();
     panel->clearScreen();
-    if (!drawQr("http://" + ip)) {
+    if (!drawQr(ip)) {
       text(12, "On your phone, open:", C(150, 150, 170));
       text(30, ip.c_str(), C(255, 255, 255));
     } else {

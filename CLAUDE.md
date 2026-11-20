@@ -31,9 +31,9 @@ build the firmware and publish `docs/` (website + online installer) to GitHub Pa
 ## Build (Arduino CLI, same toolchain as CI: esp32 core 3.3.13, HUB75 DMA 3.1.0)
 ```bash
 A="/c/Users/hogfa/AppData/Local/Programs/arduino-cli/arduino-cli.exe"   # not on PATH
-cd firmware && "$A" compile -b "esp32:esp32:esp32s3:FlashMode=dio,FlashSize=8M,CDCOnBoot=cdc,USBMode=hwcdc,PSRAM=disabled" --output-dir build/pocket_jumbotron pocket_jumbotron
+cd firmware && "$A" compile -b "esp32:esp32:esp32s3:FlashMode=dio,FlashSize=8M,CDCOnBoot=cdc,USBMode=hwcdc,PSRAM=disabled" --build-property upload.maximum_size=1835008 --output-dir build/pocket_jumbotron pocket_jumbotron
 ```
-Ignore "Maximum is 1310720" in the size report; the real app slot is 1.75 MB.
+`upload.maximum_size` = our 1.75 MB app slot; without it arduino-cli refuses apps over 1.25 MB and leaves the old .bin in place.
 
 ## Flash / talk to a card (run in a terminal tab the user can see, via `powershell -ExecutionPolicy Bypass -File ...`)
 - Firmware: `tools/flash-watch.ps1 -LogSec 300 -Images "0x10000=firmware\build\pocket_jumbotron\pocket_jumbotron.ino.bin"`. A card still on Huidu: start the script, then the user plugs in holding S1.

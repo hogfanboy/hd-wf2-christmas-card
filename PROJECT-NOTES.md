@@ -11,6 +11,7 @@ Custom firmware + website for ~15 LED "Christmas cards" already mailed out last 
 
 ## Features (verified on the cards)
 - **Show** (fw 0.7.0+, `show.ino`): `/show.txt` lists items (tab-separated): `pic`, `text` (4 fonts, color or rainbow, snow/sparkle background), `clock`, `countdown` (MM-DD + label), each with seconds (0 = auto). Without show.txt every picture in `/gifs` plays in name order. Auto timing: short animations loop for ≥8 s; long ones stop at ~20 s at the end of a loop.
+- **Effects + weather** (fw 0.8.0): `fx` items and effect backgrounds (snow, sparkle, hearts, confetti, fireworks, stars, fire, plasma, matrix) drawn by the card; `weather` items fetch Open-Meteo over plain http (~150 ms, no TLS), at most every 15 min. Ran for several loops on card 1 with no resets, heap steady ~81 KB.
 - **Pictures**: `.gif` (AnimatedGIF, ≤256 colors/frame) or `.pjm` full color = `PJM1` + per frame [u32 len, u16 delay ms, u16 0, baseline JPEG], decoded with JPEGDEC 1.8.5 (RGB8888). The card page converts any input (JPG/PNG/GIF/WEBP, animated WEBP via `ImageDecoder`) and picks GIF or full color per picture (>400 colors → full color).
 - **Time**: NTP after WiFi joins; POSIX TZ string worked out by the phone page from its own DST changes. Night mode: hours + brightness level (NVS).
 - **Player**: **Single-buffered** (redraws only changed pixels), 8-bit color, brightness capped at 55% of full (`MAX_BRIGHTNESS` 140); the user's % setting is saved in NVS.
@@ -60,7 +61,9 @@ Custom firmware + website for ~15 LED "Christmas cards" already mailed out last 
 - **Upload speed**: don't call `LittleFS.usedBytes()` (walks the whole FS) per chunk; measure once per file. 2.36 MB / 22 files takes 41 s.
 - **Android 16+ Chrome needs the "Nearby devices" (local network) permission** to open the card page; without it Chrome says "site can't be reached" and offers a pop-up that opens Chrome's App info. Verified on the Pixel 10a.
 - The card page is plain http: no WebCrypto, no geolocation, no camera APIs there. Fetching https files from GitHub Pages works (CORS allowed).
-- The Arduino prototype generator puts function prototypes before other files' includes: don't use library types (e.g. `esp_qrcode_handle_t`) in function signatures of non-main .ino files.
+- **Heap is fragmented**: with WiFi up, ~80 KB free but the largest block is only ~31 KB. Allocate what's needed, not fixed big buffers (`.pjm` sizes its JPEG buffer to the file's biggest frame).
+- **Build size check**: compile with `--build-property upload.maximum_size=1835008`; the default 1.25 MB check fails the build and leaves the old `.bin` in place.
+- The Arduino prototype generator puts function prototypes before other files' includes: don't use library types (e.g. `esp_qrcode_handle_t`) or structs declared there in function signatures of non-main .ino files (declare such structs in the main .ino).
 - The HUB75 library already applies CIE1931 correction, so don't add gamma (gamma 2.2 made everything too dark).
 - GIF playback: apply the *previous* frame's disposal before the next frame, and clear the canvas when a loop restarts.
 - Cameras show partial-frame bands at low refresh (rolling shutter, invisible to the eye).
