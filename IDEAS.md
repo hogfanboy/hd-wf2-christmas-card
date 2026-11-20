@@ -7,7 +7,7 @@ At the end of a session: promote what was built and verified to PROJECT-NOTES.md
 - **Website promises things that don't exist**: "photos & videos", "checks for new animations once a day", a "Straight from your phone / no WiFi" upload path (dropped: uploads are home-WiFi only), hotspot named `PocketJumbotron` (it's `PocketJumbo-XXXX` + password on the panel), "press the button" (it's hold 2 s). Rewrite `docs/index.html` for the real flow.
 
 ## Big features (ambitious, roughly in order)
-1. **Content packs from GitHub Pages**: source pictures in a repo folder (e.g. `content/<pack>/`), CI converts them with `make-gifs.mjs` into `docs/packs/<pack>/` + `docs/packs/manifest.json`. Anything there is **public**, so only your own or royalty-free art (no commercial characters). Step 1 (button + build-packs) done in 0.6.3. Step 2: card fetches it daily by itself (HTTPS on the card; tight on RAM, so pause the player while downloading).
+1. **Content packs**: public + encrypted family packs done (0.6.3-0.7.2). Next: the card fetches new packs daily by itself (HTTPS on the card; tight on RAM, pause the player while downloading).
 2. **Per-family messages**: done in 0.6.3 via `cards` in pack.json. Next: card shows a "new pack for you" hint on the panel.
 3. **Show builder**: done in 0.7.0 (messages, clock, countdown, seconds per item). Next: more effects (fireworks, confetti), two-line messages, drag to reorder.
 4. **News + weather items** (year-round): weather from Open-Meteo (free, no key; city picked on the page), headlines from RSS digested by a GitHub Actions cron into a small text file on Pages. Card does a small HTTPS GET between items (~40 KB RAM for TLS).
@@ -17,18 +17,19 @@ At the end of a session: promote what was built and verified to PROJECT-NOTES.md
 8. **Built-in effects library**: our own fireworks, snow, confetti, hearts as code (like `docs/panel.js` scenes), free to publish and zero storage if drawn by the card.
 
 ## Easier setup (no typing 192.168...)
-- QR code on the address screen: done in 0.7.1.
+- QR code on the address screen: done (0.7.1, styles in 0.7.3). Pixel camera app ignores it; try a QR to an https forwarding page on the website.
+- Add-to-home-screen icon for the card page (manifest + icon), so it opens like an app.
 - **Improv WiFi in the installer**: after flashing, the install page asks for the home WiFi over USB (Improv Serial, used by ESPHome/WLED). No hotspot step for PC installs.
 - Bluetooth: Web Bluetooth works on Android Chrome only (not iPhone). BLE stack costs ~30-50 KB RAM (we have ~75 KB free with WiFi); flash for it is fine (content has its own 4.3 MB partition). Only worth it for setup, then BLE off.
 
 ## Private content
-- Done in 0.7.2: encrypted family packs + family code (see PROGRESS.md). Later: per-family codes UI, code shown on the panel at setup.
+- Encrypted family packs done (0.7.2). Later: show "new family pictures" on the panel. The 3 GIFs once in public `content/` are still in public git history.
 
 ## Smaller improvements
 - **First-install**: installer backs up Huidu first (esptool-js read-flash → download). Panel-chip check no longer needed (one firmware for both).
 - Storage meter on the card page before Send ("2.1 of 4.3 MB").
 - Optional PIN for the card page (anyone on the home WiFi can wipe it today).
-- **Phone reachability on home WiFi**: Pixel 10a couldn't reach the card while the PC could (guest network / AP isolation?). Test another phone; explain in the help.
+- Explain the Android "Nearby devices" permission in the website help and on the setup screens.
 - **VBUS check**: does the board back-feed the PC port? Mostly moot with the new unplug-the-panel install steps.
 - Dark grays weak at the very dark end at 60 Hz. Color depth A/B (8 vs 10/12-bit). Text-heavy GIF cleanup. People with no home WiFi.
 - Tidy: move the one-off probe sketches into `firmware/probes/`.

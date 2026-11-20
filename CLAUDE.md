@@ -22,8 +22,9 @@ build the firmware and publish `docs/` (website + online installer) to GitHub Pa
 - After any driver, feature or bug fix, update PROGRESS.md (under 60 lines): working state and verified pins, active bug or next task, key decisions (no failed attempts). Then say: "Task complete and PROGRESS.md updated. Ready for /clear."
 
 ## Layout
-- `firmware/pocket_jumbotron/`: `pocket_jumbotron.ino` (panel setup + register writes, GIF player, button), `net.ino` (WiFi, web API, hotspot, NVS, OTA), `rollback.cpp`, `partitions.csv`. `web_index.h` is generated.
-- `web/` pages served by the card; `node tools/build-web.mjs` regenerates `web_index.h` (run after editing `web/`, then recompile).
+- `firmware/pocket_jumbotron/`: `pocket_jumbotron.ino` (panel setup + register writes, GIF player, button, shared globals), `show.ino` (show list, text/clock/countdown, full-color .pjm player, night mode), `net.ino` (WiFi, web API, hotspot, NVS, OTA, QR), `rollback.cpp`, `partitions.csv`. `web_index.h` is generated.
+- `web/` pages served by the card (`index.html`, `wifi.html`, `vault.js`); `node tools/build-web.mjs` regenerates `web_index.h` (run after editing `web/`, then recompile).
+- `content/` public packs (`tools/build-packs.mjs`). Private pictures + family codes: repo hogfanboy/pocket-jumbotron-content, cloned at `../pocket-jumbotron-content`, encrypted by `tools/build-vault.mjs` in CI. Never put a family code in this repo.
 - `docs/` website + `install.html` (browser USB installer); `docs/firmware/` is built by `node tools/build-install.mjs` (CI does this).
 - Other `firmware/*` folders are one-off panel probes/tests.
 
@@ -37,7 +38,7 @@ Ignore "Maximum is 1310720" in the size report; the real app slot is 1.75 MB.
 ## Flash / talk to a card (run in a terminal tab the user can see, via `powershell -ExecutionPolicy Bypass -File ...`)
 - Firmware: `tools/flash-watch.ps1 -LogSec 300 -Images "0x10000=firmware\build\pocket_jumbotron\pocket_jumbotron.ino.bin"`. A card still on Huidu: start the script, then the user plugs in holding S1.
 - Serial log: `tools/serial-log.ps1 -Seconds 600`.
-- Over WiFi: `node tools/upload-to-card.mjs <host> <folder>` (replaces all content). API: `GET /api/info`, `POST /api/clear|upload|play|brightness?v=|update|forget-wifi`.
+- Over WiFi: firmware `curl -F "firmware=@firmware/build/pocket_jumbotron/pocket_jumbotron.ino.bin" http://<ip>/api/update`. API: `GET /api/info|show|file?name=`, `POST /api/clear|upload|show|play|brightness?v=|settings|update|forget-wifi`.
 - esptool v5: `%LOCALAPPDATA%\Programs\esptool\esptool-windows-amd64\esptool.exe`. gh: `%LOCALAPPDATA%\Programs\gh\bin\gh.exe`.
 
 ## Media and testing without a card
