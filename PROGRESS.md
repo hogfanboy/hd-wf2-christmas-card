@@ -1,8 +1,13 @@
 # PROGRESS
 
-## Working state (fw 0.8.2, 2026-11-20; card 1 on 0.8.2 via WiFi, card 2 still 0.6.2)
-- 0.8.2: animated WEBP now animates from the card page. `ImageDecoder` only exists on https pages, so the page
-  splits WEBP frames itself (`decodeWebpAnim` in `web/index.html`). Tested in the preview; user to try from the PC.
+## Working state (fw 0.8.3, 2026-11-20; card 1 on 0.8.3 via WiFi, card 2 still 0.6.2)
+- 0.8.2: animated WEBP animates from the card page (`ImageDecoder` is https-only, so `decodeWebpAnim` in
+  `web/index.html` splits frames itself). Tested in the preview; user to try from the PC.
+- 0.8.3 fast-scan QR screen: `panelSetFast()` restarts the panel at 2-bit color while the address screen is up
+  (serial: 651 Hz vs 84 Hz full color, ~20 ms per switch, heap back to ~82 KB). `panelStop()` frees the GDMA
+  channel the library leaks on delete. Hz shows at the bottom of the QR screen.
+- 0.8.3 bridge test: card serves `/bridge` (runs requests from https://hogfanboy.github.io against its own /api);
+  `/api/info` sends CORS + private-network headers; `docs/bridge-test.html?ip=<ip>` runs both tests.
 - One firmware for both panel chips. CI (push to main + hourly) builds firmware, installer, public packs, encrypted packs.
 - Card 1 (FM6124C): 192.168.50.16 / pocketjumbo-eed0 (also on the PC's USB, COM10). Card 2 (RUL6024): 192.168.50.199.
 - Show (`show.ino`, `/show.txt`): pictures, messages, clock, countdown, **effects** (`fx`), **weather**, seconds per item.
@@ -36,15 +41,14 @@
 - Build with `--build-property upload.maximum_size=1835008` (app is 1.34 MB now; the default 1.25 MB check fails
   the build and silently keeps the old .bin).
 
-## Active issue: QR code
-- Camera test on the PC monitor (go.html?test): the Pixel camera app offers both the http://<ip> and the https go
-  link. So the link type is fine; the panel's QR rendering is what the camera app won't read.
-- 0.8.0 styles 7-8 never drew (QR encoder capped at version 3); fixed in 0.8.1 (max version 5). Style 8 is now dim
-  white at full PWM (camera glare idea). User test: styles 7 and 8 on the panel.
-- Idea under discussion: card page app hosted on GitHub Pages (see Next).
+## Active: two tests that decide the new structure
+- QR: user scans the fast-scan QR screen with the Pixel camera (link type was already fine). Press S1 several
+  times: steps styles, and the serial log's "free heap" shows whether panel restarts leak.
+- Website → card: user opens bridge-test.html in PC Chrome and on the phone. Test 1 = direct (Chrome local
+  network permission), test 2 = bridge tab. The in-app browser blocks test 1 and can't open the tab (no verdict).
 
-## Next
-- User checks the startup screen and QR styles 7-8 on card 1. Still unjudged: full color, night mode, weather look.
-- Decide: card serves a tiny shell page that loads the app from GitHub Pages (same-origin API calls, app updates
-  without firmware). A pure https GitHub page can't call the card (mixed content + no way to find it by ID).
-- QR test above, then keep one style. Then: news headlines item, Improv WiFi in the installer, update card 2.
+## Next (proposed structure, test results first)
+- Card = display engine: modules (panel incl. fast scan, layers, screens, scheduler, storage, net/API v1),
+  `show.json`, rescue page + bridge in firmware. Website (Pages, https) = the app: studio, reminders, packs.
+- Then: reminders ("start N days before", yearly), 5-day forecast (same Open-Meteo call), news, Improv, card 2.
+- Still unjudged on the panel: full color, night mode, weather look.
