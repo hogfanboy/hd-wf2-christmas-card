@@ -25,6 +25,15 @@
         "tools/pack-builder.mjs"
       ],
       "port": 8095
+    },
+    {
+      "name": "pack-builder-test",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "tools/pack-builder.mjs",
+        "firmware/build/content-copy"
+      ],
+      "port": 8095
     }
   ]
 }

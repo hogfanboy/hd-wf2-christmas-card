@@ -4,6 +4,7 @@
 //   docs/firmware/pocket-jumbotron-app.bin      app only (for wireless updates)
 //   docs/firmware/info.json                     version, sizes, sha256
 // Usage: node tools/build-install.mjs [content folders...]   (CI passes its checkout of the private picture repo)
+//   --first-show-only: just build + list the first show (firmware/build/install-fs), no compile or image.
 // Runs on Windows (this PC) and Linux (GitHub Actions). Needs arduino-cli + the ESP32 core installed.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -39,44 +40,67 @@ const appOut = path.join(build, 'pocket_jumbotron');
 const out = path.join(root, 'docs/firmware');
 fs.mkdirSync(out, { recursive: true });
 
+const firstOnly = process.argv.includes('--first-show-only');
+process.argv = process.argv.filter(a => a !== '--first-show-only');
 // 1. Web pages -> web_index.h, then compile.
+if (!firstOnly) {
 run(process.execPath, [path.join(root, 'tools/build-web.mjs')]);
 run(arduinoCli, ['compile', '-b', FQBN, '--build-property', 'upload.maximum_size=1835008', '--output-dir', appOut, sketch]);   // our app slot is 1.75 MB (partitions.csv)
+}
 const version = /FW_VERSION = "([^"]+)"/.exec(fs.readFileSync(path.join(sketch, 'pocket_jumbotron.ino'), 'utf8'))[1];
 
 // 2. The first show -> LittleFS image (must match partitions.csv: spiffs @0x390000, 0x460000):
-//    clock, weather where the screen is (found by its internet address) + 5-day forecast, the pictures from the
-//    content folders (loose pictures, plus packs whose pack.json has "install": true), our holiday greetings
-//    (mid-November to early January) and the Pocket Jumbotron title.
-const fsDir = path.join(build, 'install-fs'), gifs = path.join(fsDir, 'gifs');
-fs.rmSync(fsDir, { recursive: true, force: true });
-run(process.execPath, [path.join(root, 'tools/make-starter.mjs'), gifs]);
-fs.rmSync(path.join(gifs, '04-full-color.gif'), { force: true });     // color test: website pack only
-const own = [];
+//    clock, weather where the screen is (found by its internet address) + 5-day forecast, then the pictures from
+//    the content folders: loose pictures, then every pack whose pack.json has "install": true (pack list order,
+//    then play order). Per picture, pack.json "pictures": { "<file>": { "install": false } } leaves it off new
+//    cards and { "dates": "1115-0106" } shows it only between those days. All set in the pack builder; the
+//    "Holiday Starter" pack holds our own greetings. No install pack at all (a local build without the content
+//    repo): the generated greetings from make-starter.mjs.
+const fsDir = path.join(build, 'install-fs'), gifs = path.join(fsDir, 'gifs'), stage = path.join(build, 'install-stage');
+fs.rmSync(fsDir, { recursive: true, force: true }); fs.rmSync(stage, { recursive: true, force: true });
+fs.mkdirSync(gifs, { recursive: true }); fs.mkdirSync(stage, { recursive: true });
+const picked = [];                                   // { src, dates }
+const isPic = (p) => PIC.test(p) && fs.statSync(p).isFile();
 for (const src of process.argv.slice(2).map(p => path.resolve(p)).filter(p => fs.existsSync(p))) {
-  for (const f of fs.readdirSync(src).sort()) {
-    const p = path.join(src, f);
-    if (PIC.test(f) && fs.statSync(p).isFile()) own.push(p);
-    const meta = path.join(p, 'pack.json');
-    if (fs.statSync(p).isDirectory() && fs.existsSync(meta) && readPackMeta(p).install)
-      own.push(...fs.readdirSync(p).filter(x => PIC.test(x)).sort(byName).map(x => path.join(p, x)));
+  for (const f of fs.readdirSync(src).sort(byName)) if (isPic(path.join(src, f))) picked.push({ src: path.join(src, f) });
+  const packs = fs.readdirSync(src).filter(d => !d.startsWith('_') && !d.startsWith('.') && fs.statSync(path.join(src, d)).isDirectory())
+    .map(d => ({ dir: path.join(src, d), name: d, meta: readPackMeta(path.join(src, d)) })).filter(p => p.meta.install)
+    .sort((a, b) => (Number(a.meta.order) || 50) - (Number(b.meta.order) || 50) || byName(a.name, b.name));
+  for (const p of packs) for (const f of fs.readdirSync(p.dir).sort(byName)) {
+    const s = (p.meta.pictures || {})[f] || {};
+    if (!isPic(path.join(p.dir, f)) || s.install === false) continue;
+    picked.push({ src: path.join(p.dir, f), dates: /^\d{4}-\d{4}$/.test(s.dates || '') ? s.dates : '' });
   }
 }
-const before = new Set(fs.readdirSync(gifs));
-if (own.length) run(process.execPath, [path.join(root, 'tools/make-gifs.mjs'), gifs, ...own]);   // any picture -> 128x64 GIF
-const ownGifs = fs.readdirSync(gifs).filter(f => !before.has(f)).sort();
+if (!picked.length) {                                 // no content repo: our generated greetings
+  run(process.execPath, [path.join(root, 'tools/make-starter.mjs'), stage]);
+  picked.push({ src: path.join(stage, '01-merry-christmas.gif'), dates: '1115-0106' }, { src: path.join(stage, '03-happy-holidays.gif'), dates: '1115-0106' },
+    { src: path.join(stage, '02-pocket-jumbotron.gif') });
+}
+// Card-ready GIFs (128x64) go on as they are; anything else is converted (any picture -> 128x64 GIF).
+// Each gets a numbered name so the same file name in two packs can't clash.
+const isCardGif = (f) => { const b = fs.readFileSync(f); return b.slice(0, 3).toString() === 'GIF' && b.readUInt16LE(6) === 128 && b.readUInt16LE(8) === 64; };
+const showPics = [];
+picked.forEach((p, i) => {
+  const base = String(i + 1).padStart(2, '0') + '-' + path.basename(p.src, path.extname(p.src)).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24);
+  if (isCardGif(p.src)) { fs.copyFileSync(p.src, path.join(gifs, base + '.gif')); showPics.push({ file: base + '.gif', dates: p.dates }); return; }
+  const tmp = path.join(stage, 'one'); fs.rmSync(tmp, { recursive: true, force: true }); fs.mkdirSync(tmp);
+  run(process.execPath, [path.join(root, 'tools/make-gifs.mjs'), tmp, p.src]);
+  const made = fs.readdirSync(tmp).filter(f => f.endsWith('.gif'));
+  if (!made.length) { console.warn('warning: could not convert ' + p.src + '; left off the first show'); return; }
+  fs.copyFileSync(path.join(tmp, made[0]), path.join(gifs, base + '.gif')); showPics.push({ file: base + '.gif', dates: p.dates });
+});
 const L = (...f) => f.join('\t');
 const show = [
   L('clock', 0, '5AC8FF', '000000', 4, 'none', 12),
   L('weather', 0, 'FFFFFF', '000000', 4, 'none', 'A', 'auto', 'auto', '', '@forecast'),
-  ...ownGifs.map(f => L('pic', 0, f)),
-  L('pic', 0, '01-merry-christmas.gif', '@dates=1115-0106'),
-  L('pic', 0, '03-happy-holidays.gif', '@dates=1115-0106'),
-  L('pic', 0, '02-pocket-jumbotron.gif'),
+  ...showPics.map(p => p.dates ? L('pic', 0, p.file, '@dates=' + p.dates) : L('pic', 0, p.file)),
 ];
 fs.writeFileSync(path.join(fsDir, 'show.txt'), show.join('\n') + '\n');
 const fsBytes = fs.readdirSync(gifs).reduce((s, f) => s + fs.statSync(path.join(gifs, f)).size, 0);
-console.log(`First show: ${show.length} items, ${ownGifs.length} own pictures, ${(fsBytes / 1048576).toFixed(2)} MB`);
+console.log(`First show: ${show.length} items, ${showPics.length} pictures, ${(fsBytes / 1048576).toFixed(2)} MB`);
+for (const l of show) console.log('  ' + l.replace(/\t/g, ' | '));
+if (firstOnly) process.exit(0);
 if (fsBytes > 0x460000 - 0x40000) throw new Error('first show is too big for the picture storage (4.1 MB)');
 const littlefs = path.join(build, 'install-littlefs.bin');
 run(findTool('mklittlefs', 'mklittlefs'), ['-c', fsDir, '-b', '4096', '-p', '256', '-s', String(0x460000), littlefs], { stdio: ['ignore', 'ignore', 'inherit'] });

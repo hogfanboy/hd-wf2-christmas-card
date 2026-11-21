@@ -13,10 +13,11 @@
 // JSON or "title: ..." lines, and a broken pack is skipped with a warning instead of failing the build.
 // Output: docs/packs/<pack-id>/<files> + docs/packs/manifest.json (published by GitHub Actions, not committed).
 // The website is public: anyone with a picture's address can download it. Private here = not on GitHub.
-// Also adds the generated "holiday-starter" pack (our own animations from docs/panel.js).
+// The holiday greetings are a normal pack too ("Holiday Starter" in the content repo, first made by
+// tools/make-starter.mjs), so the pack builder can edit them. "install": true + per-picture "install"/"dates" are
+// for new cards only (tools/build-install.mjs); this script ignores them.
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { PIC, packId, safeName, byName, readPackMeta } from './pack-meta.mjs';
 
@@ -27,9 +28,6 @@ fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(out, { recursive: true });
 
 const packs = [];
-execFileSync(process.execPath, [path.join(root, 'tools/make-starter.mjs'), path.join(out, 'holiday-starter')], { stdio: 'inherit' });
-packs.push({ id: 'holiday-starter', title: 'Holiday starter animations', about: 'Snow, greetings and color tests.', order: 90,
-  files: fs.readdirSync(path.join(out, 'holiday-starter')).filter(f => PIC.test(f)).sort() });
 
 const isFile = (p) => fs.statSync(p).isFile();
 // Copies pictures into docs/packs/<id>/ under web-safe, unique names; returns the names in play order.

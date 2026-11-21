@@ -52,6 +52,12 @@
   .chip { padding:4px 9px; font-size:12px; background:#1b1b28; color:var(--muted); border:1px solid var(--line); }
   .chip.on { background:#123247; color:var(--cyan); border-color:var(--cyan); }
   .chip.set { font-weight:800; }
+  .fresh { margin-top:16px; border-top:1px solid var(--line); padding-top:12px; }
+  .fresh ol { margin:6px 0 0; padding-left:20px; font-size:13px; } .fresh li { margin:2px 0; cursor:pointer; overflow-wrap:anywhere; }
+  .fresh li.fixed { cursor:default; color:var(--muted); } .fresh li:hover:not(.fixed) { color:var(--cyan); }
+  .fresh .d { color:var(--violet); font-size:12px; }
+  .tile input.dates { padding:3px 7px; font-size:12px; width:130px; }
+  .tag.new { background:#123a26; color:var(--green); }
   label.chk { display:flex; gap:6px; align-items:center; font-size:13px; color:var(--muted); }
 </style>
 </head>
@@ -88,6 +94,14 @@
       <div style="margin-top:14px" class="muted">New pack</div>
       <div class="row" style="margin-top:4px"><input type="text" id="newName" placeholder="Folder, e.g. Smith Family"><button class="secondary" id="newBtn">+ Add</button></div>
       <div class="status" id="newStatus"></div>
+      <div class="fresh">
+        <h2 style="margin:0">🆕 What a new card gets</h2>
+        <div class="muted">The first show of a card installed from Huidu (website installer). A pack's "On new cards"
+          setting adds it; click a line to open its pack.</div>
+        <ol id="fresh"></ol>
+        <div class="muted" id="freshTotal" style="margin-top:6px"></div>
+        <div class="bar" id="freshBar"><i></i></div>
+      </div>
     </div>
 
     <div>
@@ -101,10 +115,13 @@
             <option value="gif">GIF: sharp, exact colors (best for cartoons, text, stickers)</option>
             <option value="auto">Auto: GIF, or full color when GIF loses detail</option>
             <option value="full">Full color: photos, smooth shading, video</option></select></label>
+          <label class="wide">On new cards (the first show of every card installed from Huidu)<select data-m="install">
+            <option value="">No: phones add it from the page when they want it</option>
+            <option value="yes">Yes: new cards start with these pictures (each picture can opt out below)</option></select></label>
           <label class="wide">Only for these screens (names like PocketJumbo-EED0, commas; empty = every screen)<input type="text" data-m="cards"></label>
         </div>
         <div class="row" style="margin-top:10px"><button class="secondary" id="saveMeta">Save details</button><span class="status" id="metaStatus" style="margin:0"></span></div>
-        <div class="muted" id="loose" hidden style="margin-top:6px">Loose pictures in the repo root become the "New pictures" pack (no details to set).</div>
+        <div class="muted" id="loose" hidden style="margin-top:6px">Loose pictures in the repo root become the "New pictures" pack (no details to set). They are also on every new card.</div>
 
         <div class="drop" id="drop">Drop pictures here, or click to choose (GIF, PNG, JPG, WEBP; animated is fine)
           <input type="file" id="files" accept=".gif,.png,.jpg,.jpeg,.webp" multiple hidden></div>
@@ -150,21 +167,26 @@ function parseMeta(text) {
     let v = m[2].replace(/^"(.*)"$/, '$1'); const key = m[1].toLowerCase();
     if (key === 'cards') v = v.replace(/[[\]"]/g, '').split(/[,\s]+/).filter(Boolean);
     else if (key === 'order') v = Number(v) || 50;
+    else if (key === 'install') v = /^(true|yes|1)$/i.test(v);
     meta[key] = v;
   }
   return meta;
 }
 // pack.json: title, about, cards, order, plus how phones convert the pictures: "format" (the pack's default:
 // "gif", "full" or "auto") and "pictures": { "<file name>": { "fit": "fill"|"fit", "format": "gif"|"full" } }.
+// New cards (tools/build-install.mjs): "install": true puts the pack in the first show; per picture
+// "install": false leaves it off and "dates": "MMDD-MMDD" shows it only between those days (may wrap past New Year).
 function metaJson(m) {
   const o = {};
   if (m.title) o.title = String(m.title).trim(); if (m.about) o.about = String(m.about).trim();
   const cards = [].concat(m.cards || []).join(',').split(/[,\s]+/).filter(Boolean); if (cards.length) o.cards = cards;
   if (m.order !== '' && m.order != null && !isNaN(+m.order)) o.order = +m.order;
   if (m.format === 'gif' || m.format === 'full') o.format = m.format;
+  if (m.install === true || m.install === 'yes') o.install = true;
   const pics = {};
   for (const [n, s] of Object.entries(m.pictures || {})) {
     const p = {}; if (s.fit === 'fill' || s.fit === 'fit') p.fit = s.fit; if (s.format === 'gif' || s.format === 'full') p.format = s.format;
+    if (s.install === false) p.install = false; if (/^\d{4}-\d{4}$/.test(s.dates || '')) p.dates = s.dates;
     if (Object.keys(p).length) pics[n] = p;
   }
   if (Object.keys(pics).length) o.pictures = pics;
@@ -341,6 +363,44 @@ function picSet(name) {
   const s = (cur.meta.pictures || {})[name] || {};
   return { fit: s.fit || '', format: s.format || cur.meta.format || 'auto', own: s };
 }
+// "11-15 to 01-06" <-> "1115-0106" (pack.json / the card's @dates). '' = every day, null = can't read it.
+function parseDates(v) {
+  const d = (v || '').replace(/\D+/g, ' ').trim().split(' ').filter(Boolean);
+  if (!d.length) return '';
+  if (d.length === 2 && d[0].length === 4 && d[1].length === 4) d.splice(0, 2, d[0].slice(0, 2), d[0].slice(2), d[1].slice(0, 2), d[1].slice(2));
+  if (d.length !== 4) return null;
+  const [a, b, c, e] = d.map(Number);
+  if (![a, c].every(m => m >= 1 && m <= 12) || ![b, e].every(x => x >= 1 && x <= 31)) return null;
+  const p = (n) => String(n).padStart(2, '0');
+  return p(a) + p(b) + '-' + p(c) + p(e);
+}
+const showDates = (d) => /^\d{4}-\d{4}$/.test(d || '') ? `${d.slice(0, 2)}-${d.slice(2, 4)} to ${d.slice(5, 7)}-${d.slice(7, 9)}` : '';
+// Same rules as tools/build-install.mjs: loose pictures, then "install" packs by list order, then play order.
+const onNewCards = (p, name) => !!p.loose || (!!p.meta.install && !p.skipped && ((p.meta.pictures || {})[name] || {}).install !== false);
+const measured = new Map();                       // "pack/name/size" -> bytes on a screen, from the previews
+const FIRST_SHOW = 0x420000;                      // the install image's picture space (build-install.mjs)
+const esc = (x) => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function renderFresh() {
+  const ol = $('fresh'); ol.innerHTML = '';
+  const li = (html, cls, pack) => { const e = document.createElement('li'); e.innerHTML = html; if (cls) e.className = cls; if (pack != null) e.onclick = () => openPack(pack); ol.appendChild(e); };
+  li('Clock', 'fixed'); li('Weather where the screen is, with forecast', 'fixed');
+  const inst = packs.filter(p => p.loose || (p.meta.install && !p.skipped))
+    .sort((a, b) => (!!b.loose - !!a.loose) || (Number(a.meta.order) || 50) - (Number(b.meta.order) || 50) || byName(a.folder, b.folder));
+  let bytes = 0, n = 0, known = 0;
+  for (const p of inst) for (const f of p.files) {
+    if (!onNewCards(p, f.name)) continue;
+    const d = showDates(((p.meta.pictures || {})[f.name] || {}).dates);
+    li(`${esc(f.name)} <span class="muted">· ${esc(p.meta.title || p.folder)}</span>${d ? ` <span class="d">only ${d}</span>` : ''}`, '', p.id);
+    const m = measured.get(p.id + '/' + f.name + '/' + f.size);
+    bytes += m != null ? m : f.size; n++; if (m != null) known++;
+  }
+  if (!n) li('(no pictures: the build falls back to the generated greetings)', 'fixed');
+  $('freshTotal').textContent = `${n} picture${n === 1 ? '' : 's'}, about ${kb(bytes)} of ${kb(FIRST_SHOW)}` +
+    (known < n ? ` (${n - known} not measured yet: open their pack; unmeasured pictures count at full file size)` : '') +
+    (bytes > FIRST_SHOW && known === n ? ' · too big: the website build will stop' : '');
+  $('freshBar').querySelector('i').style.width = Math.min(100, bytes / FIRST_SHOW * 100) + '%';
+  $('freshBar').classList.toggle('over', bytes > FIRST_SHOW);
+}
 async function convert(t) {
   const file = new File([await store.file(cur.id, t.name)], t.name);
   const src = await decode(file, {});
@@ -350,10 +410,12 @@ async function convert(t) {
   const full = set.format === 'full' || (set.format === 'auto' && !gifFits(frames));
   const out = full ? await encodePjm(frames) : encodeGif(frames);
   Object.assign(t, { frames: out.shown, fi: -1, next: 0, full, fit, phone: out.blob.size, nf: frames.length });
+  measured.set(t.pack + '/' + t.name + '/' + t.size, out.blob.size);
 }
 async function setPic(name, patch) {
   const pictures = { ...(cur.meta.pictures || {}) };
   pictures[name] = { ...(pictures[name] || {}), ...patch };
+  for (const k of Object.keys(pictures[name])) if (pictures[name][k] === undefined) delete pictures[name][k];
   try { await store.saveMeta(cur.id, { ...cur.meta, pictures }); } catch (e) { alert(e.message); }
   await load(cur.id);
 }
@@ -364,11 +426,12 @@ function renderPacks() {
     const b = document.createElement('button');
     b.className = 'pk' + (cur && p.id === cur.id ? ' on' : '') + (p.skipped ? ' skip' : '');
     b.innerHTML = '<b></b><span class="muted"></span>';
-    b.querySelector('b').textContent = (p.meta.cards ? '🎁 ' : '') + (p.meta.title || p.folder);
+    b.querySelector('b').textContent = (p.meta.cards ? '🎁 ' : '') + ((p.loose || (p.meta.install && !p.skipped)) ? '🆕 ' : '') + (p.meta.title || p.folder);
     b.querySelector('span').textContent = `${p.folder} · ${p.files.length} picture${p.files.length === 1 ? '' : 's'}${p.skipped ? ' · skipped (starts with _)' : ''}`;
     b.onclick = () => openPack(p.id);
     $('packs').appendChild(b);
   }
+  renderFresh();
 }
 async function load(keep, fresh) {
   const j = await store.load(fresh);
@@ -390,7 +453,7 @@ async function openPack(id) {
   const m = cur.meta;
   for (const inp of $('meta').querySelectorAll('[data-m]')) {
     const k = inp.dataset.m;
-    inp.value = k === 'cards' ? [].concat(m.cards || []).join(', ') : k === 'format' ? (m.format || 'auto') : m[k] ?? '';
+    inp.value = k === 'cards' ? [].concat(m.cards || []).join(', ') : k === 'format' ? (m.format || 'auto') : k === 'install' ? (m.install ? 'yes' : '') : m[k] ?? '';
   }
   $('metaStatus').textContent = '';
   renderTiles();
@@ -407,12 +470,19 @@ function renderTiles() {
     el.innerHTML = `<span class="num">${i + 1}</span><canvas width="${W * S}" height="${H * S}"></canvas><div class="nm"></div><div class="info">Converting…</div>
       <div class="btns" data-set><button class="chip" data-fit="fill" title="Crop to fill the screen">Fill</button><button class="chip" data-fit="fit" title="Whole picture, black bars">Fit</button>
         <button class="chip" data-fmt="gif" style="margin-left:8px">GIF</button><button class="chip" data-fmt="full">Full color</button></div>
+      <div class="btns" data-new><button class="chip" data-inst="1" title="In the first show of new cards">On new cards</button><button class="chip" data-inst="0" title="Phones can still add it">Off</button>
+        <input type="text" class="dates" placeholder="every day" title="New cards show it only between these days, every year, e.g. 11-15 to 01-06"></div>
       <div class="btns"><button class="secondary" data-a="-1" title="Earlier">◀</button><button class="secondary" data-a="1" title="Later">▶</button><button class="secondary" data-a="del" style="color:var(--red);margin-left:auto">Delete</button></div>`;
     el.querySelector('.nm').textContent = t.name; el.querySelector('.nm').title = t.name;
     t.cv = el.querySelector('canvas'); t.info = el.querySelector('.info'); t.el = el;
     if (t.frames) { t.next = 0; showInfo(t); }
     el.querySelectorAll('[data-a]').forEach(b => b.onclick = () => b.dataset.a === 'del' ? del(t) : move(i, i + +b.dataset.a));
     el.querySelector('[data-set]').hidden = !!cur.loose;      // loose pictures have no pack.json to keep settings
+    el.querySelector('[data-new]').hidden = !cur.meta.install || !!cur.loose;
+    el.querySelectorAll('[data-inst]').forEach(b => b.onclick = () => setPic(t.name, { install: b.dataset.inst === '1' ? undefined : false }));
+    const dt = el.querySelector('.dates'), own = picSet(t.name).own;
+    dt.value = showDates(own.dates); dt.disabled = own.install === false;
+    dt.onchange = () => { const d = parseDates(dt.value); if (d === null) { alert('Dates like 11-15 to 01-06 (month-day), or empty for every day.'); dt.value = showDates(own.dates); return; } setPic(t.name, { dates: d || undefined }); };
     el.querySelectorAll('[data-fit]').forEach(b => b.onclick = () => setPic(t.name, { fit: b.dataset.fit }));
     el.querySelectorAll('[data-fmt]').forEach(b => b.onclick = () => setPic(t.name, { format: b.dataset.fmt }));
     el.ondragstart = (e) => { e.dataTransfer.setData('text/x-tile', String(i)); el.classList.add('drag'); };
@@ -427,15 +497,17 @@ function renderTiles() {
 }
 function showInfo(t) {
   const own = picSet(t.name).own;
+  t.el.querySelectorAll('[data-inst]').forEach(b => b.classList.toggle('on', (b.dataset.inst === '1') === (own.install !== false)));
   t.el.querySelectorAll('[data-fit]').forEach(b => { b.classList.toggle('on', b.dataset.fit === t.fit); b.classList.toggle('set', b.dataset.fit === own.fit); });
   t.el.querySelectorAll('[data-fmt]').forEach(b => { b.classList.toggle('on', (b.dataset.fmt === 'full') === t.full); b.classList.toggle('set', b.dataset.fmt === own.format); });
-  t.info.innerHTML = `${t.nf} frame${t.nf === 1 ? '' : 's'} · file ${kb(t.size)} · on a screen ${kb(t.phone)}<span class="tag${t.full ? ' full' : ''}">${t.full ? 'Full color' : 'GIF'}</span>`;
+  t.info.innerHTML = `${t.nf} frame${t.nf === 1 ? '' : 's'} · file ${kb(t.size)} · on a screen ${kb(t.phone)}<span class="tag${t.full ? ' full' : ''}">${t.full ? 'Full color' : 'GIF'}</span>${onNewCards(cur, t.name) ? '<span class="tag new" title="On new cards">🆕</span>' : ''}`;
 }
 function updateTotal() {
   const done = tiles.filter(t => t.phone), need = done.reduce((s, t) => s + t.phone + 4096, 0);
   $('total').textContent = tiles.length ? `Adds ${kb(need)} to a screen (${done.length} of ${tiles.length} measured) · a screen holds about ${kb(SCREEN)}` : 'No pictures yet.';
   $('bar').querySelector('i').style.width = Math.min(100, need / SCREEN * 100) + '%';
   $('bar').classList.toggle('over', need > SCREEN);
+  renderFresh();
 }
 
 async function move(from, to) {
@@ -473,6 +545,7 @@ async function addFiles(list) {
 
 $('saveMeta').onclick = async () => {
   const m = { ...cur.meta }; $('meta').querySelectorAll('[data-m]').forEach(i => m[i.dataset.m] = i.value);
+  m.install = m.install === 'yes';
   try { await store.saveMeta(cur.id, m); $('metaStatus').className = 'status ok'; $('metaStatus').textContent = '✓ Saved' + (LOCAL ? '' : ' (goes up when you publish)'); await load(cur.id); }
   catch (e) { $('metaStatus').className = 'status err'; $('metaStatus').textContent = e.message; }
 };
