@@ -19,7 +19,7 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "0.9.0";
+static const char *FW_VERSION = "0.9.1";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
@@ -54,6 +54,13 @@ struct ShowItem {
   uint32_t fg = 0xFFFFFF, bg = 0;
   bool rainbow = false;
   uint8_t font = 2, effect = 0;   // effect: index into FX_NAMES (show.ino)
+  // When it plays (show.ino itemActive): yearly date range MMDD (0 = any), weekdays bit 0 = Sunday,
+  // hours [hFrom, hTo) (-1 = any), countdown only within `lead` days (-1 = always). forecast: weather + 5 days.
+  uint16_t dFrom = 0, dTo = 0;
+  uint8_t days = 0x7F;
+  int8_t hFrom = -1, hTo = -1;
+  int16_t lead = -1;
+  bool forecast = false;
 };
 std::vector<ShowItem> playlist;
 struct Flake { int16_t x, y; uint8_t spd, bri; };   // effect particles (show.ino)
@@ -392,5 +399,12 @@ void loop() {
   }
   if (holdPlayback || playlist.empty()) { delay(5); return; }
   if (playIdx >= playlist.size()) playIdx = 0;
-  playItem(playlist[playIdx++]);
+  static size_t skipped = 0;                         // items in a row that are off schedule right now
+  const ShowItem &it = playlist[playIdx++];
+  if (!itemActive(it)) {
+    if (++skipped >= playlist.size()) { skipped = 0; panel->clearScreen(); shownValid = false; waitMs(1000); }
+    return;
+  }
+  skipped = 0;
+  playItem(it);
 }

@@ -9,6 +9,14 @@
 //   sec 0 = automatic (pictures: 8-20 s by their own length; scrolling text: one pass; others: 8-10 s).
 //   fg/bg are RRGGBB hex, fg may be "rainbow". effect: one of FX_NAMES (none, snow, sparkle, hearts, confetti,
 //   fireworks, stars, fire, matrix). Unknown names (e.g. the removed "plasma") play as none.
+//   Any line may end with an options field starting with '@' (space-separated, all optional; fw 0.9.0+):
+//     dates=MMDD-MMDD  only between these days, every year (may wrap past New Year, e.g. 1215-0105)
+//     days=0123456     only on these weekdays (0 = Sunday)
+//     hours=H-H        only from the first hour up to (not including) the second; may wrap past midnight
+//     lead=N           countdown: only in the last N days before the date (a reminder)
+//     forecast         weather: then a 5-day forecast screen
+//   Items with a time rule are skipped until the clock is set. Older firmware ignores the field except as
+//   the last text of a line.
 //   Without /show.txt every file in /gifs plays in name order (the old behavior).
 // Picture files: .gif (AnimatedGIF) or .pjm = full-color JPEG frames:
 //   "PJM1", then per frame: u32 jpeg length, u16 delay ms, u16 0, the JPEG (128x64 baseline).
@@ -47,6 +55,43 @@ static uint8_t fxByName(const String &s) { for (int i = 0; i < FX_COUNT; i++) if
 static bool isPicture(const String &n) { String l = n; l.toLowerCase(); return l.endsWith(".gif") || l.endsWith(".pjm"); }
 static uint32_t hex(const String &s) { return strtoul(s.c_str(), nullptr, 16) & 0xFFFFFF; }
 
+static void parseOptions(ShowItem &it, const String &opts) {
+  int s = 0;
+  while (s < (int)opts.length()) {
+    int e = opts.indexOf(' ', s); if (e < 0) e = opts.length();
+    String t = opts.substring(s, e); s = e + 1;
+    int eq = t.indexOf('='), dash;
+    String k = eq < 0 ? t : t.substring(0, eq), v = eq < 0 ? "" : t.substring(eq + 1);
+    dash = v.indexOf('-');
+    if (k == "dates" && dash > 0) { it.dFrom = v.substring(0, dash).toInt(); it.dTo = v.substring(dash + 1).toInt(); }
+    else if (k == "days") { it.days = 0; for (char c : v) if (c >= '0' && c <= '6') it.days |= 1 << (c - '0'); if (!it.days) it.days = 0x7F; }
+    else if (k == "hours" && dash > 0) { it.hFrom = constrain((int)v.substring(0, dash).toInt(), 0, 23); it.hTo = constrain((int)v.substring(dash + 1).toInt(), 0, 24); }
+    else if (k == "lead") it.lead = v.toInt();
+    else if (k == "forecast") it.forecast = true;
+  }
+}
+static int daysUntil(const String &mmdd);
+// Is this item on the schedule right now? (see the options above)
+bool itemActive(const ShowItem &it) {
+  bool timed = it.dFrom || it.days != 0x7F || it.hFrom >= 0 || it.lead >= 0;
+  if (!timed) return true;
+  if (!timeValid()) return false;
+  time_t t = time(nullptr); struct tm lt; localtime_r(&t, &lt);
+  if (it.dFrom && it.dTo) {
+    int md = (lt.tm_mon + 1) * 100 + lt.tm_mday;
+    bool in = it.dFrom <= it.dTo ? (md >= it.dFrom && md <= it.dTo) : (md >= it.dFrom || md <= it.dTo);
+    if (!in) return false;
+  }
+  if (!(it.days & (1 << lt.tm_wday))) return false;
+  if (it.hFrom >= 0 && it.hTo >= 0 && it.hFrom != it.hTo) {
+    int h = lt.tm_hour;
+    bool in = it.hFrom < it.hTo ? (h >= it.hFrom && h < it.hTo) : (h >= it.hFrom || h < it.hTo);
+    if (!in) return false;
+  }
+  if (it.lead >= 0 && it.type == 'd' && it.extra.length() >= 5 && daysUntil(it.extra) > it.lead) return false;
+  return true;
+}
+
 void loadPlaylist() {
   playlist.clear();
   File sf = LittleFS.open("/show.txt", "r");
@@ -57,8 +102,9 @@ void loadPlaylist() {
       std::vector<String> f;
       int s = 0;
       for (;;) { int t = line.indexOf('\t', s); if (t < 0) { f.push_back(line.substring(s)); break; } f.push_back(line.substring(s, t)); s = t + 1; }
-      if (f.size() < 3) continue;
       ShowItem it;
+      if (f.size() > 3 && f.back().startsWith("@")) { parseOptions(it, f.back().substring(1)); f.pop_back(); }
+      if (f.size() < 3) continue;
       it.sec = f[1].toInt();
       if (f[0] == "pic") { it.type = 'p'; it.file = "/gifs/" + f[2]; if (!LittleFS.exists(it.file)) continue; }
       else {
@@ -517,20 +563,39 @@ static void playFx(const ShowItem &it) {
 }
 
 // ---------- Weather (Open-Meteo: free, no key, plain http so no TLS memory) ----------
-struct Weather { bool ok = false; uint32_t at = 0; String key; float temp = 0, hi = 0, lo = 0; int code = 0; bool day = true; };
+struct Weather {
+  bool ok = false; uint32_t at = 0; String key; float temp = 0, hi = 0, lo = 0; int code = 0; bool day = true;
+  int fcN = 0, fcCode[5]; float fcHi[5], fcLo[5];          // daily forecast, [0] = today at the town
+  uint32_t failAt = 0;                                       // last failed fetch (back off 5 min)
+};
 static Weather wx;
 static float jsonNum(const String &s, const char *key, int from) {
   int i = s.indexOf(key, from);
   return i < 0 ? NAN : s.substring(i + strlen(key), i + strlen(key) + 16).toFloat();
+}
+// Reads up to n numbers of a JSON array that starts right after key (key ends with '[').
+static int jsonArr(const String &s, const char *key, int from, float *out, int n) {
+  int i = s.indexOf(key, from);
+  if (i < 0) return 0;
+  const char *p = s.c_str() + i + strlen(key);
+  int k = 0;
+  while (k < n && *p && *p != ']') {
+    char *end; float v = strtof(p, &end);
+    if (end == p) break;
+    out[k++] = v; p = end;
+    while (*p == ',' || *p == ' ') p++;
+  }
+  return k;
 }
 // it.extra = "F,lat,lon". Refreshes at most every 15 minutes; keeps the last reading if a fetch fails.
 static bool weatherFetch(const ShowItem &it) {
   bool cached = wx.ok && wx.key == it.extra;
   if (cached && millis() - wx.at < 15UL * 60 * 1000) return true;
   if (WiFi.status() != WL_CONNECTED) return cached;
+  if (wx.failAt && millis() - wx.failAt < 5UL * 60 * 1000) return cached;   // service down: don't stall the show
   int c1 = it.extra.indexOf(','), c2 = it.extra.indexOf(',', c1 + 1);
   String url = "http://api.open-meteo.com/v1/forecast?latitude=" + it.extra.substring(c1 + 1, c2) + "&longitude=" + it.extra.substring(c2 + 1) +
-               "&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1" +
+               "&current=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5" +
                (it.extra.startsWith("F") ? "&temperature_unit=fahrenheit" : "");
   HTTPClient http;
   http.setConnectTimeout(3000);
@@ -542,7 +607,7 @@ static bool weatherFetch(const ShowItem &it) {
   http.end();
   int cur = body.indexOf("\"current\":{"), day = body.indexOf("\"daily\":{");
   Serial.printf("Weather: HTTP %d, %u bytes, %u ms, free heap %u\n", code, (unsigned)body.length(), (unsigned)(millis() - t0), (unsigned)ESP.getFreeHeap());
-  if (cur < 0 || day < 0) return cached;
+  if (cur < 0 || day < 0) { wx.failAt = millis() | 1; return cached; }
   float t = jsonNum(body, "\"temperature_2m\":", cur);
   if (isnan(t)) return cached;
   wx.temp = t;
@@ -550,7 +615,14 @@ static bool weatherFetch(const ShowItem &it) {
   wx.day = jsonNum(body, "\"is_day\":", cur) != 0;
   wx.hi = jsonNum(body, "\"temperature_2m_max\":[", day);
   wx.lo = jsonNum(body, "\"temperature_2m_min\":[", day);
-  wx.key = it.extra; wx.at = millis(); wx.ok = true;
+  float codes[5];
+  int n = jsonArr(body, "\"weather_code\":[", day, codes, 5);
+  n = std::min(n, jsonArr(body, "\"temperature_2m_max\":[", day, wx.fcHi, 5));
+  n = std::min(n, jsonArr(body, "\"temperature_2m_min\":[", day, wx.fcLo, 5));
+  for (int i = 0; i < n; i++) wx.fcCode[i] = (int)codes[i];
+  wx.fcN = n;
+  Serial.printf("Weather: %.0f now, forecast %d days (today %d, hi %.0f lo %.0f)\n", wx.temp, n, n ? wx.fcCode[0] : -1, n ? wx.fcHi[0] : 0.f, n ? wx.fcLo[0] : 0.f);
+  wx.key = it.extra; wx.at = millis(); wx.ok = true; wx.failAt = 0;
   return true;
 }
 enum { WX_SUN, WX_PARTLY, WX_CLOUD, WX_FOG, WX_RAIN, WX_SNOW, WX_STORM };
@@ -614,6 +686,58 @@ static void wxIcon(int kind, bool day, const ShowItem &it, uint32_t frame) {
     }
   }
 }
+// 5-day forecast: 5 columns of 25 px: weekday, small icon, high (item color), low (gray).
+static void wxMini(int kind, int cx, int cy, uint32_t frame) {
+  auto cloud = [&](int x, int y, uint32_t c) {
+    cg.rgb(c); cg.fillCircle(x - 4, y + 1, 3, 0); cg.fillCircle(x + 1, y - 2, 4, 0); cg.fillCircle(x + 5, y + 1, 3, 0); cg.fillRect(x - 4, y + 1, 9, 4, 0);
+  };
+  auto sun = [&](int x, int y, int r) {
+    cg.rgb(0xFFC828); cg.fillCircle(x, y, r, 0);
+    for (int i = 0; i < 8; i++) { float a = i * 0.7854f + frame * 0.02f; px(x + lroundf(cosf(a) * (r + 2)), y + lroundf(sinf(a) * (r + 2)), 0xFFC828); }
+  };
+  switch (kind) {
+    case WX_SUN: sun(cx, cy, 4); break;
+    case WX_PARTLY: sun(cx - 3, cy - 3, 3); cloud(cx + 2, cy + 2, 0xDCDCE6); break;
+    case WX_CLOUD: cloud(cx - 2, cy - 2, 0x8C8C9B); cloud(cx + 2, cy + 2, 0xDCDCE6); break;
+    case WX_FOG: cloud(cx, cy - 2, 0x8C8C9B); cg.rgb(0xB4B4BE); cg.drawFastHLine(cx - 6, cy + 5, 12, 0); cg.drawFastHLine(cx - 4, cy + 7, 12, 0); break;
+    default: {
+      for (int i = 0; i < 3; i++) {
+        int x = cx - 4 + i * 4, y = cy + 4 + (int)((frame / (kind == WX_SNOW ? 4 : 2) + i * 3) % 6);
+        px(x, y, kind == WX_SNOW ? 0xFFFFFF : 0x50A0FF);
+      }
+      if (kind == WX_STORM && (frame / 4) % 10 < 2) { cg.rgb(0xFFF050); cg.drawLine(cx + 1, cy + 2, cx - 2, cy + 7, 0); cg.drawLine(cx - 2, cy + 7, cx + 1, cy + 7, 0); cg.drawLine(cx + 1, cy + 7, cx - 2, cy + 11, 0); }
+      cloud(cx, cy - 2, kind == WX_STORM ? 0x6E6E7D : 0xAAAAB9);
+    }
+  }
+}
+static void playForecast(const ShowItem &it, uint32_t frame) {
+  static const char *const DOW[] = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
+  int today = 0;
+  if (timeValid()) { time_t t = time(nullptr); struct tm lt; localtime_r(&t, &lt); today = lt.tm_wday; }
+  uint32_t total = (it.sec ? it.sec : 10) * 1000UL, start = millis();
+  shownValid = false;
+  while (millis() - start < total) {
+    uint32_t t0 = millis();
+    paintBackground(it, frame);
+    setFont(1); cg.setTextSize(1);
+    for (int i = 0; i < wx.fcN; i++) {
+      int cx = 2 + i * 25 + 12;
+      String d = DOW[(today + i) % 7];
+      String hi = String((int)lroundf(wx.fcHi[i])), lo = String((int)lroundf(wx.fcLo[i]));
+      cg.rgb(0xFFBE3C); cg.setCursor(cx - textWidth(d) / 2, 1); cg.print(d);
+      wxMini(wxKind(wx.fcCode[i]), cx, 19, frame + i * 7);
+      cg.rgb(it.rainbow ? hsv((millis() / 8 + i * 300) % 1536) : it.fg); cg.setCursor(cx - textWidth(hi) / 2, 35); cg.print(hi);
+      cg.rgb(0x8C8CA0); cg.setCursor(cx - textWidth(lo) / 2, 45); cg.print(lo);
+    }
+    String place = upcase(it.text);
+    if (place.length() > 21) place = place.substring(0, 21);
+    cg.rgb(0xB4B4C8); cg.setCursor((W - textWidth(place)) / 2, 56); cg.print(place);
+    pushCanvas();
+    frame++;
+    int32_t wait = 40 - (int32_t)(millis() - t0);
+    if (waitMs(wait > 0 ? wait : 1)) return;
+  }
+}
 static void playWeather(const ShowItem &it) {
   if (!weatherFetch(it)) return;
   effectInit(it); FxGuard fxg;
@@ -644,6 +768,7 @@ static void playWeather(const ShowItem &it) {
     int32_t wait = 40 - (int32_t)(millis() - t0);
     if (waitMs(wait > 0 ? wait : 1)) return;
   }
+  if (it.forecast && wx.fcN) playForecast(it, frame);   // same background effect carries on
 }
 
 void playItem(const ShowItem &it) {

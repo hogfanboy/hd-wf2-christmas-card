@@ -687,7 +687,7 @@ function baseEl(it) {
   const el = document.createElement('div'); el.className = 'item';
   el.innerHTML = `<canvas width="128" height="64"></canvas><div><div class="name"></div><div class="meta"></div>
     <div class="row"><span class="muted" style="font-size:12px">Seconds</span><input class="s secs" type="number" min="0" max="600" placeholder="auto">
-    <button class="chip" data-mv="-1">▲</button><button class="chip" data-mv="1">▼</button><button class="chip del">Remove</button></div></div>`;
+    <button class="chip" data-mv="-1">▲</button><button class="chip" data-mv="1">▼</button><button class="chip whenBtn">⏰ When</button><button class="chip del">Remove</button></div></div>`;
   it.el = el; it.thumb = el.querySelector('canvas'); it.metaEl = el.querySelector('.meta');
   el.querySelector('.name').textContent = label(it);
   const secs = el.querySelector('.secs');
@@ -695,9 +695,76 @@ function baseEl(it) {
   it.thumb.onclick = () => select(it);
   el.querySelectorAll('[data-mv]').forEach(b => b.onclick = () => move(it, +b.dataset.mv));
   el.querySelector('.del').onclick = () => remove(it);
+  whenPanel(it, el);
   $('items').appendChild(el);
   items.push(it);
   return el;
+}
+
+// ---------- When an item plays (the screen checks it: dates every year, weekdays, hours) ----------
+const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const hourName = (h) => new Date(2000, 0, 1, h).toLocaleTimeString([], { hour: 'numeric' });
+const mmdd = (v) => v ? v.slice(5, 7) + v.slice(8, 10) : '';                 // "2026-12-01" -> "1201"
+const dateVal = (m) => m ? new Date().getFullYear() + '-' + m.slice(0, 2) + '-' + m.slice(2, 4) : '';
+const md = (m) => new Date(2000, +m.slice(0, 2) - 1, +m.slice(2, 4)).toLocaleDateString([], { month: 'short', day: 'numeric' });
+function whenSummary(it) {
+  const w = it.when, parts = [];
+  if (w.from && w.to) parts.push(md(w.from) + '–' + md(w.to));
+  if (w.days.length < 7) parts.push(w.days === '12345' ? 'weekdays' : w.days === '06' ? 'weekends' : w.days.split('').map(d => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(' '));
+  if (w.h1 !== '' && w.h2 !== '' && w.h1 !== w.h2) parts.push(hourName(+w.h1) + '–' + hourName(+w.h2));
+  if (it.kind === 'countdown' && it.lead !== '' && it.lead != null) parts.push(`only the last ${it.lead} days`);
+  return parts.join(' · ');
+}
+function whenPanel(it, el) {
+  it.when = Object.assign({ from: '', to: '', days: '0123456', h1: '', h2: '' }, it.when);
+  const hours = '<option value="">any time</option>' + Array.from({ length: 24 }, (_, h) => `<option value="${h}">${hourName(h)}</option>`).join('');
+  const wp = document.createElement('div'); wp.className = 'edit when'; wp.hidden = true;
+  wp.innerHTML = `<label>Only from <input type="date" data-w="from"> to <input type="date" data-w="to"></label>
+    <label>On ${DAY_LETTERS.map((d, i) => `<button class="chip" data-d="${i}">${d}</button>`).join('')}</label>
+    <label>From <select data-w="h1">${hours}</select> to <select data-w="h2">${hours}</select></label>
+    <div class="muted" style="font-size:12px">Dates repeat every year. Leave blank to always show. Needs the screen's clock (internet).</div>`;
+  el.appendChild(wp);
+  const sum = document.createElement('div'); sum.className = 'meta whenSum'; sum.style.color = 'var(--cyan)';
+  it.metaEl.after(sum);
+  it.whenRefresh = () => {
+    wp.querySelector('[data-w=from]').value = dateVal(it.when.from);
+    wp.querySelector('[data-w=to]').value = dateVal(it.when.to);
+    wp.querySelector('[data-w=h1]').value = it.when.h1;
+    wp.querySelector('[data-w=h2]').value = it.when.h2;
+    wp.querySelectorAll('[data-d]').forEach(b => b.classList.toggle('on', it.when.days.includes(b.dataset.d)));
+    const t = whenSummary(it); sum.textContent = t ? '⏰ ' + t : ''; el.querySelector('.whenBtn').classList.toggle('on', !!t);
+  };
+  wp.querySelectorAll('[data-w]').forEach(inp => inp.oninput = () => {
+    const k = inp.dataset.w; it.when[k] = k === 'from' || k === 'to' ? mmdd(inp.value) : inp.value; it.whenRefresh();
+  });
+  wp.querySelectorAll('[data-d]').forEach(b => b.onclick = () => {
+    const set = new Set(it.when.days.split('')); set.has(b.dataset.d) ? set.delete(b.dataset.d) : set.add(b.dataset.d);
+    it.when.days = [...set].sort().join('') || '0123456'; it.whenRefresh();
+  });
+  el.querySelector('.whenBtn').onclick = () => { wp.hidden = !wp.hidden; };
+  it.whenRefresh();
+}
+// The options field at the end of a show line: "@dates=1201-1231 days=12345 hours=7-22 lead=14 forecast".
+function optsField(it) {
+  const w = it.when, o = [];
+  if (w.from && w.to) o.push(`dates=${w.from}-${w.to}`);
+  if (w.days.length < 7) o.push('days=' + w.days);
+  if (w.h1 !== '' && w.h2 !== '' && w.h1 !== w.h2) o.push(`hours=${w.h1}-${w.h2}`);
+  if (it.kind === 'countdown' && it.lead !== '' && it.lead != null) o.push('lead=' + it.lead);
+  if (it.kind === 'weather' && it.fc) o.push('forecast');
+  return '@' + o.join(' ');
+}
+function parseOpts(field) {
+  const o = { when: { from: '', to: '', days: '0123456', h1: '', h2: '' }, lead: '', fc: false };
+  for (const t of field.slice(1).split(' ').filter(Boolean)) {
+    const [k, v = ''] = t.split('=');
+    if (k === 'dates') [o.when.from, o.when.to] = v.split('-');
+    if (k === 'days') o.when.days = v;
+    if (k === 'hours') [o.when.h1, o.when.h2] = v.split('-');
+    if (k === 'lead') o.lead = v;
+    if (k === 'forecast') o.fc = true;
+  }
+  return o;
 }
 
 $('files').addEventListener('change', async (e) => {
@@ -742,7 +809,7 @@ function addDrawn(kind, o = {}) {
   const it = Object.assign({ kind, secs: 0, fg: kind === 'clock' ? '#5ac8ff' : kind === 'weather' ? '#ffffff' : COLORS.fg, bg: COLORS.bg, rainbow: false,
     font: kind === 'text' ? 3 : 4, effect: kind === 'countdown' ? 'snow' : kind === 'fx' ? 'fireworks' : 'none',
     text: kind === 'text' ? 'Happy Birthday!' : kind === 'countdown' ? 'Christmas' : '', date: '12-25',
-    unit: usesF() ? 'F' : 'C', lat: '', lon: '', place: '',
+    unit: usesF() ? 'F' : 'C', lat: '', lon: '', place: '', lead: '', fc: false,
     h24: !new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12 }, o);
   const el = baseEl(it);
   it.metaEl.textContent = META[kind];
@@ -757,11 +824,13 @@ function addDrawn(kind, o = {}) {
        &nbsp; Background <input type="color" data-k="bg"></label>`
     : `
     ${kind === 'text' || kind === 'countdown' ? `<input type="text" maxlength="${kind === 'text' ? 120 : 21}" data-k="text" placeholder="${kind === 'text' ? 'Your message' : 'What for, e.g. Christmas'}">` : ''}
-    ${kind === 'countdown' ? `<label>Date <input type="date" data-k="date"></label>` : ''}
+    ${kind === 'countdown' ? `<label>Date <input type="date" data-k="date"></label>
+      <label>Start showing <input class="s" type="number" min="0" max="365" data-k="lead" placeholder="any" style="width:70px"> days before (blank = all year)</label>` : ''}
     ${kind === 'clock' ? `<label><input type="checkbox" data-k="h24"> 24-hour clock</label>` : ''}
     ${kind === 'weather' ? `<div class="flex"><input type="text" class="wq" placeholder="Your town" style="flex:1;min-width:0"><button class="chip wfind">Find</button></div>
       <div class="row wres"></div>
-      <label>Units <select data-k="unit"><option value="F">°F</option><option value="C">°C</option></select></label>` : ''}
+      <label>Units <select data-k="unit"><option value="F">°F</option><option value="C">°C</option></select>
+        &nbsp; <input type="checkbox" data-k="fc"> Then a 5-day forecast</label>` : ''}
     ${colors}
     <label>Size <select data-k="font">${sizes}</select>
       &nbsp; Effect <select data-k="effect">${fxOptions()}</select></label>`;
@@ -773,6 +842,7 @@ function addDrawn(kind, o = {}) {
     else inp.value = it[k];
     inp.oninput = () => {
       it[k] = inp.type === 'checkbox' ? inp.checked : k === 'font' ? +inp.value : k === 'date' ? inp.value.slice(5) : inp.value;
+      if (k === 'lead') it.whenRefresh();
       el.querySelector('.name').textContent = label(it);
       if (k === 'unit') wxFetch(it);
       it.t0 = performance.now(); updateSpace();
@@ -856,17 +926,21 @@ $('loadShow').onclick = async () => {
     items.slice().forEach(remove);
     for (const ln of lines) {
       const f = ln.split('\t'), secs = +f[1] || 0;
+      const op = f.length > 3 && f[f.length - 1].startsWith('@') ? parseOpts(f.pop()) : parseOpts('@');
+      const before = items.length;
       if (f[0] === 'pic') {
         const r = await fetch('/api/file?name=' + encodeURIComponent(f[2]));
         if (r.ok) await addFile(new File([await r.blob()], f[2]), secs, true);
       } else {
-        const o = { secs, fg: f[2] === 'rainbow' ? '#ffffff' : '#' + f[2], rainbow: f[2] === 'rainbow', bg: '#' + f[3], font: +f[4], effect: FX[f[5]] ? f[5] : 'none' };
+        const o = { lead: op.lead, fc: op.fc, secs, fg: f[2] === 'rainbow' ? '#ffffff' : '#' + f[2], rainbow: f[2] === 'rainbow', bg: '#' + f[3], font: +f[4], effect: FX[f[5]] ? f[5] : 'none' };
         if (f[0] === 'text') addDrawn('text', { ...o, text: f[6] });
         if (f[0] === 'clock') addDrawn('clock', { ...o, h24: f[6] === '24' });
         if (f[0] === 'countdown') addDrawn('countdown', { ...o, date: f[6], text: f[7] || '' });
         if (f[0] === 'fx' && o.effect !== 'none') addDrawn('fx', o);
         if (f[0] === 'weather') addDrawn('weather', { ...o, unit: f[6] || 'F', lat: f[7] || '', lon: f[8] || '', place: f[9] || '' });
       }
+      const added = items[before];
+      if (added) { Object.assign(added.when, op.when); added.whenRefresh(); }
     }
     st.className = 'status ok'; st.textContent = `Loaded ${lines.length} item${lines.length > 1 ? 's' : ''} from the screen.`;
     items.forEach(i => { const s = i.el.querySelector('.secs'); s.value = i.secs || ''; });
@@ -875,7 +949,8 @@ $('loadShow').onclick = async () => {
 
 const hex6 = (c) => c.replace('#', '').toUpperCase();
 const clean = (s) => String(s).replace(/[\t\r\n]/g, ' ').trim();
-function showLine(it, fileName) {
+function showLine(it, fileName) { return showLineBase(it, fileName) + '\t' + optsField(it); }
+function showLineBase(it, fileName) {
   const sec = it.secs || 0;
   if (it.kind === 'pic') return ['pic', sec, fileName].join('\t');
   const common = [sec, it.rainbow ? 'rainbow' : hex6(it.fg), hex6(it.bg), it.font, it.effect];
