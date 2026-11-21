@@ -135,7 +135,7 @@
       <span class="muted">Night brightness</span>
       <select class="s" id="nl"><option value="0">Off (dark)</option><option value="10">10%</option><option value="25">25%</option><option value="50">50%</option></select>
     </div>
-    <button class="secondary" id="saveTime">Save (also sets the time zone to this phone's)</button>
+    <button class="secondary" id="saveTime">Save night mode</button>
     <div class="status" id="timeStatus"></div>
   </div>
 
@@ -1302,31 +1302,10 @@ function showTime() {
   if (card.time === undefined) { $('timeInfo').textContent = 'Needs newer screen software.'; return; }
   $('timeInfo').textContent = card.time ? 'The screen\'s clock is set' + (card.night ? ' (night mode is on now).' : '.') : 'The screen hasn\'t got the time yet (needs internet).';
 }
-// The screen needs a POSIX time zone rule; work it out from this phone's own daylight-saving changes.
-function posixTZ() {
-  const y = new Date().getFullYear(), offAt = (t) => new Date(t).getTimezoneOffset();
-  const fmt = (m) => (m < 0 ? '-' : '') + Math.floor(Math.abs(m) / 60) + (Math.abs(m) % 60 ? ':' + String(Math.abs(m) % 60).padStart(2, '0') : '');
-  const jan = offAt(Date.UTC(y, 0, 1)), jul = offAt(Date.UTC(y, 6, 1));
-  const std = Math.max(jan, jul), dst = Math.min(jan, jul);
-  if (std === dst) return 'STD' + fmt(std);
-  const rules = [];
-  let prev = offAt(Date.UTC(y, 0, 1));
-  for (let t = Date.UTC(y, 0, 1); t < Date.UTC(y + 1, 0, 1) && rules.length < 2; t += 900000) {
-    const o = offAt(t);
-    if (o === prev) continue;
-    const wall = new Date(t - prev * 60000);       // local clock time just as the change happens (old offset)
-    const d = wall.getUTCDate(), m = wall.getUTCMonth() + 1, dim = new Date(Date.UTC(y, m, 0)).getUTCDate();
-    const wk = d + 7 > dim ? 5 : Math.ceil(d / 7);
-    rules.push({ toDst: o < prev, r: `M${m}.${wk}.${wall.getUTCDay()}/${wall.getUTCHours()}${wall.getUTCMinutes() ? ':' + wall.getUTCMinutes() : ''}` });
-    prev = o;
-  }
-  const start = rules.find(r => r.toDst), end = rules.find(r => !r.toDst);
-  return `STD${fmt(std)}DST${dst === std - 60 ? '' : fmt(dst)}` + (start && end ? `,${start.r},${end.r}` : '');
-}
 $('saveTime').onclick = async () => {
   const st = $('timeStatus'); st.className = 'status';
   try {
-    await api(`/api/settings?tz=${encodeURIComponent(posixTZ())}&nf=${$('nf').value}&nt=${$('nt').value}&nl=${$('nl').value}`, { method: 'POST' });
+    await api(`/api/settings?${card.tzAuto === false ? 'tz=auto&' : ''}nf=${$('nf').value}&nt=${$('nt').value}&nl=${$('nl').value}`, { method: 'POST' });
     st.className = 'status ok'; st.textContent = 'Saved.';
     setTimeout(loadInfo, 3000);
   } catch (err) { st.className = 'status err'; st.textContent = 'Couldn\'t save: ' + err.message; }

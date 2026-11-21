@@ -19,6 +19,12 @@
   - **Readability colors (card 1, not judged yet):** weather line 2 = "H" warm `WX_HI` 0xFF8250 and "L" cool
     `WX_LO` 0x78B4FF (1 px after each), numbers theme main, town dim; forecast lows `WX_LO`; clock date = accent
     (dims looked muddy); news bar time = dim (was a darker dim). Countdown/stocks unchanged. Page preview matches.
+  - **QR on card 2:** same as card 1 (scans from 3-4 ft only).
+  - **Time zone:** page's Save button is now "Save night mode"; it sends `tz=auto` to cards with a saved phone zone,
+    which drops it and uses the zone from the card's location (`geoTz`). Both cards switched (CST6CDT, verified).
+  - **Forecast layouts (trying):** `fcStyle` 0 plain, 1 alternate columns shaded, 2 shaded tiles, 3 four days
+    (32 px) alternate shaded; `FC_SHADE` 0x1C1C2C. `POST /api/fcprobe?s=N` jumps to the first weather item's
+    forecast for 60 s with a red tag (`tools/forecast-probe.ps1`). Not saved; page preview not changed yet.
   - **Moon:** halo removed (read as a gray disc). New reminders default to "5 days before" (was 14).
 - **0.9.8 (verified):** Jumbo font, sprite weather icons, self-update (tested: 0.9.0 -> 0.9.8 by itself in 16 s),
   Improv WiFi (card side tested over COM10: state, info, scan; install page's WiFi step not tried on a card yet).
@@ -40,8 +46,8 @@
 - Test uploads with curl: `-H "Content-Type: text/plain"` for /api/show, then POST /api/play.
 
 ## Next (the user can answer with one of these commands)
-1. **"QR close up"** (optional) - try a dimmer white (e.g. setBrightness8 ~120) so it scans close up; re-run
-   `tools\qr-probe.ps1 -Bits 2`. Theme colors on the QR screen would need 3+ bits.
+1. **"Forecast layout N"** - user runs `toolsorecast-probe.ps1` and picks one. Then make it the only layout
+   (drop fcStyle/probe), mirror it in the page preview. QR close up (dimmer white) stays optional.
 2. **"Themes look good" / "change theme X"** - user picks themes on the page (swatches) and judges card 1's show.
    Then promote themes + QR + forecast to PROJECT-NOTES.md.
 3. **"Test the installer on card 2"** - card 2 on USB: run install.html (online installer) end to end, including

@@ -133,7 +133,10 @@ static void handleShowPost() {
 // Time zone (POSIX TZ string from the page) and night mode hours.
 static void handleSettings() {
   touch();
-  if (web->hasArg("tz") && web->arg("tz").length() < 60) { tzString = web->arg("tz"); tzAuto = false; prefs.putString("tz", tzString); timeBegin(); }
+  if (web->arg("tz") == "auto") {                // back to the zone from the card's location (old pages saved the phone's)
+    prefs.remove("tz"); tzAuto = true;
+    if (geoTz.length()) { tzString = geoTz; timeBegin(); }
+  } else if (web->hasArg("tz") && web->arg("tz").length() < 60) { tzString = web->arg("tz"); tzAuto = false; prefs.putString("tz", tzString); timeBegin(); }
   if (web->hasArg("nf")) { nightFrom = constrain((int)web->arg("nf").toInt(), -1, 23); prefs.putChar("nfrom", nightFrom); }
   if (web->hasArg("nt")) { nightTo = constrain((int)web->arg("nt").toInt(), -1, 23); prefs.putChar("nto", nightTo); }
   if (web->hasArg("theme")) { themeIx = constrain((int)web->arg("theme").toInt(), 0, 6); prefs.putUChar("theme", themeIx); }
@@ -224,6 +227,13 @@ static void startHomeWeb() {
     uint8_t b = constrain((int)web->arg("bits").toInt(), 2, 6);
     if (panelFast && b != fastBits) panelSetFast(false);
     fastBits = b; addrHoldMs = 60000; addrUntil = 0; buttonAction = BTN_SHORT;
+    sendJson("{\"ok\":true}");
+  });
+  // Forecast probe: jump to the first weather item and show only its forecast in layout s (0-3) for 60 s.
+  web->on("/api/fcprobe", HTTP_POST, []() {
+    touch();
+    fcStyle = constrain((int)web->arg("s").toInt(), 0, 3); fcProbeUntil = millis() + 60000;
+    for (size_t i = 0; i < playlist.size(); i++) if (playlist[i].type == 'w') { playIdx = i; skipItem = true; break; }
     sendJson("{\"ok\":true}");
   });
   web->on("/api/update-site", HTTP_POST, []() { touch(); updateNow = true; sendJson("{\"ok\":true}"); });   // card fetches it itself

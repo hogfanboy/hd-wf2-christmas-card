@@ -129,8 +129,9 @@ void geoService() {
   geoOk = true;
   String zone = jsonText(b, "\"timezone\":\"");
   Serial.printf("Location: %s, %s (%.2f, %.2f) %s\n", geoCity.c_str(), geoCountry.c_str(), geoLat, geoLon, zone.c_str());
+  geoTz = posixFor(zone, of < 0 ? 0 : b.substring(of + 9).toInt());
   if (tzAuto) {                                  // the page never set a time zone: use this one (not saved)
-    tzString = posixFor(zone, of < 0 ? 0 : b.substring(of + 9).toInt());
+    tzString = geoTz;
     setenv("TZ", tzString.c_str(), 1); tzset();
     Serial.printf("Time zone (automatic): %s\n", tzString.c_str());
   }

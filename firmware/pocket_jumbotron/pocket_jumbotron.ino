@@ -94,6 +94,10 @@ const char *const FX_NAMES[] = {"none", "snow", "sparkle", "hearts", "confetti",
 enum { FX_NONE, FX_SNOW, FX_SPARKLE, FX_HEARTS, FX_CONFETTI, FX_FIREWORKS, FX_STARS, FX_FIRE, FX_MATRIX, FX_COUNT };
 // ---------- Settings: time zone + night mode (NVS, see net.ino settingsLoad) ----------
 String tzString = "UTC0";
+uint8_t fcStyle = 0;                           // forecast layout being tried (weather.ino); not saved
+uint32_t fcProbeUntil = 0;                     // forecast probe: show only the forecast until this millis()
+bool skipItem = false;                         // end the current item now (probes)
+String geoTz;                                  // the time zone that goes with the card's location (online.ino)
 bool tzAuto = true;                           // no time zone from the page yet: guessed from the location (online.ino)
 int8_t nightFrom = -1, nightTo = -1;          // hours 0-23; -1 = night mode off
 uint8_t nightLevel = 0;                        // % of normal brightness at night (0 = dark)
@@ -154,7 +158,7 @@ bool waitMs(uint32_t ms) {
     pollButton();
     netService();
     checkNight();
-    if (buttonAction != BTN_NONE || holdPlayback || addrUntil) return true;
+    if (buttonAction != BTN_NONE || holdPlayback || addrUntil || skipItem) return true;
     delay(3);
   }
   return false;
@@ -186,6 +190,7 @@ void loop() {
     return;
   }
   skipped = 0;
+  skipItem = false;
   geoService();                                      // once per start: where am I (online.ino)
   playItem(it);
 }

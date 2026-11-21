@@ -28,7 +28,7 @@ static const Theme THEMES[] = {
 static const uint8_t THEME_N = sizeof(THEMES) / sizeof(THEMES[0]);
 static inline const Theme &th() { return THEMES[themeIx < THEME_N ? themeIx : 2]; }
 // Fixed colors that mean something whatever the theme: today's high / low (and the forecast lows).
-static const uint32_t WX_HI = 0xFF8250, WX_LO = 0x78B4FF;
+static const uint32_t WX_HI = 0xFF8250, WX_LO = 0x78B4FF, FC_SHADE = 0x1C1C2C;   // FC_SHADE: forecast column shading
 static uint32_t hsv(uint16_t h) {                // h 0..1535, full saturation and value
   uint8_t x = h & 255;
   switch (h >> 8) {
