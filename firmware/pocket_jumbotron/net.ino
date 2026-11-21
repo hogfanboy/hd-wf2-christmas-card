@@ -91,35 +91,22 @@ static void showHotspotScreen(const char *status) {
   if (doubleBuffered) panel->flipDMABuffer();
 }
 
-// QR code at the left of the panel, drawn while the panel is in fast scan (2-bit). S1 presses while the
-// address is up step through the styles; the number shows bottom right. Uses the ESP32 core's QR encoder.
+// QR code of http://<ip> at the left of the panel: white modules, 4-module quiet zone, 2 LEDs per module,
+// drawn while the panel is in fast scan (2-bit, ~650 Hz). Fast scan is what made phone cameras read it
+// (0.8.4: all styles scanned with the Pixel camera). Uses the ESP32 core's QR encoder.
 // Fast scan colors: the library's color table is built for 8-bit, and at 2-bit it reads only the table's two
 // lowest bits, so most values come out wrong (white looked green). Use CF() pure colors only.
-// 0.8.3 test: only the website-link styles scanned with the Pixel camera (they happened to show green).
-struct QrStyle { bool web, r, g, b; };
-static const QrStyle QR_STYLES[] = {
-  {true,  0, 1, 0},       // 1: https link to go.html (forwards to http://<ip>), green: scanned in the 0.8.3 test
-  {true,  1, 1, 1},       // 2: same link, white
-  {false, 0, 1, 0},       // 3: plain http://<ip> (smaller code, 2 LEDs per module), green
-  {false, 1, 1, 1},       // 4: plain http://<ip>, white
-};
-static const int QR_COUNT = sizeof(QR_STYLES) / sizeof(QR_STYLES[0]);
-int qrVariant = 1;
-static const QrStyle *qrs = &QR_STYLES[0];
 static void qrDraw(const uint8_t *q) {        // q is an esp_qrcode_handle_t
   int n = esp_qrcode_get_size(q), qz = 4, px = (n + 2 * qz) * 2 <= 64 ? 2 : 1;
   int sz = (n + 2 * qz) * px, x0 = 1, y0 = (64 - sz) / 2;
-  uint16_t light = CF(qrs->r, qrs->g, qrs->b), dark = 0;
-  panel->fillRect(x0, y0, sz, sz, light);
+  panel->fillRect(x0, y0, sz, sz, CF(1, 1, 1));
   for (int y = 0; y < n; y++)
     for (int x = 0; x < n; x++)
-      if (esp_qrcode_get_module(q, x, y)) panel->fillRect(x0 + (qz + x) * px, y0 + (qz + y) * px, px, px, dark);
+      if (esp_qrcode_get_module(q, x, y)) panel->fillRect(x0 + (qz + x) * px, y0 + (qz + y) * px, px, px, 0);
 }
-void qrNext() { qrVariant = qrVariant % QR_COUNT + 1; }
 static bool drawQr(String ip) {
-  qrs = &QR_STYLES[(qrVariant - 1) % QR_COUNT];
-  String url = qrs->web ? "https://hogfanboy.github.io/hd-wf2-christmas-card/go#" + ip : "http://" + ip;
-  esp_qrcode_config_t cfg = {qrDraw, 5, ESP_QRCODE_ECC_LOW};   // max version 5: the website link needs 4
+  String url = "http://" + ip;
+  esp_qrcode_config_t cfg = {qrDraw, 5, ESP_QRCODE_ECC_LOW};
   return esp_qrcode_generate(&cfg, url.c_str()) == ESP_OK;
 }
 
@@ -142,7 +129,7 @@ void showAddress(uint32_t ms) {
       text(30, ip.c_str(), C(255, 255, 255));
     } else {
       // Pure colors only (fast scan, see above).
-      panel->setTextColor(CF(1, 1, 0));
+      panel->setTextColor(CF(1, 1, 1));
       panel->setCursor(64, 2);  panel->print("Scan with");
       panel->setCursor(64, 11); panel->print("your phone");
       panel->setTextColor(CF(0, 1, 1));
@@ -151,9 +138,6 @@ void showAddress(uint32_t ms) {
       int dot = ip.lastIndexOf('.', ip.lastIndexOf('.') - 1);   // split 192.168. / 50.16
       panel->setCursor(64, 38); panel->print(ip.substring(0, dot + 1));
       panel->setCursor(64, 47); panel->print(ip.substring(dot + 1));
-      panel->setTextColor(CF(0, 0, 1));
-      panel->setCursor(64, 56); panel->print(panel->calculated_refresh_rate); panel->print("Hz");
-      panel->setCursor(110, 56); panel->print(qrVariant); panel->print("/"); panel->print(QR_COUNT);
     }
   } else {
     text(12, "Can't join WiFi:", C(255, 90, 110));
@@ -189,11 +173,8 @@ static int countPictures() {
 }
 static void handleInfo() {
   touch();
-  // Test: lets the website read this directly where the browser allows it (Chrome "local network access").
-  web->sendHeader("Access-Control-Allow-Origin", "https://hogfanboy.github.io");
-  web->sendHeader("Access-Control-Allow-Private-Network", "true");
   char buf[480];
-  snprintf(buf, sizeof(buf), "{\"fw\":\"%s\",\"name\":\"%s\",\"total\":%u,\"used\":%u,\"files\":%d,\"items\":%u,\"brightness\":%u,\"heap\":%u,"
+  snprintf(buf, sizeof(buf), "{\"api\":1,\"fw\":\"%s\",\"name\":\"%s\",\"total\":%u,\"used\":%u,\"files\":%d,\"items\":%u,\"brightness\":%u,\"heap\":%u,"
            "\"tz\":\"%s\",\"nightFrom\":%d,\"nightTo\":%d,\"nightLevel\":%u,\"night\":%s,\"time\":%lu,\"fc\":\"%s\"}",
            FW_VERSION, hostName.c_str(), (unsigned)LittleFS.totalBytes(), (unsigned)LittleFS.usedBytes(), countPictures(),
            (unsigned)playlist.size(), brightnessPct, (unsigned)ESP.getFreeHeap(), tzString.c_str(), nightFrom, nightTo, nightLevel,
@@ -355,37 +336,30 @@ static void handleForgetWifi() {
   restartRequested = true;
 }
 
-// Bridge (test): the website (https) can't call the card (http) directly, so it opens this page in a tab
-// and posts requests to it; the page runs them against the card's own API and posts the answers back.
-// Only the website's origin (and the local preview) is listened to.
-static const char BRIDGE_HTML[] PROGMEM = R"HTML(<!doctype html><meta charset=utf-8>
-<meta name=viewport content="width=device-width,initial-scale=1"><title>Pocket Jumbotron bridge</title>
-<body style="font:15px system-ui,sans-serif;background:#111;color:#ccc;padding:16px">
-<p id=s>Connecting to the website... keep this tab open.</p><script>
-const OK=['https://hogfanboy.github.io','http://localhost:8080'],out=window.opener,s=document.getElementById('s');
-let peer=null,n=0;
-function say(m){if(out&&peer)out.postMessage(m,peer);}
-addEventListener('message',async e=>{
- if(!OK.includes(e.origin))return;
- if(!peer){peer=e.origin;}
- const d=e.data||{};
- if(d.hello){say({ready:true,host:location.host});s.textContent='Connected to '+peer+'. Keep this tab open.';return;}
- if(d.probe){say({id:d.id,bytes:d.probe.byteLength});return;}
- if(typeof d.path!=='string'||!d.path.startsWith('/api/'))return say({id:d.id,error:'bad path'});
- try{let b=d.body;
-  if(d.fields){b=new FormData();for(const f of d.fields)f.name?b.append(f.key,new Blob([f.value]),f.name):b.append(f.key,f.value);}
-  const r=await fetch(d.path,{method:d.method||'GET',body:b});
-  say({id:d.id,status:r.status,text:await r.text()});s.textContent='Connected to '+peer+'. Requests: '+(++n);
- }catch(err){say({id:d.id,error:String(err)});}
-});
-if(out)for(const o of OK)try{out.postMessage({ready:false,host:location.host},o)}catch(e){}
-</script>)HTML";
-static void handleBridge() { touch(); web->sendHeader("Cache-Control", "no-store"); web->send_P(200, "text/html", BRIDGE_HTML); }
+// The card's front page is a tiny starter: it loads the app (the full page) from the website, so the app
+// updates without new firmware, and keeps a copy on the phone for when the website can't be reached. The app
+// then runs on the card's own address, so its /api calls go straight to the card (an https page can't call
+// http devices; an http page may load https code). No app at all: the built-in copy at /local.
+static const char SHELL_HTML[] PROGMEM = R"HTML(<!doctype html><html><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1"><title>Pocket Jumbotron</title></head>
+<body style="background:#0b0d12;color:#9aa;font:16px system-ui,sans-serif;padding:20px"><p>Loading...</p><script>
+(async()=>{
+ const APP='https://hogfanboy.github.io/hd-wf2-christmas-card/app/index.html';
+ let h=null,ls=null;try{ls=localStorage}catch(e){}
+ try{const c=new AbortController();setTimeout(()=>c.abort(),5000);
+  const r=await fetch(APP,{cache:'no-cache',signal:c.signal});
+  if(r.ok){h=await r.text();try{ls&&ls.setItem('pjApp',h)}catch(e){}}}catch(e){}
+ if(!h)try{h=ls&&ls.getItem('pjApp')}catch(e){}
+ if(!h)return location.replace('/local');
+ document.open();document.write(h);document.close();
+})();
+</script></body></html>)HTML";
+static void handleShell() { touch(); web->sendHeader("Cache-Control", "no-store"); web->send_P(200, "text/html", SHELL_HTML); }
 
 static void startHomeWeb() {
   web = new WebServer(80);
-  web->on("/", HTTP_GET, handleIndex);
-  web->on("/bridge", HTTP_GET, handleBridge);
+  web->on("/", HTTP_GET, handleShell);
+  web->on("/local", HTTP_GET, handleIndex);       // built-in copy of the app (no internet)
   web->on("/api/info", HTTP_GET, handleInfo);
   web->on("/api/clear", HTTP_POST, handleClear);
   web->on("/api/upload", HTTP_POST, handleUploadDone, handleUploadData);

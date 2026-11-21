@@ -1,6 +1,7 @@
 // Builds the phone setup page that the card serves:
 //  web/index.html + vendored libs (omggif, gifenc, aes-js, js-sha256; MIT) + web/vault.js -> one self-contained page,
-//  gzipped into firmware/pocket_jumbotron/web_index.h. Also writes firmware/build/web/index.html for testing.
+//  gzipped into firmware/pocket_jumbotron/web_index.h (built-in copy at /local) and copied to docs/app/ (the
+//  website copy that the card's front page loads). Also writes firmware/build/web/index.html for testing.
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
@@ -24,10 +25,16 @@ const vendor = `<script>/* aes-js (MIT, Richard Moore) */${aesjs}</script>
 <script>${vaultJs}</script>
 <script>/* omggif (MIT) */${omggif}</script>\n<script>/* gifenc (MIT, Matt DesLauriers) */(function(){${gifenc}})();</script>`;
 
-const html = fs.readFileSync(path.join(root, 'web/index.html'), 'utf8').replace('<!--VENDOR-->', vendor);
+// Build stamp shown on the page ("app 2026-11-20 abc1234"); the website copy is what cards normally run.
+let rev = ''; try { rev = (await import('node:child_process')).execSync('git rev-parse --short HEAD', { cwd: root }).toString().trim(); } catch (e) {}
+const stamp = new Date().toISOString().slice(0, 10) + (rev ? ' ' + rev : '');
+const html = fs.readFileSync(path.join(root, 'web/index.html'), 'utf8').replace('<!--VENDOR-->', vendor).replace('/*APP_BUILD*/', stamp);
 const outDir = path.join(root, 'firmware/build/web');
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(path.join(outDir, 'index.html'), html);
+// The website copy the card's starter page loads (published by CI from docs/app/, not committed).
+fs.mkdirSync(path.join(root, 'docs/app'), { recursive: true });
+fs.writeFileSync(path.join(root, 'docs/app/index.html'), html);
 
 const toC = (name, text) => {
   const gz = zlib.gzipSync(text, { level: 9 });

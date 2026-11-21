@@ -144,6 +144,7 @@
 </main>
 
 <!--VENDOR-->
+<script>window.APP_BUILD = '/*APP_BUILD*/';</script>
 <script>
 'use strict';
 const W = 128, H = 64, MAX_FRAMES = 150, STILL_MS = 10000, JPEG_Q = 0.86;
@@ -835,7 +836,7 @@ const newer = (a, b) => { const p = s => String(s).split('.').map(Number); const
 async function loadInfo() {
   try {
     card = await api('/api/info');
-    $('cardInfo').textContent = `Connected to ${card.name || 'your screen'} · ${card.items ?? card.files} item${(card.items ?? card.files) === 1 ? '' : 's'} playing · version ${card.fw}`;
+    $('cardInfo').textContent = `Connected to ${card.name || 'your screen'} · ${card.items ?? card.files} item${(card.items ?? card.files) === 1 ? '' : 's'} playing · version ${card.fw} · app ${location.pathname === '/local' ? 'built-in' : APP_BUILD}`;
     $('bright').value = card.brightness;
     $('brightLabel').textContent = card.brightness + '%';
     showTime();
