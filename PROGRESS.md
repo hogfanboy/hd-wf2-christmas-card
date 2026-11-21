@@ -1,6 +1,9 @@
 # PROGRESS
 
-## Working state (fw 1.0.0-beta4 on both cards via WiFi, 2026-11-21; NOT judged by eye yet)
+## Working state (fw 1.0.0-beta5 on both cards via WiFi, 2026-11-21)
+- **beta5:** aquarium = fish + bubbles on black (no water/seaweed). Improv WiFi over USB fixed (the page dropped
+  all but the first network of the scan burst) + "Set up WiFi only" on install.html for switched cards. Card side
+  tested over COM10; the page with a real card (Chrome) not yet. Effects judged good by the user.
 - **Crisp fonts:** Jumbo font pixels are fully on or off (no soft edge shading). `SOFT` in `web/pjfont.js` can bring
   soft edges back per size (e.g. the huge font). Page preview uses the same pixels.
 - **Weather icons (beta4):** back to the shaded beta2 drawings (gradient sun with turning tapered rays, shaded moon
@@ -9,11 +12,7 @@
   Alternative offered: shaded disc + beta3's straight breathing rays (not built in).
 - **Shuffle:** page "Play order: In order / 🔀 Shuffle" writes `order<TAB>shuffle` into show.txt; card plays a new
   random order each round, never the same item twice in a row. Tested on the fake card (Send + reload keeps it).
-- **Full-color fix:** the Christmas2026 pictures were picked as "full color" (1000+ colors from smoothing) and sent
-  as browser JPEGs that halve color resolution (reds/greens smeared). Now: auto picks GIF when a 254-color palette
-  matches (all 17 Christmas pictures -> GIF, error ~1), full color uses a 4:4:4 JPEG (jpeg-js, q92) with near-black
-  forced to black, and the card floors near-black too. Page GIFs store only changed pixels (smaller). Preview shows
-  the encoded result. Conversion code moved to `web/convert.js`.
+- **Full color / border trim / GIF choice:** see PROJECT-NOTES "Pictures".
 - **Border trim (beta4 page):** every picture's plain-color border (all 4 corners the same color) is cut off before
   scaling, so small art in a big square fills the screen (01-35-46 "Merry Christmas": 464x227 art in 512x512, now
   full width). Near-black -> black now for GIF too, not only full color. The "bad full color" picture was this.
@@ -54,7 +53,6 @@
    "Use the straight rays" switches the sun to the alternative.
 2. **"Re-add the Christmas pack"** - on the phone page, ★ Get the latest pictures, add Christmas 2026, Send; they
    should now come in as GIF and look like the originals. Try Shuffle at the same time.
-3. **"Try the online pack builder"** - make the token, sign in at /builder/, open Holiday starter animations,
-   change what new cards get, Publish. Then a test install on card 2 shows the new first show.
-4. Still open from beta1/2: judge sleigh/balloons/aquarium/rain (`tools/effects-probe.ps1`), phone video,
-   installer test on card 2. Then 1.0.0 release.
+3. **Online builder** works (Christmas 2026 published from it). Next there: Holiday starter animations → new cards.
+4. **"Try WiFi only"** - card 1 on USB (close any serial-log tab), Chrome: install.html → Set up WiFi only →
+   pick the same WiFi + password. Then a full install on card 2 (also tests the new first show). Then 1.0.0.

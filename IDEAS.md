@@ -16,7 +16,6 @@ At the end of a session: promote what was built and verified to PROJECT-NOTES.md
 ## Easier setup (no typing 192.168...)
 - QR code on the address screen: done (0.7.1, styles in 0.7.3). Pixel camera app ignores it; try a QR to an https forwarding page on the website.
 - Home-screen icon: done on the website (`go.html` + manifest, remembers screens). The card page itself is http, so no install there.
-- **Improv WiFi in the installer**: after flashing, the install page asks for the home WiFi over USB (Improv Serial, used by ESPHome/WLED). No hotspot step for PC installs.
 - Bluetooth: Web Bluetooth works on Android Chrome only (not iPhone). BLE stack costs ~30-50 KB RAM (we have ~75 KB free with WiFi); flash for it is fine (content has its own 4.3 MB partition). Only worth it for setup, then BLE off.
 
 ## Private content

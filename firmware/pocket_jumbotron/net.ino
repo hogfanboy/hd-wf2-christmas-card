@@ -333,7 +333,14 @@ static void imCommand(const uint8_t *d, uint8_t n) {
   } else if (cmd == 0x03) {                                  // device info
     imResult(0x03, {"Pocket Jumbotron", FW_VERSION, "ESP32-S3", hostName});
   } else if (cmd == 0x04) {                                  // WiFi networks
+    if (WiFi.getMode() == WIFI_OFF) WiFi.mode(WIFI_STA);    // a new card has no WiFi running yet
     int k = WiFi.scanNetworks(false, false);
+    if (k < 0) {                                             // can't scan while retrying a saved network (moved house)
+      WiFi.setAutoReconnect(false); WiFi.disconnect(); delay(300);
+      k = WiFi.scanNetworks(false, false);
+      WiFi.setAutoReconnect(true);
+      if (!staSsid.isEmpty()) WiFi.begin(staSsid.c_str(), staPass.c_str());
+    }
     std::vector<String> seen;
     for (int i = 0; i < k && seen.size() < 20; i++) {
       String s = WiFi.SSID(i);

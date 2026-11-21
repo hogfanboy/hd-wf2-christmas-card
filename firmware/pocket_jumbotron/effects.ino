@@ -194,14 +194,8 @@ static void fxBalloons(uint32_t frame, bool behind) {
   }
 }
 
-// Fish swimming both ways, bubbles, and (full screen) seaweed over deep blue water.
-static void fxFish(uint32_t frame, bool behind, bool dark) {
-  if (!behind && dark) for (int y = 0; y < H; y++) for (int x = 0; x < W; x++) { canvas[y][x][1] = y / 5; canvas[y][x][2] = 10 + y * 3 / 4; }
-  if (!behind)
-    for (int s = 0; s < 7; s++) {                                // seaweed
-      int bx = 8 + s * 18 + (s * 7) % 5, hgt = 9 + (s * 5) % 9;
-      for (int k = 0; k < hgt; k++) px(bx + ((int)sin8(frame * 3 + k * 18 + s * 60) - 128) * k / (hgt * 50), H - 1 - k, k % 3 ? 0x20A040 : 0x40D060);
-    }
+// Fish swimming both ways with bubbles, on black (a background for text).
+static void fxFish(uint32_t frame, bool behind) {
   for (int i = 16; i < (behind ? 26 : 36); i++) {                // bubbles
     Flake &f = flakes[i];
     f.y -= f.spd / 3 + 3;
@@ -216,7 +210,7 @@ static void fxFish(uint32_t frame, bool behind, bool dark) {
     f.x += left ? -(f.spd / 3 + 2) : f.spd / 3 + 2;
     if (f.x < -12 * 16 || f.x > (W + 4) * 16) {
       f.bri = (rnd(2) ? 128 : 0) | rnd(7); f.spd = 4 + rnd(10);
-      f.x = (f.bri & 128) ? (W + 2) * 16 : -10 * 16; f.y = (4 + rnd(H - 22)) * 16;
+      f.x = (f.bri & 128) ? (W + 2) * 16 : -10 * 16; f.y = (3 + rnd(H - 10)) * 16;
     }
     int y = f.y / 16 + ((int)sin8(frame * 3 + i * 70) - 128) / 64;
     sprite(FISH, 5, f.x / 16, y, PARTY[(f.bri & 7) % 7], left, false);
@@ -305,7 +299,7 @@ static void paintBackground(const ShowItem &it, uint32_t frame) {
     case FX_MATRIX: fxMatrix(frame); break;
     case FX_SLEIGH: fxSleigh(frame, behind); break;
     case FX_BALLOONS: fxBalloons(frame, behind); break;
-    case FX_FISH: fxFish(frame, behind, it.bg == 0); break;
+    case FX_FISH: fxFish(frame, behind); break;
     case FX_RAIN: fxRain(frame, behind); break;
   }
 }

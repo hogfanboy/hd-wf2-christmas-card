@@ -399,11 +399,6 @@ function fxStep(s, d, behind) {
       }
       break;
     case 'fish': {
-      if (!behind && s.dark && d) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = (y * W + x) * 4; d[i + 1] = tr(y / 5); d[i + 2] = 10 + tr(y * 3 / 4); }
-      if (!behind) for (let k = 0; k < 7; k++) {
-        const bx = 8 + k * 18 + (k * 7) % 5, hgt = 9 + (k * 5) % 9;
-        for (let j = 0; j < hgt; j++) px(bx + tr((sin8(frame * 3 + j * 18 + k * 60) - 128) * j / (hgt * 50)), H - 1 - j, j % 3 ? [32, 160, 64] : [64, 208, 96]);
-      }
       for (let i = 16; i < (behind ? 26 : 36); i++) {
         const f = s.flakes[i];
         f.y -= tr(f.spd / 3) + 3;
@@ -417,7 +412,7 @@ function fxStep(s, d, behind) {
         f.x += left ? -(tr(f.spd / 3) + 2) : tr(f.spd / 3) + 2;
         if (f.x < -12 * 16 || f.x > (W + 4) * 16) {
           f.bri = (rand(2) ? 128 : 0) | rand(7); f.spd = 4 + rand(10);
-          f.x = (f.bri & 128) ? (W + 2) * 16 : -10 * 16; f.y = (4 + rand(H - 22)) * 16;
+          f.x = (f.bri & 128) ? (W + 2) * 16 : -10 * 16; f.y = (3 + rand(H - 10)) * 16;
         }
         sprite(px, SPR.fish, tr(f.x / 16), tr(f.y / 16) + tr((sin8(frame * 3 + i * 70) - 128) / 64), PARTY[(f.bri & 7) % 7], left);
       }
