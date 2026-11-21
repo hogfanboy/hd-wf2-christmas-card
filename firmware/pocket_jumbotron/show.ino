@@ -1,7 +1,7 @@
 // The show: an ordered list of items, each shown for a number of seconds.
 //   /show.txt, one item per line, fields separated by TABs (written by the web page):
 //     pic       <sec> <file in /gifs>
-//     text      <sec> <fg> <bg> <font 1-4> <effect> <message>
+//     text      <sec> <fg> <bg> <font 1-7> <effect> <message>
 //     clock     <sec> <fg> <bg> <font> <effect> <12|24>
 //     countdown <sec> <fg> <bg> <font> <effect> <MM-DD> <label>
 //     fx        <sec> <fg> <bg> <font> <effect>                      (an effect on its own, full screen)
@@ -106,7 +106,7 @@ void loadPlaylist() {
         it.rainbow = f[2] == "rainbow";
         it.fg = it.rainbow ? 0xFFFFFF : hex(f[2]);
         it.bg = hex(f[3]);
-        it.font = constrain((int)f[4].toInt(), 1, 4);
+        it.font = constrain((int)f[4].toInt(), 1, 7);
         it.effect = fxByName(f[5]);
         f.resize(std::max<size_t>(f.size(), 10));
         if (it.type == 't') it.text = f[6];

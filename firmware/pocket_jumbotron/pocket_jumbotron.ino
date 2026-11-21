@@ -25,6 +25,7 @@
 #include <Fonts/FreeSansBold12pt7b.h>
 #include <Fonts/FreeSansBold18pt7b.h>
 #include <Fonts/FreeSansBold24pt7b.h>
+#include "font_jumbo.h"                  // Serpentine Bold Oblique, sizes 17/21/25/34 px (~28 KB flash)
 
 // ---- Hardware (confirmed on WF2 V7.2, see PROJECT-NOTES.md) ----
 static const HUB75_I2S_CFG::i2s_pins PINS = {
@@ -34,7 +35,7 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "0.9.3";
+static const char *FW_VERSION = "0.9.4";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
@@ -68,7 +69,7 @@ struct ShowItem {
   String file, text, extra;       // extra: clock 12/24, countdown MM-DD, weather "F,lat,lon"
   uint32_t fg = 0xFFFFFF, bg = 0;
   bool rainbow = false;
-  uint8_t font = 2, effect = 0;   // effect: index into FX_NAMES (show.ino)
+  uint8_t font = 2, effect = 0;   // font: 1 tiny, 2-4 classic S/M/B, 5-7 jumbo S/M/B (canvas.ino). effect: FX_NAMES index
   // When it plays (show.ino itemActive): yearly date range MMDD (0 = any), weekdays bit 0 = Sunday,
   // hours [hFrom, hTo) (-1 = any), countdown only within `lead` days (-1 = always). forecast: weather + 5 days.
   uint16_t dFrom = 0, dTo = 0;

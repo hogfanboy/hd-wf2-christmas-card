@@ -1,6 +1,12 @@
 # PROGRESS
 
-## Working state (fw 0.9.3, 2026-11-20; card 1 on 0.9.3 via WiFi, card 2 still 0.6.2)
+## Working state (fw 0.9.4, 2026-11-20; card 1 gets 0.9.4 via WiFi, card 2 still 0.6.2)
+- **0.9.4 (needs the user's eye):** Jumbo fonts = Serpentine Bold Oblique bitmaps (`font_jumbo.h`, cap 17/21/25/34 px,
+  ~28 KB flash, 0 RAM; made from the user's installed TTF by `tools/make-font.mjs`). Show font field 5-7 = jumbo
+  S/M/B (old cards clamp to 4 = Big). Clock/countdown/weather pick the biggest font that fits (`fitBig`).
+  12-hour clock: small AM/PM beside the time, top level with the digits (was tacked onto the date line).
+  App: Size menu has Classic + Jumbo groups (preview approximates jumbo with italic Arial Black);
+  "Something wrong?" box shows /api/info (family code removed) + app build + phone, for beta testers.
 - **0.9.3 restructure:** firmware split into one file per job (map at the top of pocket_jumbotron.ino), moved
   line for line by a script, no behavior change. Shared types/globals/includes in the main file.
 - **0.9.2:** QR screen at full panel brightness (user saw purple/dull white at the 55% cap: green drops first at
@@ -37,10 +43,13 @@
 - Fast-scan screens must use `CF()` colors only (library LUT is 8-bit; at runtime 2-bit only its low 2 bits count).
 - One firmware and one panel setup for every card. Card stores GIF/JPEG frames, never WEBP.
 - Private content = encrypted packs, unlocked by a family code. Never write a family code into this repo.
+- No 10/12-bit color: HUB75 lib 3.1.0 #errors above 8 bits at compile time; 12-bit would also need ~+50% DMA RAM.
 - Build with `--build-property upload.maximum_size=1835008` (app is 1.37 MB).
 - Test uploads with curl: `-H "Content-Type: text/plain"` for /api/show (form type = empty show), then POST /api/play.
 
 ## Next (1.0 plan)
+0. Beta testers 2026-11-21 evening: user checks 0.9.4 clock (12h + 24h, Jumbo big/medium), a Jumbo message,
+   overnight soak on card 1; then flash card 2 and the testers' cards (USB installer or WiFi update).
 1. User checks the QR screen is now white and bright (0.9.2+), and a reminder made with + Reminder.
 2. Colorful pixel-art weather icons (IDEAS.md parking lot; user wants nicer icons).
 3. Improv WiFi in the installer, news headlines item, update card 2 (and the other 13 cards) to 1.0.

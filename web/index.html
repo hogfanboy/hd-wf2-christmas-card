@@ -56,6 +56,7 @@
 <main>
   <h1>Pocket <span>Jumbotron</span></h1>
   <div class="muted" id="cardInfo">Connecting to your screen…</div>
+  <details class="muted" style="font-size:12px"><summary>Something wrong? Details to send with a screenshot</summary><pre id="diag" style="white-space:pre-wrap;margin:4px 0"></pre></details>
 
   <div class="box update stack" id="updBox" hidden>
     <b>New software for your screen: <span id="updVer"></span></b>
@@ -181,8 +182,19 @@ blank();
 // ---------- Text / clock / countdown rendering (a close copy of what the screen draws) ----------
 const tcan = document.createElement('canvas'); tcan.width = W; tcan.height = H;
 const tctx = tcan.getContext('2d', { willReadFrequently: true });
-const CAP = { 1: 14, 2: 17, 3: 25, 4: 34 };       // capital-letter height in pixels of the screen's fonts
-const fontCss = (f) => f == 1 ? `bold ${Math.round(CAP[1] / 0.72)}px monospace` : `bold ${Math.round(CAP[f] / 0.72)}px Arial, Helvetica, sans-serif`;
+// Screen fonts: 1 pixel, 2-4 classic small/medium/big, 5-7 jumbo (a slanted sporty face) small/medium/big,
+// 8 jumbo between small and medium (clock fitting). CAP = capital-letter height in pixels.
+const CAP = { 1: 14, 2: 17, 3: 25, 4: 34, 5: 17, 6: 25, 7: 34, 8: 21 };
+const fontCss = (f) => f == 1 ? `bold ${Math.round(CAP[1] / 0.72)}px monospace`
+  : f >= 5 ? `italic 900 ${Math.round(CAP[f] / 0.72)}px "Arial Black", Arial, sans-serif` : `bold ${Math.round(CAP[f] / 0.72)}px Arial, Helvetica, sans-serif`;
+const setF = (f) => { tctx.font = fontCss(f); tctx.letterSpacing = f >= 5 ? Math.round(CAP[f] * 0.12) + 'px' : '0px'; };
+const smallF = () => { tctx.font = '8px monospace'; tctx.letterSpacing = '0px'; };
+// Same as the card's fitBig: the largest font of the item's family (up to its size, at least medium) that fits.
+function fitBig(f, s, maxW, extra = 0) {
+  const l = f >= 5 ? (f == 7 ? [7, 6, 8, 5] : [6, 8, 5]) : (f == 4 ? [4, 3, 2] : [3, 2]);
+  for (const x of l) { setF(x); if (tctx.measureText(s).width + extra <= maxW) return x; }
+  return l[l.length - 1];
+}
 const capOf = () => +tctx.font.match(/(\d+)px/)[1] * 0.72;
 const hue = (h) => `hsl(${(h % 1536) / 1536 * 360},100%,50%)`;
 // ---------- Effects: a JS copy of the card's effects library (show.ino), for the preview ----------
@@ -336,7 +348,7 @@ function paintBg(it, t) {
   tctx.putImageData(img, 0, 0);
   if (it.fx.glyphs.length) {
     const keep = tctx.font, kb = tctx.textBaseline;
-    tctx.font = '8px monospace'; tctx.textBaseline = 'top';
+    smallF(); tctx.textBaseline = 'top';
     for (const [ch, x, y, col] of it.fx.glyphs) { tctx.fillStyle = col; tctx.fillText(ch, x, y); }
     tctx.font = keep; tctx.textBaseline = kb;
   }
@@ -406,7 +418,7 @@ function wxMini(kind, cx, cy, f) {
 }
 function drawForecast(it, w, t) {
   const f = Math.floor(t / 40), dow = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'], today = new Date().getDay();
-  tctx.font = '8px monospace'; tctx.textBaseline = 'top';
+  smallF(); tctx.textBaseline = 'top';
   w.fc.slice(0, 5).forEach(([code, hi, lo], i) => {
     const cx = 2 + i * 25 + 12, d = dow[(today + i) % 7], h = String(Math.round(hi)), l = String(Math.round(lo));
     tctx.fillStyle = '#ffbe3c'; tctx.fillText(d, cx - tctx.measureText(d).width / 2, 1);
@@ -446,20 +458,19 @@ function renderItem(it, t) {      // t = ms since the item started
     if (it.fc && w.fc && Math.floor(t / per) % 2 === 1) { drawForecast(it, w, t); return tctx.getImageData(0, 0, W, H); }
     wxIcon(wxKind(w.code), w.day, it, f);
     const temp = String(Math.round(w.temp));
-    tctx.font = fontCss(Math.max(3, it.font));
-    if (tctx.measureText(temp).width > 70) tctx.font = fontCss(3);
+    fitBig(it.font, temp, 70);
     const tw = tctx.measureText(temp).width, x = 48 + Math.floor((80 - tw - 8) / 2), base = Math.round(2 + (38 + capOf()) / 2);
     drawStr(it, temp, x, base, t);
     tctx.strokeStyle = it.rainbow ? hue(t / 4) : it.fg; tctx.lineWidth = 1.5;
     tctx.beginPath(); tctx.arc(x + tw + 4.5, base - capOf() + 3.5, 2, 0, 6.2832); tctx.stroke();
-    tctx.font = '8px monospace'; tctx.textBaseline = 'top';
+    smallF(); tctx.textBaseline = 'top';
     const word = wxWord(w.code), l2 = `H${Math.round(w.hi)} L${Math.round(w.lo)} ${(it.place || '').toUpperCase()}`.slice(0, 21);
     tctx.fillStyle = '#ffbe3c'; tctx.fillText(word, 48 + (80 - tctx.measureText(word).width) / 2, 44);
     tctx.fillStyle = '#b4b4c8'; tctx.fillText(l2, (W - tctx.measureText(l2).width) / 2, 55);
     return tctx.getImageData(0, 0, W, H);
   }
   if (it.kind === 'text') {
-    tctx.font = fontCss(it.font);
+    setF(it.font);
     const tw = tctx.measureText(it.text).width;
     const x = tw > W - 4 ? W - (Math.floor(t / 25) % (W + tw)) : (W - tw) / 2;
     drawStr(it, it.text, x, Math.round((H + capOf()) / 2), t);
@@ -468,15 +479,17 @@ function renderItem(it, t) {      // t = ms since the item started
     if (it.kind === 'clock') {
       const d = new Date(), h = it.h24 ? d.getHours() : (d.getHours() % 12 || 12);
       bigS = (it.h24 ? String(h).padStart(2, '0') : h) + ':' + String(d.getMinutes()).padStart(2, '0');
-      l2 = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '').toUpperCase() + (it.h24 ? '' : d.getHours() < 12 ? ' AM' : ' PM');
+      l2 = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '').toUpperCase() ;
     } else {
       const n = daysUntil(it.date);
       bigS = n ? String(n) : 'TODAY!'; l1 = n ? (n === 1 ? 'DAY UNTIL' : 'DAYS UNTIL') : it.text.toUpperCase(); l2 = n ? it.text.toUpperCase() : '';
     }
-    tctx.font = fontCss(Math.max(3, it.font));
-    if (tctx.measureText(bigS).width > W - 2) tctx.font = fontCss(3);
-    drawStr(it, bigS, (W - tctx.measureText(bigS).width) / 2, Math.round((40 + capOf()) / 2), t);
-    tctx.font = '8px monospace'; tctx.textBaseline = 'top';
+    const pmW = it.kind === 'clock' && !it.h24 ? 13 : 0;      // 12-hour clock: small AM/PM beside the time
+    fitBig(it.font, bigS, W - 2, pmW);
+    const bw = tctx.measureText(bigS).width, bx = (W - bw - pmW) / 2, by = Math.round((40 + capOf()) / 2), top = by - Math.round(capOf());
+    drawStr(it, bigS, bx, by, t);
+    if (pmW) { smallF(); tctx.textBaseline = 'top'; tctx.fillStyle = it.rainbow ? '#fff' : it.fg; tctx.fillText(new Date().getHours() < 12 ? 'AM' : 'PM', bx + bw + 2, top); }
+    smallF(); tctx.textBaseline = 'top';
     if (it.kind === 'clock') { tctx.fillStyle = '#b4b4c8'; tctx.fillText(l2, (W - tctx.measureText(l2).width) / 2, 50); }
     else { tctx.fillStyle = '#fff'; tctx.fillText(l1, (W - tctx.measureText(l1).width) / 2, 42); tctx.fillStyle = '#ffbe3c'; tctx.fillText(l2, (W - tctx.measureText(l2).width) / 2, 53); }
   }
@@ -856,8 +869,10 @@ function addDrawn(kind, o = {}) {
   const ed = document.createElement('div'); ed.className = 'edit';
   const colors = `<label>Color <input type="color" data-k="fg"> <input type="checkbox" data-k="rainbow"> Rainbow
       &nbsp; Background <input type="color" data-k="bg"></label>`;
-  const sizes = kind === 'weather' ? '<option value="3">Medium</option><option value="4">Big</option>'
-    : '<option value="1">Pixel</option><option value="2">Small</option><option value="3">Medium</option><option value="4">Big</option>';
+  const sizes = kind === 'weather'
+    ? '<option value="3">Medium</option><option value="4">Big</option><option value="6">Jumbo medium</option><option value="7">Jumbo big</option>'
+    : '<optgroup label="Classic"><option value="1">Pixel</option><option value="2">Small</option><option value="3">Medium</option><option value="4">Big</option></optgroup>'
+      + '<optgroup label="Jumbo (slanted)"><option value="5">Jumbo small</option><option value="6">Jumbo medium</option><option value="7">Jumbo big</option></optgroup>';
   ed.innerHTML = kind === 'fx'
     ? `<label>Effect <select data-k="effect">${fxOptions().replace('<option value="none">None</option>', '')}</select>
        &nbsp; Background <input type="color" data-k="bg"></label>`
@@ -952,6 +967,7 @@ const newer = (a, b) => { const p = s => String(s).split('.').map(Number); const
 async function loadInfo() {
   try {
     card = await api('/api/info');
+    $('diag').textContent = JSON.stringify(Object.assign({}, card, { fc: undefined })) + '\napp ' + (location.pathname === '/local' ? 'built-in' : APP_BUILD) + ' · ' + navigator.userAgent + ' · ' + new Date().toString();
     $('cardInfo').textContent = `Connected to ${card.name || 'your screen'} · ${card.items ?? card.files} item${(card.items ?? card.files) === 1 ? '' : 's'} playing · version ${card.fw} · app ${location.pathname === '/local' ? 'built-in' : APP_BUILD}`;
     $('bright').value = card.brightness;
     $('brightLabel').textContent = card.brightness + '%';

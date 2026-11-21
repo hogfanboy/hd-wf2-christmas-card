@@ -188,9 +188,7 @@ static void playWeather(const ShowItem &it) {
     uint32_t t0 = millis();
     paintBackground(it, frame);
     wxIcon(kind, wx.day, it, frame);
-    uint8_t f = it.font < 3 ? 3 : it.font;
-    setFont(f);
-    if (textWidth(temp) > 70) { f = 3; setFont(3); }
+    uint8_t f = fitBig(it.font, temp, 70, 0);
     int tw = textWidth(temp), x = 48 + (80 - tw - 8) / 2, base = textBaseline(f, 2, 40);
     int16_t x1, y1; uint16_t bw, bh;
     cg.getTextBounds("0", 0, base, &x1, &y1, &bw, &bh);

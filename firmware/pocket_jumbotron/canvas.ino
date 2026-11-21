@@ -26,10 +26,25 @@ static uint32_t hsv(uint16_t h) {                // h 0..1535, full saturation a
     default: return 0xFF0000 | (255 - x);
   }
 }
+// Fonts: 1 tiny (5x7 doubled), 2-4 classic (FreeSans Bold) small/medium/big, 5-7 jumbo (Serpentine Bold Oblique)
+// small/medium/big, 8 jumbo between small and medium (only for fitting the clock).
 static void setFont(uint8_t f) {
+  static const GFXfont *const F[] = {&FreeSansBold12pt7b, &FreeSansBold18pt7b, &FreeSansBold24pt7b,
+    &SerpentineBoldOblique17, &SerpentineBoldOblique25, &SerpentineBoldOblique34, &SerpentineBoldOblique21};
   cg.setTextWrap(false);
-  if (f == 1) { cg.setFont(nullptr); cg.setTextSize(2); }
-  else { cg.setTextSize(1); cg.setFont(f == 2 ? &FreeSansBold12pt7b : f == 3 ? &FreeSansBold18pt7b : &FreeSansBold24pt7b); }
+  if (f < 2 || f > 8) { cg.setFont(nullptr); cg.setTextSize(2); }
+  else { cg.setTextSize(1); cg.setFont(F[f - 2]); }
+}
+static bool isJumbo(uint8_t f) { return f >= 5; }
+// Big numbers (clock, countdown, weather): the largest font of the item's family, up to its size (at least
+// medium), whose width for s plus extra fits in maxW. Sets it and returns it.
+static int textWidth(const String &s);
+static uint8_t fitBig(uint8_t f, const String &s, int maxW, int extra) {
+  static const uint8_t J[] = {7, 6, 8, 5}, K[] = {4, 3, 2};
+  const uint8_t *l = isJumbo(f) ? J + (f == 7 ? 0 : 1) : K + (f == 4 ? 0 : 1);
+  uint8_t n = isJumbo(f) ? (f == 7 ? 4 : 3) : (f == 4 ? 3 : 2);
+  for (uint8_t i = 0; i < n; i++) { setFont(l[i]); if (textWidth(s) + extra <= maxW || i == n - 1) return l[i]; }
+  return l[n - 1];
 }
 // Width of a string and the y that centers it vertically in a band [top, top+h).
 static int textWidth(const String &s) { int16_t x1, y1; uint16_t w, h; cg.getTextBounds(s.c_str(), 0, 0, &x1, &y1, &w, &h); return w + x1; }

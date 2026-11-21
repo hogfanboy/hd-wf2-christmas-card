@@ -35,11 +35,16 @@ static void playClock(const ShowItem &it) {
     snprintf(hm, sizeof(hm), h12 ? "%d:%02d" : "%02d:%02d", hour, lt.tm_min);
     strftime(date, sizeof(date), "%a %b %e", &lt);
     paintBackground(it, frame);
-    setFont(it.font < 3 ? 3 : it.font);
-    if (textWidth(hm) > W - 2) setFont(3);
-    drawText(hm, (W - textWidth(hm)) / 2, textBaseline(3, 2, 40), it, millis());
+    // 12-hour: a small AM/PM beside the time, its top level with the digits (11 px wide + 2 px gap).
+    const int PM_W = h12 ? 13 : 0;
+    fitBig(it.font, hm, W - 2, PM_W);
+    int tw = textWidth(hm), x = (W - tw - PM_W) / 2, base = textBaseline(it.font, 2, 40);
+    int16_t x1, y1; uint16_t bw, bh;
+    cg.getTextBounds("0", 0, base, &x1, &y1, &bw, &bh);
+    drawText(hm, x, base, it, millis());
     setFont(1); cg.setTextSize(1);
-    String d = upcase(date) + (h12 ? (lt.tm_hour < 12 ? " AM" : " PM") : "");
+    if (h12) { cg.rgb(it.rainbow ? 0xFFFFFF : it.fg); cg.setCursor(x + tw + 2, y1); cg.print(lt.tm_hour < 12 ? "AM" : "PM"); }
+    String d = upcase(date);
     cg.rgb(0xB4B4C8); cg.setCursor((W - textWidth(d)) / 2, 50); cg.print(d);
     pushCanvas();
     frame++;
@@ -73,9 +78,7 @@ static void playCountdown(const ShowItem &item) {
   while (millis() - start < total) {
     uint32_t t0 = millis();
     paintBackground(it, frame);
-    setFont(it.font < 3 ? 3 : it.font);
-    if (textWidth(big) > W - 2) setFont(3);
-    if (textWidth(big) > W - 2) setFont(2);
+    fitBig(it.font, big, W - 2, 0);
     drawText(big, (W - textWidth(big)) / 2, textBaseline(3, 0, 40), it, millis());
     setFont(1); cg.setTextSize(1);
     cg.rgb(0xFFFFFF);
