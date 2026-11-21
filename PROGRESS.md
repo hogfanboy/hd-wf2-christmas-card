@@ -1,58 +1,42 @@
 # PROGRESS
 
-## Working state (fw 0.8.4, 2026-11-20; card 1 on 0.8.4 via WiFi, card 2 still 0.6.2)
-- 0.8.2: animated WEBP animates from the card page (`ImageDecoder` is https-only, so `decodeWebpAnim` in
-  `web/index.html` splits frames itself). Tested in the preview; user to try from the PC.
-- 0.8.3 fast-scan QR screen: `panelSetFast()` restarts the panel at 2-bit color while the address screen is up
-  (serial: 651 Hz vs 84 Hz full color, ~20 ms per switch, heap back to ~82 KB). `panelStop()` frees the GDMA
-  channel the library leaks on delete. Hz shows at the bottom of the QR screen.
-- 0.8.3 result: only styles 7-8 (https go.html link) scanned with the Pixel camera, and they showed green, not
-  white. Cause: the library's color table is compiled for 8-bit; at runtime 2-bit it uses the table's 2 lowest
-  bits. Fast-scan screens must use `CF()` (channel 0 or 224 = full on all channels; 255 → 248 = 1/3 on red/blue).
-- 0.8.4: QR styles cut to 4 (go link green/white, http link green/white), text in pure CF colors.
-- Bridge test FAILED: the card's /bridge tab never got messages from the website (stuck on "Connecting"), and
-  direct fetch was blocked in Chrome ("Failed to fetch"). Drop both; `/bridge` + bridge-test.html are leftovers.
-- One firmware for both panel chips. CI (push to main + hourly) builds firmware, installer, public packs, encrypted packs.
+## Working state (fw 0.9.1, 2026-11-20; card 1 on 0.9.1 via WiFi, card 2 still 0.6.2)
+- One firmware for both panel chips. CI (push to main + hourly) builds firmware, installer, web app, packs, vault.
 - Card 1 (FM6124C): 192.168.50.16 / pocketjumbo-eed0 (also on the PC's USB, COM10). Card 2 (RUL6024): 192.168.50.199.
-- Show (`show.ino`, `/show.txt`): pictures, messages, clock, countdown, **effects** (`fx`), **weather**, seconds per item.
-  Pictures are `.gif` or full-color `.pjm`. NTP time + phone's time zone; night mode.
-- Effects library (drawn by the card, no storage): snow, sparkle, hearts, confetti, fireworks, starfield, fire,
-  code rain. User loves them all (judged by eye on card 1); plasma removed at their request (0.8.1). Full screen as an item, or behind any message/clock/countdown/weather. The card page has a JS
-  copy of each for the preview (keep `show.ino` and the page's `fxStep` in step).
-- 0.8.0 weather: Open-Meteo over plain http (no key, no TLS RAM), refreshed at most every 15 min; town picked on the
-  page (Open-Meteo geocoding), stored in the show line. Animated icon, temp, condition, high/low, town.
-- Ran 3+ loops on card 1 (serial log): no resets, heap ~81 KB, largest block ~31 KB. Fixed: `.pjm` buffer now sized
-  to the file's biggest frame (fixed 24 KB failed with "no memory for jpeg" after weather fetches).
-- Startup screen (0.8.1): the "POCKET JUMBOTRON" arcade marquee (`firmware/intro.gif` → `tools/make-intro.mjs` →
-  `intro_gif.h`), 2 loops (~5 s), S1 skips it.
-- Card page: show builder (+ Effect, + Weather), load show back, packs, 🔒 family packs, one-tap update.
-- Website: homepage text rewritten for the real flow; `go.html` = QR target that forwards to `http://<ip>` and
-  remembers the screen (home-screen icon via `go.webmanifest`); `go.html?test` shows QR codes for a camera test.
-- Private pictures: repo hogfanboy/pocket-jumbotron-content → `tools/build-vault.mjs` → `docs/vault/` (see notes).
+- **App on the website (0.9.0, verified):** the card's `/` is a ~1 KB starter (`SHELL_HTML`, net.ino) that fetches
+  `docs/app/index.html` from Pages, saves it in the phone's localStorage, and document.write()s it, so it runs on
+  the card's origin (same-origin /api). No website and no saved copy: `/local` = built-in copy (web_index.h).
+  The page footer line says `app <date> <sha>` or `app built-in`. `/api/info` has `"api":1`.
+- **Schedule (0.9.1, verified by serial):** optional last field `@...` on any show line: `dates=MMDD-MMDD`,
+  `days=0123456`, `hours=H-H`, `lead=N` (countdown reminder), `forecast` (weather). `itemActive()` skips items off
+  schedule; all off = blank screen, checked every second. Page: ⏰ When panel on every item, "Start showing N days
+  before" on countdowns, "Then a 5-day forecast" on weather. The page always writes the `@` field.
+- **5-day forecast (0.9.1):** same Open-Meteo call (`forecast_days=5`), 5 columns: weekday, small icon, high, low.
+  Parsed OK on card 1 (5 days, 329 ms, heap ~81 KB). Weather backs off 5 min after a failed fetch (Open-Meteo
+  was down for a while on 2026-11-20 and each try stalled the show 4 s).
+- **QR screen (0.9.0):** white `http://<ip>` code, panel in fast scan (2-bit, 651 Hz) while it's up. All 4 test styles
+  scanned with the Pixel camera on 0.8.4. S1 press = show address, press again = back to the show.
+- 0.8.2: animated WEBP from the card page (own frame splitter; `ImageDecoder` is https-only).
+- Effects, weather, clock, countdown, full-color `.pjm`, night mode, packs, family vault: see PROJECT-NOTES.md.
+
+## Card 1 test show (left on for the user to judge)
+- `01.pjm`, weather Fayetteville AR + forecast (8 s each), Christmas countdown `lead=40` (shows), a red
+  "HIDDEN TEST" countdown `lead=10` (must NOT show until Dec 15). Replace via the page when done.
 
 ## Verified pins (HD-WF2)
-- HUB75: R1 2, G1 6, B1 10, R2 3, G2 7, B2 11, A 39, B 38, C 37, D 36, E 21, LAT 33, OE 35, CLK 34.
-- S1 button: GPIO17.
-
-## Panel setup (same on every card)
-- ESP32-HUB75-MatrixPanel-DMA 3.1.0, `cfg.driver = DP3246`, default 60 Hz; after `begin()` `GPIO.func_out_sel_cfg[CLK].inv_sel = 0`.
-- `panelRegInit()`: LAT 12 = REG1, LAT 13 = REG2 (FM6126A values), LAT 11 = all ones, LAT 14 = 0x0100. FM6124C ignores them.
+- HUB75: R1 2, G1 6, B1 10, R2 3, G2 7, B2 11, A 39, B 38, C 37, D 36, E 21, LAT 33, OE 35, CLK 34. S1: GPIO17.
 
 ## Key decisions
-- One firmware and one panel setup for every card (no per-chip detection).
-- Card stores GIF or JPEG frames, never WEBP (no small decoder, RAM). WEBP is an input format only.
-- Private content = encrypted packs on public Pages, unlocked by a family code. Never write a family code into this repo.
-- Build with `--build-property upload.maximum_size=1835008` (app is 1.34 MB now; the default 1.25 MB check fails
-  the build and silently keeps the old .bin).
+- Card = display engine; the website = the app (loaded by the card's starter page). No bridge/popups (tested,
+  failed in Chrome), no direct https→card calls (blocked).
+- Fast-scan screens must use `CF()` colors only (library LUT is 8-bit; at runtime 2-bit only its low 2 bits count).
+- One firmware and one panel setup for every card. Card stores GIF/JPEG frames, never WEBP.
+- Private content = encrypted packs, unlocked by a family code. Never write a family code into this repo.
+- Build with `--build-property upload.maximum_size=1835008` (app is 1.37 MB).
+- Test uploads with curl: `-H "Content-Type: text/plain"` for /api/show (form type = empty show), then POST /api/play.
 
-## Active: QR test on 0.8.4
-- User scans styles 1-4 (S1 steps them): is white as good as green, and does the plain http link ever scan?
-  Then keep one style and drop the rest. Many S1 presses also check that panel restarts don't leak.
-
-## Next (proposed structure)
-- Card = display engine: modules (panel incl. fast scan, layers, screens, scheduler, storage, net/API v1),
-  `show.json`, rescue page in firmware. App = card's `/` is a tiny shell that loads the app's JS/CSS from
-  GitHub Pages (https script in an http page is allowed; API calls stay same-origin; falls back to the built-in
-  rescue page with no internet). QR → go.html → http://<ip> → app. No bridge, no popups, any browser.
-- Then: reminders ("start N days before", yearly), 5-day forecast (same Open-Meteo call), news, Improv, card 2.
-- Still unjudged on the panel: full color, night mode, weather look.
+## Next (1.0 plan)
+1. User judges on card 1: forecast screen look, reminder, QR screen. Still unjudged: full color, night mode.
+2. Page: forecast preview (JS copy of `playForecast`), a "Reminders" quick-add (name + date + days before).
+3. Firmware restructure into modules (panel / player / show+schedule / net+api) with headers, no behavior change.
+4. Improv WiFi in the installer, news headlines item, update card 2 (and the other 13 cards) to 1.0.
