@@ -1,6 +1,16 @@
-// Pocket Jumbotron firmware - GIF player.
-// Plays every GIF in /gifs on LittleFS, in name order, with gamma correction and a brightness cap.
-// Board: Huidu HD-WF2 (ESP32-S3, 8 MB flash, no PSRAM), one 128x64 1/32-scan HUB75E panel.
+// Pocket Jumbotron firmware. Board: Huidu HD-WF2 (ESP32-S3, 8 MB flash, no PSRAM), one 128x64 1/32-scan
+// HUB75E panel. Arduino joins the .ino files into one program: this file first, then the others in name order,
+// so shared types, globals and includes live here. One file per job:
+//   pocket_jumbotron.ino  config, shared state, setup(), loop(), S1 button
+//   canvas.ino    drawing helpers (canvas text, fonts, pixels, panel text colors)
+//   effects.ino   effects library (snow, fireworks, fire...) and effect-only items
+//   net.ino       WiFi, settings (NVS), hotspot setup mode, address/QR screen
+//   panel.ino     panel driver setup: chip registers, fast scan (QR), restart
+//   player.ino    GIF and full-color .pjm players, canvas push
+//   screens.ino   text, clock and countdown items
+//   show.ino      the show list (/show.txt format), schedule, time and night mode
+//   weather.ino   weather and 5-day forecast (Open-Meteo)
+//   web.ino       web API, the starter page that loads the app, built-in app at /local
 #include <LittleFS.h>
 #include <AnimatedGIF.h>
 #include <JPEGDEC.h>
@@ -10,6 +20,11 @@
 #include "soc/gpio_struct.h"
 #include "driver/gpio.h"
 #include "intro_gif.h"
+#include <time.h>
+#include <HTTPClient.h>
+#include <Fonts/FreeSansBold12pt7b.h>
+#include <Fonts/FreeSansBold18pt7b.h>
+#include <Fonts/FreeSansBold24pt7b.h>
 
 // ---- Hardware (confirmed on WF2 V7.2, see PROJECT-NOTES.md) ----
 static const HUB75_I2S_CFG::i2s_pins PINS = {
@@ -19,7 +34,7 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "0.9.2";
+static const char *FW_VERSION = "0.9.3";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
@@ -64,205 +79,21 @@ struct ShowItem {
 };
 std::vector<ShowItem> playlist;
 struct Flake { int16_t x, y; uint8_t spd, bri; };   // effect particles (show.ino)
+// Effect names in show lines (show.ino); index = ShowItem.effect.
+const char *const FX_NAMES[] = {"none", "snow", "sparkle", "hearts", "confetti", "fireworks", "stars", "fire", "matrix"};
+enum { FX_NONE, FX_SNOW, FX_SPARKLE, FX_HEARTS, FX_CONFETTI, FX_FIREWORKS, FX_STARS, FX_FIRE, FX_MATRIX, FX_COUNT };
 // ---------- Settings: time zone + night mode (NVS, see net.ino settingsLoad) ----------
 String tzString = "UTC0";
 int8_t nightFrom = -1, nightTo = -1;          // hours 0-23; -1 = night mode off
 uint8_t nightLevel = 0;                        // % of normal brightness at night (0 = dark)
 bool nightNow = false;
 
-
-// ---- AnimatedGIF file callbacks (stream from LittleFS) ----
-static File gifFile;
-void *gifOpen(const char *name, int32_t *size) {
-  gifFile = LittleFS.open(name, "r");
-  if (!gifFile) return nullptr;
-  *size = gifFile.size();
-  return &gifFile;
-}
-void gifClose(void *h) { if (h) static_cast<File *>(h)->close(); }
-int32_t gifRead(GIFFILE *f, uint8_t *buf, int32_t len) {
-  File *file = static_cast<File *>(f->fHandle);
-  int32_t n = std::min(len, f->iSize - f->iPos);
-  if (n <= 0) return 0;
-  n = file->read(buf, n);
-  f->iPos = file->position();
-  return n;
-}
-int32_t gifSeek(GIFFILE *f, int32_t pos) {
-  File *file = static_cast<File *>(f->fHandle);
-  file->seek(pos);
-  f->iPos = file->position();
-  return f->iPos;
-}
-
-// GIF "disposal" says what to do with a frame's area *after* it has been shown, before the next frame.
-// 2 = clear it to background, 3 = restore what was there before it. We remember the previous frame's
-// rule and apply it when the next frame starts (including when the animation loops back to frame 1).
-struct PendingDisposal { uint8_t method; int x, y, w, h; } pending = {0, 0, 0, 0, 0};
+// Declared here for setup(): the auto-made declarations skip functions with default arguments.
+bool startPanel(bool dbl, bool fast = false);   // panel.ino
+// Player state (player.ino), here because the panel restart (panel.ino) resets it too.
 static PixRow *shown = nullptr;                // what the panel currently shows (single-buffer mode)
 static bool shownValid = false;
 static PixRow *saved = nullptr;                // canvas snapshot for disposal 3 (allocated only if a GIF uses it)
-
-static void fillRect(int x0, int y0, int w, int h, const PixRow *src) {
-  for (int y = std::max(0, y0); y < std::min(H, y0 + h); y++)
-    for (int x = std::max(0, x0); x < std::min(W, x0 + w); x++)
-      for (int c = 0; c < 3; c++) canvas[y][x][c] = src ? src[y][x][c] : 0;
-}
-
-static void beginFrame(GIFDRAW *d) {
-  if (pending.method == 2) fillRect(pending.x, pending.y, pending.w, pending.h, nullptr);
-  else if (pending.method == 3 && saved) fillRect(pending.x, pending.y, pending.w, pending.h, saved);
-  pending = {d->ucDisposalMethod, d->iX + offX, d->iY + offY, d->iWidth, d->iHeight};
-  if (pending.method == 3) { if (!saved) saved = (PixRow *)malloc(CANVAS_BYTES); if (saved) memcpy(saved, canvas, CANVAS_BYTES); }
-}
-
-// Called once per line of each frame: composite into the canvas (skips transparent pixels).
-void gifDraw(GIFDRAW *d) {
-  if (d->y == 0) beginFrame(d);
-  int y = d->iY + d->y + offY;
-  if (y < 0 || y >= H) return;
-  const uint8_t *pal = d->pPalette24;
-  const uint8_t *src = d->pPixels;
-  int x0 = d->iX + offX;
-  for (int i = 0; i < d->iWidth; i++) {
-    uint8_t idx = src[i];
-    if (d->ucHasTransparency && idx == d->ucTransparent) continue;
-    int x = x0 + i;
-    if (x < 0 || x >= W) continue;
-    const uint8_t *c = pal + idx * 3;
-    canvas[y][x][0] = c[0]; canvas[y][x][1] = c[1]; canvas[y][x][2] = c[2];
-  }
-}
-
-// Single-buffered: only pixels that changed since the last push are redrawn, which keeps each update
-// short (less chance of a visible half-drawn frame). "shown" mirrors what the panel displays.
-// RUL6024 config registers, found by experiment on card 2 (no datasheet). A register is written by holding
-// LAT high for the last N clocks of a 128-bit chain; the panel keeps it until power-off.
-//  - N=12/13 with the FM6126A values: smoother dark grays than the library's DP3246 init leaves.
-//  - N=11 all ones: LED current/brightness (Huidu-level bright; the library's value left it dim).
-//  - N=14 = 0x0100: removes the fixed noise in the lower middle-right. Other bits there either do nothing,
-//    make the noise worse, or roughen the gradient.
-// The pins are taken from the LCD peripheral for a moment as plain GPIO, then handed back.
-static void panelRegWrite(const bool reg[16], int latClocks) {
-  const uint8_t steal[] = {PINS.r1, PINS.g1, PINS.b1, PINS.r2, PINS.g2, PINS.b2, PINS.clk, PINS.lat, PINS.oe};
-  const uint8_t data[] = {PINS.r1, PINS.g1, PINS.b1, PINS.r2, PINS.g2, PINS.b2};
-  uint32_t saved[sizeof(steal)];
-  gpio_set_level((gpio_num_t)PINS.oe, 1); gpio_set_level((gpio_num_t)PINS.lat, 0); gpio_set_level((gpio_num_t)PINS.clk, 0);
-  for (int i = 0; i < (int)sizeof(steal); i++) { saved[i] = GPIO.func_out_sel_cfg[steal[i]].val; GPIO.func_out_sel_cfg[steal[i]].val = 0x100; }
-  for (int l = 0; l < W; l++) {
-    for (uint8_t p : data) gpio_set_level((gpio_num_t)p, reg[l % 16]);
-    if (l == W - latClocks) gpio_set_level((gpio_num_t)PINS.lat, 1);
-    gpio_set_level((gpio_num_t)PINS.clk, 1); gpio_set_level((gpio_num_t)PINS.clk, 0);
-  }
-  gpio_set_level((gpio_num_t)PINS.lat, 0);
-  for (uint8_t p : data) gpio_set_level((gpio_num_t)p, 0);
-  gpio_set_level((gpio_num_t)PINS.clk, 1); gpio_set_level((gpio_num_t)PINS.clk, 0);
-  for (int i = 0; i < (int)sizeof(steal); i++) GPIO.func_out_sel_cfg[steal[i]].val = saved[i];
-}
-void panelRegInit() {
-  static const bool REG1[16] = {0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0};
-  static const bool REG2[16] = {0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0};
-  static const bool GAIN[16] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
-  static const bool R14[16]  = {0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0};   // 0x0100, MSB first
-  panelRegWrite(REG1, 12);
-  panelRegWrite(REG2, 13);
-  panelRegWrite(GAIN, 11);
-  panelRegWrite(R14, 14);
-}
-
-void pushCanvas() {
-  if (doubleBuffered || !shown || !shownValid) {
-    for (int y = 0; y < H; y++)
-      for (int x = 0; x < W; x++)
-        panel->drawPixelRGB888(x, y, gammaLut[canvas[y][x][0]], gammaLut[canvas[y][x][1]], gammaLut[canvas[y][x][2]]);
-    if (doubleBuffered) panel->flipDMABuffer();
-    if (shown) { memcpy(shown, canvas, CANVAS_BYTES); shownValid = true; }
-    return;
-  }
-  for (int y = 0; y < H; y++)
-    for (int x = 0; x < W; x++) {
-      uint8_t *c = canvas[y][x], *o = shown[y][x];
-      if (c[0] == o[0] && c[1] == o[1] && c[2] == o[2]) continue;
-      panel->drawPixelRGB888(x, y, gammaLut[c[0]], gammaLut[c[1]], gammaLut[c[2]]);
-      o[0] = c[0]; o[1] = c[1]; o[2] = c[2];
-    }
-}
-
-void showMessage(const char *line1, const char *line2) {
-  panel->clearScreen();
-  panel->setTextColor(panel->color565(255, 190, 60));
-  panel->setCursor(2, 20); panel->print(line1);
-  panel->setTextColor(panel->color565(90, 200, 255));
-  panel->setCursor(2, 34); panel->print(line2);
-  if (doubleBuffered) panel->flipDMABuffer();
-}
-
-bool playerAlloc() {
-  if (!gifp) { gifp = new AnimatedGIF(); gifp->begin(GIF_PALETTE_RGB888); }
-  if (!canvas) canvas = (PixRow *)calloc(1, CANVAS_BYTES);
-  if (!doubleBuffered && !shown) shown = (PixRow *)calloc(1, CANVAS_BYTES);
-  shownValid = false;
-  return gifp && canvas;
-}
-void playerFree() {
-  delete gifp; gifp = nullptr;
-  free(canvas); canvas = nullptr;
-  free(saved); saved = nullptr;
-  free(shown); shown = nullptr;
-}
-
-// Fast scan (QR screen): the panel normally sends 8 bit planes per row, so a phone camera's rolling shutter
-// catches bands. A QR code is black and white, so the address screen restarts the panel at 2-bit color,
-// which refreshes about 10x faster, and goes back to full color after.
-// The library never frees its GDMA channel on delete, so we free it ourselves (members reached through the
-// standard explicit-instantiation access trick; no library edits, CI uses the stock library).
-#include "esp_private/gdma.h"
-template <typename Tag, typename Tag::type M> struct Reach { friend typename Tag::type get(Tag) { return M; } };
-struct BusTag  { typedef Bus_Parallel16 MatrixPanel_I2S_DMA::*type; friend type get(BusTag); };
-struct ChanTag { typedef gdma_channel_handle_t Bus_Parallel16::*type; friend type get(ChanTag); };
-template struct Reach<BusTag, &MatrixPanel_I2S_DMA::dma_bus>;
-template struct Reach<ChanTag, &Bus_Parallel16::dma_chan>;
-bool panelFast = false;
-static void panelStop() {
-  panel->stopDMAoutput();
-  gdma_channel_handle_t ch = (panel->*get(BusTag())).*get(ChanTag());
-  if (ch) { gdma_disconnect(ch); gdma_del_channel(ch); }
-  delete panel; panel = nullptr;
-}
-
-bool startPanel(bool dbl, bool fast = false) {
-  HUB75_I2S_CFG cfg(W, H, 1, PINS);
-  if (fast) { cfg.setPixelColorDepthBits(2); cfg.min_refresh_rate = 300; }
-  // One setup for both panel types the cards came with (FM6124C and RUL6024), tested 2026-11-18:
-  // the library's DP3246 mode gives the 3-clock latch the RUL6024 needs, but it also inverts the clock,
-  // which shifts the RUL6024 image one column and misaligns the FM6124C's two halves. So after begin()
-  // the clock pin goes back to the original edge (the library applies the inversion in the GPIO matrix).
-  cfg.driver = HUB75_I2S_CFG::DP3246;
-  cfg.double_buff = dbl;
-  panel = new MatrixPanel_I2S_DMA(cfg);
-  if (panel->begin()) {
-    GPIO.func_out_sel_cfg[PINS.clk].inv_sel = 0;
-    doubleBuffered = dbl;
-    panelFast = fast;
-    return true;
-  }
-  delete panel; panel = nullptr;                    // (its DMA channel may never have been set up)
-  return false;
-}
-// Switches between full color and fast scan. If the panel can't restart, the card reboots.
-void panelSetFast(bool on) {
-  if (!panel || on == panelFast) return;
-  bool dbl = doubleBuffered;
-  uint32_t t = millis();
-  panelStop();
-  if (!startPanel(dbl, on) && !startPanel(false, on)) { Serial.println("Panel restart failed, rebooting"); ESP.restart(); }
-  panelRegInit();
-  applyBrightness();
-  panel->clearScreen();
-  shownValid = false;
-  Serial.printf("Panel %s: %d Hz (%u ms), free heap %u\n", on ? "fast scan" : "full color",
-                panel->calculated_refresh_rate, (unsigned)(millis() - t), (unsigned)ESP.getFreeHeap());
-}
 
 void setup() {
   Serial.begin(115200);
@@ -292,69 +123,6 @@ void setup() {
   playIntro();
   if (playlist.empty()) showMessage("POCKET", "JUMBOTRON");
   netBegin();
-}
-
-// Plays one GIF. sec 0: loops short ones to 8 s, cuts long ones at ~20 s. sec > 0: exactly that long.
-void playOne(const String &name, uint16_t sec) {
-  if (!gif.open(name.c_str(), gifOpen, gifClose, gifRead, gifSeek, gifDraw)) {
-    Serial.printf("  can't open %s (err %d)\n", name.c_str(), gif.getLastError());
-    return;
-  }
-  playing = true;
-  offX = (W - gif.getCanvasWidth()) / 2;
-  offY = (H - gif.getCanvasHeight()) / 2;
-  memset(canvas, 0, CANVAS_BYTES);
-  pending.method = 0;
-  shownValid = false;                            // other screens may have been drawn since
-  uint32_t start = millis(), frames = 0, loops = 0;
-  for (;;) {
-    uint32_t t0 = millis();
-    int delayMs = 0;
-    int more = gif.playFrame(false, &delayMs);
-    pushCanvas();
-    frames++;
-    if (delayMs < 20) delayMs = 100;            // GIFs with 0 delay: browsers use ~100 ms
-    int32_t wait = delayMs - (int32_t)(millis() - t0);
-    if (wait > 0 && waitMs(wait)) break;        // button / phone / address screen interrupts
-    if (buttonAction || holdPlayback || addrUntil) break;
-    if (sec && millis() - start >= sec * 1000UL) break;
-    if (more <= 0) {                             // end of one loop
-      loops++;
-      uint32_t elapsed = millis() - start;
-      if (more < 0 || (!sec && elapsed >= MIN_SHOW_MS)) break;
-      gif.reset();
-      memset(canvas, 0, CANVAS_BYTES);       // each loop starts from a blank screen, like browsers do
-      pending.method = 0;
-    } else if (!sec && millis() - start > MAX_SHOW_MS && loops > 0) break;
-    if (!sec && millis() - start > MAX_SHOW_MS * 2) break;  // very long single loop: hard stop
-  }
-  uint32_t ms = millis() - start;
-  Serial.printf("  %-36s %3dx%-3d %4u frames %2u loops %5.1f fps\n", name.c_str(), gif.getCanvasWidth(), gif.getCanvasHeight(),
-                (unsigned)frames, (unsigned)loops, frames * 1000.0f / (ms ? ms : 1));
-  gif.close();
-  playing = false;
-  if (saved) { free(saved); saved = nullptr; }
-}
-
-// Startup screen: the "POCKET JUMBOTRON" arcade marquee, built into the firmware (intro_gif.h), two loops
-// (~5 s). A button press skips it.
-void playIntro() {
-  if (!gif.open((uint8_t *)INTRO_GIF, INTRO_GIF_LEN, gifDraw)) return;
-  offX = (W - gif.getCanvasWidth()) / 2;
-  offY = (H - gif.getCanvasHeight()) / 2;
-  memset(canvas, 0, CANVAS_BYTES);
-  pending.method = 0;
-  shownValid = false;
-  for (int loops = 0; loops < 2;) {
-    uint32_t t0 = millis();
-    int delayMs = 0;
-    if (gif.playFrame(false, &delayMs) <= 0) { loops++; gif.reset(); memset(canvas, 0, CANVAS_BYTES); pending.method = 0; }
-    pushCanvas();
-    if (delayMs < 20) delayMs = 100;
-    while ((int32_t)(millis() - t0) < delayMs) { if (digitalRead(BUTTON_PIN) == LOW) loops = 2; delay(2); }
-  }
-  gif.close();
-  while (digitalRead(BUTTON_PIN) == LOW) delay(5);   // don't count the skip press as a button action
 }
 
 // ---- S1 button: short press = show the web address, hold 2 s = WiFi setup hotspot ----

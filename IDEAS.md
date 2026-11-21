@@ -38,4 +38,7 @@ Phone OTG install dropped (no iPhone path). Options: borrow any Chrome/Edge comp
 3 boards ordered (N32R16, microSD, ES8311 audio, USB-C; no speaker included, so a 4–8 Ω speaker is needed). Idea: MJPEG video + audio from SD. Confirm it drives a 128x64 panel (2x 64x64 chained). Don't mix assumptions with the WF2 (it has no PSRAM). Distribute only your own family video, not commercial specials.
 
 ## Parking Lot
-- 
+- Colorful weather icons: hand-drawn pixel-art sprites (24x24 big + 12x12 forecast, shaded sun with glow, layered
+  clouds, colored drops/flakes, lightning), 2-4 animation frames each, stored as RGB565 arrays in flash (~1 KB per
+  frame). Draw them in a tool that also renders the page preview from the same data; judge on the panel with an
+  "icon test" item that shows them all. Our own art only (no copied icon sets). 
