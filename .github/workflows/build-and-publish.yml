@@ -68,7 +68,7 @@ jobs:
       - name: Build install image
         run: node tools/build-install.mjs private-content
 
-      - name: News + market feeds (the cards read these over HTTPS)
+      - name: Market feeds (the cards read these over HTTPS)
         run: node tools/build-feeds.mjs
 
       - name: Build picture packs

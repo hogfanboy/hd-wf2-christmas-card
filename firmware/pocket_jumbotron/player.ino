@@ -123,7 +123,7 @@ void playOne(const String &name, uint16_t sec) {
     frames++;
     if (delayMs < 20) delayMs = 100;            // GIFs with 0 delay: browsers use ~100 ms
     int32_t wait = delayMs - (int32_t)(millis() - t0);
-    if (wait > 0 && waitMs(wait)) break;        // button / phone / address screen interrupts
+    if (waitMs(wait > 0 ? wait : 0)) break;        // button / phone / address screen interrupts
     if (buttonAction || holdPlayback || addrUntil) break;
     if (sec && millis() - start >= sec * 1000UL) break;
     if (more <= 0) {                             // end of one loop
@@ -236,7 +236,7 @@ void playPjm(const ShowItem &it) {
     if (!limit && el > MAX_SHOW_MS && loops > 0) break;
     if (!limit && el > MAX_SHOW_MS * 2) break;
     int32_t wait = delayMs - (int32_t)(millis() - t0);
-    if (wait > 0 && waitMs(wait)) break;
+    if (waitMs(wait > 0 ? wait : 0)) break;
     if (buttonAction || holdPlayback || addrUntil) break;
   }
   uint32_t ms = millis() - start;

@@ -27,7 +27,7 @@ build the firmware and publish `docs/` (website + online installer) to GitHub Pa
 - `web/` pages served by the card (`index.html`, `wifi.html`); `node tools/build-web.mjs` regenerates `web_index.h` (run after editing `web/`, then recompile).
 - Picture packs: the pictures live in the private repo hogfanboy/pocket-jumbotron-content (cloned at `../pocket-jumbotron-content`); CI runs `tools/build-packs.mjs private-content` to publish them to `docs/packs/`. Keep `content/` here empty: never commit pictures to this public repo.
 - `docs/` website + `install.html` (browser USB installer); `docs/firmware/` is built by `node tools/build-install.mjs` (CI does this).
-- Other `firmware/*` folders are one-off panel probes/tests.
+- `firmware/probes/`: one-off panel probes/tests.
 
 ## Build (Arduino CLI, same toolchain as CI: esp32 core 3.3.13, HUB75 DMA 3.1.0)
 ```bash

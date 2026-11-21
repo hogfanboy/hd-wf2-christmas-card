@@ -1,10 +1,32 @@
 // Web API for the app, the starter page that loads the app from the website, and the built-in app (/local).
 
 // ---------- Common HTTP helpers ----------
-static void touch() {
+// Only the card's own page may use the API. Any website the owner visits could otherwise make their browser POST
+// to the card (wipe the show, flash firmware): browsers send such posts without asking. The page runs on the
+// card's address, so its posts carry Origin = Host. Tools (curl, node) send no Origin and are fine. The Host
+// check stops DNS rebinding (an attacker's name pointed at the card's IP): Host must be an IP or the card's name.
+static bool fromOwnPage() {
+  if (portalActive) return true;                   // hotspot: no internet, only the setup page can reach it
+  String host = web->hostHeader();
+  int colon = host.lastIndexOf(':');
+  if (colon > 0 && host[0] != '[') host = host.substring(0, colon);
+  host.toLowerCase();
+  bool ip = host.length() > 0;
+  for (char c : host) if (!isdigit(c) && c != '.') ip = false;
+  if (!ip && host[0] != '[' && !host.startsWith(hostName)) return false;
+  if (web->method() != HTTP_POST || !web->hasHeader("Origin")) return true;
+  String o = web->header("Origin"); o.toLowerCase();
+  return o == "http://" + host || o.startsWith("http://" + host + ":");
+}
+static bool touch() {
   lastActivity = millis();
   Serial.printf("HTTP %s %s\n", web->method() == HTTP_POST ? "POST" : "GET", web->uri().c_str());
+  if (fromOwnPage()) return true;
+  Serial.printf("  refused: Host %s, Origin %s\n", web->hostHeader().c_str(), web->header("Origin").c_str());
+  web->send(403, "text/plain", "only the card's own page can do this");
+  return false;
 }
+static String jsonEsc(String s) { s.replace("\\", "\\\\"); s.replace("\"", "\\\""); return s; }
 static void sendJson(const String &s) { web->send(200, "application/json", s); }
 static void sendPage(const uint8_t *gz, size_t len) {
   web->sendHeader("Content-Encoding", "gzip");
@@ -13,7 +35,7 @@ static void sendPage(const uint8_t *gz, size_t len) {
 }
 
 // ---------- Home-WiFi page + API ----------
-static void handleIndex() { touch(); sendPage(WEB_INDEX_GZ, WEB_INDEX_GZ_LEN); }
+static void handleIndex() { if (!touch()) return; sendPage(WEB_INDEX_GZ, WEB_INDEX_GZ_LEN); }
 
 static int countPictures() {
   int n = 0;
@@ -22,21 +44,21 @@ static int countPictures() {
   return n;
 }
 static void handleInfo() {
-  touch();
+  if (!touch()) return;
   char buf[600];
   snprintf(buf, sizeof(buf), "{\"api\":1,\"fw\":\"%s\",\"name\":\"%s\",\"total\":%u,\"used\":%u,\"files\":%d,\"items\":%u,\"brightness\":%u,\"heap\":%u,"
            "\"tz\":\"%s\",\"nightFrom\":%d,\"nightTo\":%d,\"nightLevel\":%u,\"night\":%s,\"time\":%lu,\"place\":\"%s\",\"tzAuto\":%s,\"autoUpdate\":%s,\"theme\":%u}",
            FW_VERSION, hostName.c_str(), (unsigned)LittleFS.totalBytes(), (unsigned)LittleFS.usedBytes(), countPictures(),
-           (unsigned)playlist.size(), brightnessPct, (unsigned)ESP.getFreeHeap(), tzString.c_str(), nightFrom, nightTo, nightLevel,
+           (unsigned)playlist.size(), brightnessPct, (unsigned)ESP.getFreeHeap(), jsonEsc(tzString).c_str(), nightFrom, nightTo, nightLevel,
            nightNow ? "true" : "false", timeValid() ? (unsigned long)time(nullptr) : 0UL,
-           geoOk ? geoCity.substring(0, 40).c_str() : "", tzAuto ? "true" : "false", autoUpdate ? "true" : "false", themeIx);
+           geoOk ? jsonEsc(geoCity.substring(0, 40)).c_str() : "", tzAuto ? "true" : "false", autoUpdate ? "true" : "false", themeIx);
   sendJson(buf);
 }
 
 // "Replace everything": stop playing, then wipe all pictures. While a GIF is still open the phone is
 // told to retry in a moment (the player closes it within one frame).
 static void handleClear() {
-  touch();
+  if (!touch()) return;
   holdPlayback = true;
   if (playing) { web->send(503, "text/plain", "busy"); return; }
   std::vector<String> names;
@@ -56,18 +78,21 @@ static void handleClear() {
   sendJson("{\"ok\":true}");
 }
 
+static String upPath;                              // file being received (removed again if it fails)
 static void handleUploadData() {
   lastActivity = millis();
   HTTPUpload &up = web->upload();
   if (up.status == UPLOAD_FILE_START) {
     upError = "";
+    if (!fromOwnPage()) { upError = "refused"; return; }
     if (!holdPlayback || playing) { upError = "not ready"; return; }
     String name = up.filename;
     name.replace("/", ""); name.replace("\\", "");
     String low = name; low.toLowerCase();
     if (!low.endsWith(".gif") && !low.endsWith(".pjm")) name += ".gif";
     upFree = LittleFS.totalBytes() - LittleFS.usedBytes();
-    upFile = LittleFS.open("/gifs/" + name, "w");
+    upPath = "/gifs/" + name;
+    upFile = LittleFS.open(upPath, "w");
     if (!upFile) upError = "can't create file";
     char st[24]; snprintf(st, sizeof(st), "Receiving #%d", ++upCount);
     panel->clearScreen();
@@ -79,17 +104,19 @@ static void handleUploadData() {
   } else if (up.status == UPLOAD_FILE_END || up.status == UPLOAD_FILE_ABORTED) {
     if (upFile) upFile.close();
     if (up.status == UPLOAD_FILE_ABORTED) upError = "upload interrupted";
+    if (upError.length() && upPath.length()) LittleFS.remove(upPath);   // no half pictures left taking up space
+    upPath = "";
     Serial.printf("Upload %s: %u bytes %s\n", up.filename.c_str(), (unsigned)up.totalSize, upError.c_str());
   }
 }
 static void handleUploadDone() {
-  touch();
+  if (!touch()) return;
   if (upError.length()) web->send(500, "text/plain", upError);
   else sendJson("{\"ok\":true}");
 }
 
 static void handlePlay() {
-  touch();
+  if (!touch()) return;
   loadPlaylist();
   playIdx = 0;
   holdPlayback = false;
@@ -100,7 +127,7 @@ static void handlePlay() {
 
 // The show list (see show.ino), sent as plain text after the pictures.
 static void handleShowGet() {
-  touch();
+  if (!touch()) return;
   File f = LittleFS.open("/show.txt", "r");
   if (!f) {                                        // older content: every picture, automatic timing
     String s;
@@ -113,7 +140,7 @@ static void handleShowGet() {
 }
 // One stored picture, so the page can load the current show back for editing.
 static void handleFileGet() {
-  touch();
+  if (!touch()) return;
   String n = web->arg("name");
   if (n.indexOf('/') >= 0 || n.indexOf('\\') >= 0 || n.isEmpty()) { web->send(400, "text/plain", "bad name"); return; }
   File f = LittleFS.open("/gifs/" + n, "r");
@@ -122,7 +149,7 @@ static void handleFileGet() {
   f.close();
 }
 static void handleShowPost() {
-  touch();
+  if (!touch()) return;
   String body = web->arg("plain");
   if (body.length() > 16000) { web->send(400, "text/plain", "show too long"); return; }
   File f = LittleFS.open("/show.txt", "w");
@@ -133,7 +160,7 @@ static void handleShowPost() {
 
 // Time zone (POSIX TZ string from the page) and night mode hours.
 static void handleSettings() {
-  touch();
+  if (!touch()) return;
   if (web->arg("tz") == "auto") {                // back to the zone from the card's location (old pages saved the phone's)
     prefs.remove("tz"); tzAuto = true;
     if (geoTz.length()) { tzString = geoTz; timeBegin(); }
@@ -149,7 +176,7 @@ static void handleSettings() {
 }
 
 static void handleBrightness() {
-  touch();
+  if (!touch()) return;
   brightnessPct = constrain((int)web->arg("v").toInt(), 10, 100);
   prefs.putUChar("bright", brightnessPct);
   applyBrightness();
@@ -162,27 +189,28 @@ static void handleUpdateData() {
   HTTPUpload &up = web->upload();
   if (up.status == UPLOAD_FILE_START) {
     upError = "";
+    if (!fromOwnPage()) { upError = "refused"; return; }
     holdPlayback = true;
     Serial.printf("Firmware update: %s\n", up.filename.c_str());
     if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) upError = Update.errorString();
   } else if (up.status == UPLOAD_FILE_WRITE && !upError.length()) {
-    if (Update.write(up.buf, up.currentSize) != up.currentSize) upError = Update.errorString();
+    if (Update.write(up.buf, up.currentSize) != up.currentSize) { upError = Update.errorString(); Update.abort(); }
   } else if (up.status == UPLOAD_FILE_END) {
     if (!upError.length() && !Update.end(true)) upError = Update.errorString();
   } else if (up.status == UPLOAD_FILE_ABORTED) {
-    Update.abort();
+    if (Update.isRunning()) Update.abort();
     upError = "upload interrupted";
   }
 }
 static void handleUpdateDone() {
-  touch();
+  if (!touch()) return;
   if (upError.length()) { holdPlayback = false; web->send(500, "text/plain", upError); return; }
   sendJson("{\"ok\":true}");
   restartRequested = true;
 }
 
 static void handleForgetWifi() {
-  touch();
+  if (!touch()) return;
   prefs.remove("ssid"); prefs.remove("pass");
   sendJson("{\"ok\":true}");
   restartRequested = true;
@@ -209,13 +237,13 @@ static const char SHELL_HTML[] PROGMEM = R"HTML(<!doctype html><html><head><meta
 // Browser tab icon (same as docs/favicon.svg). Chrome asks every site for /favicon.ico; a 404 = the gray globe.
 static const char FAVICON_SVG[] PROGMEM = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='1' y='2' width='30' height='28' rx='5' fill='#0d0d14' stroke='#c8202f' stroke-width='2.5'/><path fill='#ffbe3c' d='M4 7.25h3.5v3.5h-3.5zM7.5 7.25h3.5v3.5h-3.5zM11 7.25h3.5v3.5h-3.5zM4 10.75h3.5v3.5h-3.5zM11 10.75h3.5v3.5h-3.5zM4 14.25h3.5v3.5h-3.5zM7.5 14.25h3.5v3.5h-3.5zM11 14.25h3.5v3.5h-3.5zM4 17.75h3.5v3.5h-3.5zM4 21.25h3.5v3.5h-3.5z'/><path fill='#4cc3ff' d='M17.5 7.25h3.5v3.5h-3.5zM21 7.25h3.5v3.5h-3.5zM24.5 7.25h3.5v3.5h-3.5zM24.5 10.75h3.5v3.5h-3.5zM24.5 14.25h3.5v3.5h-3.5zM17.5 17.75h3.5v3.5h-3.5zM24.5 17.75h3.5v3.5h-3.5zM21 21.25h3.5v3.5h-3.5z'/></svg>";
 static void handleFavicon() { web->sendHeader("Cache-Control", "max-age=604800"); web->send_P(200, "image/svg+xml", FAVICON_SVG); }
-static void handleShell() { touch(); web->sendHeader("Cache-Control", "no-store"); web->send_P(200, "text/html", SHELL_HTML); }
+static void handleShell() { if (!touch()) return; web->sendHeader("Cache-Control", "no-store"); web->send_P(200, "text/html", SHELL_HTML); }
 
 static void startHomeWeb() {
   web = new WebServer(80);
   web->on("/", HTTP_GET, handleShell);
-  web->on("/local", HTTP_GET, handleIndex);
-  web->on("/favicon.ico", HTTP_GET, handleFavicon);       // built-in copy of the app (no internet)
+  web->on("/local", HTTP_GET, handleIndex);              // built-in copy of the app (no internet)
+  web->on("/favicon.ico", HTTP_GET, handleFavicon);
   web->on("/api/info", HTTP_GET, handleInfo);
   web->on("/api/clear", HTTP_POST, handleClear);
   web->on("/api/upload", HTTP_POST, handleUploadDone, handleUploadData);
@@ -224,7 +252,7 @@ static void startHomeWeb() {
   web->on("/api/update", HTTP_POST, handleUpdateDone, handleUpdateData);
   // QR probe: show the address screen for 60 s in fast scan with this many color bits (2-6), to test phone cameras.
   web->on("/api/qr", HTTP_POST, []() {
-    touch();
+    if (!touch()) return;
     uint8_t b = constrain((int)web->arg("bits").toInt(), 2, 6);
     if (panelFast && b != fastBits) panelSetFast(false);
     fastBits = b; addrHoldMs = 60000; addrUntil = 0; buttonAction = BTN_SHORT;
@@ -232,18 +260,20 @@ static void startHomeWeb() {
   });
   // Forecast probe: jump to the first weather item and show only its forecast in layout s (0-3) for 60 s.
   web->on("/api/fcprobe", HTTP_POST, []() {
-    touch();
+    if (!touch()) return;
     fcStyle = constrain((int)web->arg("s").toInt(), 0, 3); fcProbeUntil = millis() + 60000;
     for (size_t i = 0; i < playOrder.size(); i++) if (playlist[playOrder[i]].type == 'w') { playIdx = i; skipItem = true; break; }
     sendJson("{\"ok\":true}");
   });
-  web->on("/api/update-site", HTTP_POST, []() { touch(); updateNow = true; sendJson("{\"ok\":true}"); });   // card fetches it itself
+  web->on("/api/update-site", HTTP_POST, []() { if (!touch()) return; updateNow = true; sendJson("{\"ok\":true}"); });   // card fetches it itself
   web->on("/api/forget-wifi", HTTP_POST, handleForgetWifi);
   web->on("/api/show", HTTP_GET, handleShowGet);
   web->on("/api/show", HTTP_POST, handleShowPost);
   web->on("/api/settings", HTTP_POST, handleSettings);
   web->on("/api/file", HTTP_GET, handleFileGet);
   web->onNotFound([]() { web->send(404, "text/plain", "not found"); });
+  static const char *HDRS[] = {"Origin"};
+  web->collectHeaders(HDRS, 1);                           // for fromOwnPage()
   web->begin();
   MDNS.begin(hostName.c_str());
   MDNS.addService("http", "tcp", 80);

@@ -37,7 +37,7 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "1.0.0-beta5";
+static const char *FW_VERSION = "1.0.0-beta6";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
@@ -155,16 +155,17 @@ void pollButton() {
   else if (!pressed && down) { down = false; if (!longFired && now - downAt >= 40) buttonAction = BTN_SHORT; }
 }
 // Waits up to ms while serving the network and watching the button.
-// Returns true if something should interrupt the current picture.
+// Returns true if something should interrupt the current picture. Always serves at least once, so a GIF whose
+// frames take longer to draw than their delay can't starve the web page and the button.
 bool waitMs(uint32_t ms) {
   uint32_t end = millis() + ms;
-  while ((int32_t)(end - millis()) > 0) {
+  do {
     pollButton();
     netService();
     checkNight();
     if (buttonAction != BTN_NONE || holdPlayback || addrUntil || skipItem) return true;
-    delay(3);
-  }
+    if ((int32_t)(end - millis()) > 0) delay(3);
+  } while ((int32_t)(end - millis()) > 0);
   return false;
 }
 

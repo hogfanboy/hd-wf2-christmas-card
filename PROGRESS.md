@@ -1,6 +1,9 @@
 # PROGRESS
 
-## Working state (fw 1.0.0-beta5 on both cards via WiFi, 2026-11-21)
+## Working state (fw 1.0.0-beta6 on card 1, beta5 on card 2, 2026-11-21)
+- **beta6 (review fixes):** other websites can no longer POST to the card (Origin/Host check, 403; tested with curl
+  and the real page in a browser on card 1). Failed uploads delete their half file. The web page and button stay
+  responsive during GIFs whose frames draw slower than their delay. Tab icon on install.html + pack builder.
 - **beta5:** aquarium = fish + bubbles on black (no water/seaweed). Improv WiFi over USB fixed (the page dropped
   all but the first network of the scan burst) + "Set up WiFi only" on install.html for switched cards. Card side
   tested over COM10; the page with a real card (Chrome) not yet. Effects judged good by the user.
@@ -12,7 +15,6 @@
   Alternative offered: shaded disc + beta3's straight breathing rays (not built in).
 - **Shuffle:** page "Play order: In order / 🔀 Shuffle" writes `order<TAB>shuffle` into show.txt; card plays a new
   random order each round, never the same item twice in a row. Tested on the fake card (Send + reload keeps it).
-- **Full color / border trim / GIF choice:** see PROJECT-NOTES "Pictures".
 - **Border trim (beta4 page):** every picture's plain-color border (all 4 corners the same color) is cut off before
   scaling, so small art in a big square fills the screen (01-35-46 "Merry Christmas": 464x227 art in 512x512, now
   full width). Near-black -> black now for GIF too, not only full color. The "bad full color" picture was this.

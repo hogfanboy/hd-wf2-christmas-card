@@ -182,10 +182,10 @@ void showAddress(uint32_t ms) {
 }
 
 // ---------- WiFi setup hotspot page + API ----------
-static void handleWifiPage() { touch(); sendPage(WEB_WIFI_GZ, WEB_WIFI_GZ_LEN); }
-static void handleScan() { touch(); sendJson(scanJson); }
+static void handleWifiPage() { if (!touch()) return; sendPage(WEB_WIFI_GZ, WEB_WIFI_GZ_LEN); }
+static void handleScan() { if (!touch()) return; sendJson(scanJson); }
 static void handleSaveWifi() {
-  touch();
+  if (!touch()) return;
   String ssid = web->arg("ssid"), pass = web->arg("pass");
   if (ssid.isEmpty()) { web->send(400, "text/plain", "pick a network"); return; }
   prefs.putString("ssid", ssid);

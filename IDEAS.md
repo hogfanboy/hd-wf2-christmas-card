@@ -26,7 +26,6 @@ At the end of a session: promote what was built and verified to PROJECT-NOTES.md
 - Explain the Android "Nearby devices" permission in the website help and on the setup screens.
 - **VBUS check**: does the board back-feed the PC port? Mostly moot with the new unplug-the-panel install steps.
 - Dark grays weak at the very dark end at 60 Hz. Color depth A/B (8 vs 10/12-bit). Text-heavy GIF cleanup. People with no home WiFi.
-- Tidy: move the one-off probe sketches into `firmware/probes/`.
 
 ## Owners with no computer
 Phone OTG install dropped (no iPhone path). Options: borrow any Chrome/Edge computer or a Chromebook; mail-in, or mail them a pre-flashed spare WF2 to swap (1 ribbon + 2 power screws). Long shot: Huidu's own WiFi update (LedArt) with a small stage-1 firmware (Huidu app slots are 1 MB, ours is 1.08 MB). Test only on the spare WF2.
