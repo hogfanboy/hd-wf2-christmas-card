@@ -38,10 +38,9 @@ const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * Math.max(0, Math.min(1
 const hex = (n) => [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 const clamp01 = (t) => Math.max(0, Math.min(1, t));
 
-// Sun: glowing disc, gradient from a pale center to deep gold, 8 tapered rays (long/short), rotated by `rot`.
+// Sun (no glow halo: it read as an off-color disc on the panel; LEDs want black around it): disc, gradient from a pale center to deep gold, 8 tapered rays (long/short), rotated by `rot`.
 function sun(S, cx, cy, r, rot) {
-  const core = hex(0xFFF6B0), edge = hex(0xFFB01E), ray = hex(0xFFC22E), glow = hex(0xFF9A20);
-  S.paint((x, y) => { const d = Math.hypot(x - cx, y - cy); return d < r * 1.9 ? [...glow, 0.35 * (1 - clamp01((d - r) / (r * 0.9))) ** 2] : null; });
+  const core = hex(0xFFF6B0), edge = hex(0xFFB01E), ray = hex(0xFFC22E);
   S.paint((x, y) => {
     const dx = x - cx, dy = y - cy, d = Math.hypot(dx, dy);
     const k = 8, seg = (2 * Math.PI) / k;

@@ -11,6 +11,7 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { PIC, byName, readPackMeta } from './pack-meta.mjs';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const win = process.platform === 'win32';
@@ -51,14 +52,14 @@ const fsDir = path.join(build, 'install-fs'), gifs = path.join(fsDir, 'gifs');
 fs.rmSync(fsDir, { recursive: true, force: true });
 run(process.execPath, [path.join(root, 'tools/make-starter.mjs'), gifs]);
 fs.rmSync(path.join(gifs, '04-full-color.gif'), { force: true });     // color test: website pack only
-const PIC = /\.(gif|png|jpe?g|webp)$/i, own = [];
+const own = [];
 for (const src of process.argv.slice(2).map(p => path.resolve(p)).filter(p => fs.existsSync(p))) {
   for (const f of fs.readdirSync(src).sort()) {
     const p = path.join(src, f);
     if (PIC.test(f) && fs.statSync(p).isFile()) own.push(p);
     const meta = path.join(p, 'pack.json');
-    if (fs.statSync(p).isDirectory() && fs.existsSync(meta) && JSON.parse(fs.readFileSync(meta, 'utf8')).install)
-      own.push(...fs.readdirSync(p).filter(x => PIC.test(x)).sort().map(x => path.join(p, x)));
+    if (fs.statSync(p).isDirectory() && fs.existsSync(meta) && readPackMeta(p).install)
+      own.push(...fs.readdirSync(p).filter(x => PIC.test(x)).sort(byName).map(x => path.join(p, x)));
   }
 }
 const before = new Set(fs.readdirSync(gifs));

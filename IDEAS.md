@@ -44,3 +44,7 @@ Phone OTG install dropped (no iPhone path). Options: borrow any Chrome/Edge comp
 - Research: scan GitHub for projects built on the ESP32-HUB75-MatrixPanel-DMA library, and Huidu's HDPlayer feature list, for things worth adding.
 - News: works as designed but adds little (headlines too vague). Explore: a slow bottom-row crawl with longer, more
   detailed lines (like CNN's), under another item; or drop news from this card (may not be a good fit).
+- Test: drop the soft shading around font edges. Looks OK on the big font, muddy on the thin fonts; try crisp
+  edges on thin fonts only (LEDs shine with contrast: black around everything).
+- Pack builder web site (just for me): drag in pictures, set title/cards/order, preview at 128x64, then it commits
+  the folder + pack.json to the private content repo (so no hand-made folders or pack.json typos).

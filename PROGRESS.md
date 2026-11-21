@@ -1,7 +1,10 @@
 # PROGRESS
 
-## Working state (fw 1.0.0-beta1 built + pushed; card 1 on it via WiFi, card 2 gets it by self-update at 3:xx)
-- **1.0.0-beta1 (card 1, heap ~79 KB, one full loop of every new effect with no resets; NOT judged by eye yet):**
+## Working state (fw 1.0.0-beta2 on both cards via WiFi)
+- **1.0.0-beta2:** sun icon has no glow halo (it read as an off-color disc; black around it now). Pack builder is
+  forgiving (any names, no numbering, `title: ...` pack.json); the Christmas2026 pack failed only because the
+  folder had a capital and pack.json was not JSON. Not judged by eye yet.
+- **1.0.0-beta1 (heap ~79 KB, one full loop of every new effect with no resets; NOT judged by eye yet):**
   - **New effects:** Santa's sleigh (2 reindeer, red-nosed lead, glitter trail; full screen at mid height under a
     twinkling sky, behind text along the top), Balloons, Aquarium (fish both ways + bubbles; full screen adds
     seaweed + blue water on a black background), Rain, and "Match the weather" (weather items only: snow/rain when
@@ -19,7 +22,7 @@
   Huidu. No PIN (15-20 family members; anyone on the WiFi can change the show but not hurt the card).
 - 0.9.9 items (themes, QR redesign, readability colors, tz=auto) are on both cards; details in git history.
 - Card 1 (FM6124C): 192.168.50.16 / pocketjumbo-eed0 (PC USB COM10). Card 2 (RUL6024): 192.168.50.199 /
-  pocketjumbo-5df8 (didn't answer at 01:00 on 2026-11-21; maybe unplugged).
+  pocketjumbo-5df8.
 - Everything else (app on the website, schedule, news/stocks, night mode, packs): PROJECT-NOTES.md.
 
 ## Verified pins (HD-WF2)
@@ -38,6 +41,6 @@
 1. **"Effects look good" / "change X"** - run `tools/effects-probe.ps1`, judge sleigh/balloons/aquarium/rain by eye
    (size, speed, colors). Also look at the theme picker on the phone page.
 2. **"Try a phone video"** - add a short phone clip on the page, Send, judge it on the panel.
-3. **"Check card 2"** - confirm it self-updated to 1.0.0-beta1 overnight (`/api/info`), or update it over WiFi.
+3. **"Check the sun + Christmas 2026 pack"** - sun with no halo on the weather screen; pack listed on the page.
 4. **"Test the installer on card 2"** - USB, install.html end to end incl. the Improv WiFi step.
 5. Then 1.0.0 release: promote what's judged OK, ideas: Christmas lights border effect, bigger sleigh scene.
