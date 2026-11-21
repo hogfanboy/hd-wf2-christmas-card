@@ -26,6 +26,8 @@
 #include <Fonts/FreeSansBold12pt7b.h>
 #include <Fonts/FreeSansBold18pt7b.h>
 #include <Fonts/FreeSansBold24pt7b.h>
+#include "pj_font.h"
+#include "wx_icons.h"
 
 // ---- Hardware (confirmed on WF2 V7.2, see PROJECT-NOTES.md) ----
 static const HUB75_I2S_CFG::i2s_pins PINS = {
@@ -35,11 +37,13 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "0.9.7";
+static const char *FW_VERSION = "0.9.8";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
 uint8_t brightnessPct = 100;                   // user setting, saved in NVS
+bool autoUpdate = true;                        // daily update check from the website (online.ino), saved in NVS
+extern bool updateNow;
 // The HUB75 library already applies CIE1931 brightness correction (lumConvTab), so no extra gamma here.
 static const float GAMMA = 1.0f;
 static const uint32_t MIN_SHOW_MS = 8000;     // short GIFs loop until this long
@@ -69,7 +73,7 @@ struct ShowItem {
   String file, text, extra;       // extra: clock 12/24, countdown MM-DD, weather "F,lat,lon"
   uint32_t fg = 0xFFFFFF, bg = 0;
   bool rainbow = false;
-  uint8_t font = 2, effect = 0;   // font: 1 tiny, 2-4 classic S/M/B (canvas.ino). effect: FX_NAMES index
+  uint8_t font = 2, effect = 0;   // font: 1 tiny, 2-4 classic S/M/B, 8-12 PJ (canvas.ino). effect: FX_NAMES index
   // When it plays (show.ino itemActive): yearly date range MMDD (0 = any), weekdays bit 0 = Sunday,
   // hours [hFrom, hTo) (-1 = any), countdown only within `lead` days (-1 = always). forecast: weather + 5 days.
   uint16_t dFrom = 0, dTo = 0;
@@ -167,6 +171,7 @@ void loop() {
     panelSetFast(false);                             // back to full color after the QR screen
     applyBrightness();                               // some QR styles use full panel brightness
   }
+  updateService();                                   // 3 am: newer firmware on the website? (online.ino)
   if (holdPlayback || playlist.empty()) { delay(5); return; }
   if (playIdx >= playlist.size()) playIdx = 0;
   static size_t skipped = 0;                         // items in a row that are off schedule right now

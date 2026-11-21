@@ -144,15 +144,14 @@ static const char *newsTitle(const String &topic) {
 }
 static void newsBar(const char *title, const String &src) {
   cg.rgb(0x1E1E32); cg.fillRect(0, 0, W, 10, 0);
-  setFont(1); cg.setTextSize(1);
-  cg.rgb(0xFFBE3C); cg.setCursor(2, 1); cg.print(title);
+  label(title, 2, 1, 0xFFBE3C);
   String right = src;
   if (timeValid()) {
     time_t t = time(nullptr); struct tm lt; localtime_r(&t, &lt);
     char hm[8]; snprintf(hm, sizeof(hm), "%d:%02d", lt.tm_hour % 12 ? lt.tm_hour % 12 : 12, lt.tm_min);
     right = src + " " + hm;
   }
-  cg.rgb(0x8C8CA0); cg.setCursor(W - 1 - textWidth(right), 1); cg.print(right);
+  label(right, W - 1 - labelW(right), 1, 0x8C8CA0);
 }
 // it.extra = topic (top, world, business, sports, tech, science). sec 0 = three headlines, else that long.
 static void playNews(const ShowItem &it) {
@@ -163,6 +162,7 @@ static void playNews(const ShowItem &it) {
   if (lines.empty()) return;
   static uint16_t next = 0;                      // each pass carries on with the next headlines
   const char *title = newsTitle(it.extra);
+  pjLabels = isPJ(it.font);
   effectInit(it); FxGuard fxg;
   uint32_t total = it.sec * 1000UL, start = millis(), frame = 0;
   shownValid = false;
@@ -209,11 +209,12 @@ static void playStocks(const ShowItem &it) {
     for (auto &l : lines) if (l.startsWith(sym + "\t")) { pick.push_back(l); break; }
   }
   if (pick.empty()) return;
+  pjLabels = isPJ(it.font);
   effectInit(it); FxGuard fxg;
   uint32_t per = it.sec ? std::max<uint32_t>(3000, it.sec * 1000UL / pick.size()) : 5000, frame = 0;
   shownValid = false;
   for (auto &l : pick) {
-    String label = field(l, 1), price = withCommas(field(l, 2)), chg = field(l, 3), pct = field(l, 4), sp = field(l, 5);
+    String name = field(l, 1), price = withCommas(field(l, 2)), chg = field(l, 3), pct = field(l, 4), sp = field(l, 5);
     bool up = chg[0] != '-';
     if (!up) { chg.remove(0, 1); pct.remove(0, 1); }
     uint32_t col = up ? 0x30DC6E : 0xFF4650;
@@ -224,16 +225,14 @@ static void playStocks(const ShowItem &it) {
     while (millis() - start < per) {
       uint32_t t0 = millis();
       paintBackground(it, frame);
-      setFont(1); cg.setTextSize(1);
-      cg.rgb(0xFFBE3C); cg.setCursor(2, 1); cg.print(label);
-      cg.rgb(col); cg.setCursor(W - 1 - textWidth(pctS), 1); cg.print(pctS);
-      uint8_t f = fitBig(std::min<uint8_t>(it.font, 3), price, W - 2, 0);   // big would overflow the 64 rows
+      ::label(name, 2, 1, 0xFFBE3C);
+      ::label(pctS, W - 1 - labelW(pctS), 1, col);
+      uint8_t f = fitBig(std::min<uint8_t>(it.font, isPJ(it.font) ? 11 : 3), price, W - 2, 0);   // big would overflow the 64 rows
       drawText(price, (W - textWidth(price)) / 2, textBaseline(f, 9, 30), it, t0);
-      setFont(1); cg.setTextSize(1);
-      int cw = textWidth(chgS), cx = (W - cw - 9) / 2;
+      int cw = labelW(chgS), cx = (W - cw - 9) / 2;
       cg.rgb(col);
       if (up) cg.fillTriangle(cx, 47, cx + 6, 47, cx + 3, 41, 0); else cg.fillTriangle(cx, 41, cx + 6, 41, cx + 3, 47, 0);
-      cg.setCursor(cx + 9, 41); cg.print(chgS);
+      ::label(chgS, cx + 9, pjLabels ? 40 : 41, col);
       for (int i = 1; i < n; i++) {             // today's prices, rows 49-63
         int x0 = 2 + (i - 1) * (W - 4) / (n - 1), x1 = 2 + i * (W - 4) / (n - 1);
         cg.drawLine(x0, 63 - v[i - 1] * 14 / 15, x1, 63 - v[i] * 14 / 15, 0);
@@ -244,4 +243,104 @@ static void playStocks(const ShowItem &it) {
       if (waitMs(wait > 0 ? wait : 1)) return;
     }
   }
+}
+
+// ---------- Automatic updates ----------
+// Once a day at 3:xx in the morning (minute picked from the card's MAC so cards don't all ask at once) the card
+// reads firmware/info.json from the website. A newer version is downloaded over HTTPS straight into the other app
+// slot, checked against the SHA-256 in info.json, then the card restarts into it. A new version that fails to
+// start goes back to the old one by itself (rollback.cpp). Off with the page's "Automatic updates" switch.
+#include "mbedtls/sha256.h"
+static String jsonStr(const String &s, const char *key) {      // "key" : "value" (spaces allowed) -> value
+  int k = s.indexOf(String("\"") + key + "\""); if (k < 0) return "";
+  int c = s.indexOf(':', k), q = c < 0 ? -1 : s.indexOf('"', c + 1), e = q < 0 ? -1 : s.indexOf('"', q + 1);
+  return e < 0 ? "" : s.substring(q + 1, e);
+}
+static int verNum(const String &v) { int a = 0, b = 0, c = 0; sscanf(v.c_str(), "%d.%d.%d", &a, &b, &c); return a * 10000 + b * 100 + c; }
+static void updateScreen(const String &ver, int pct) {
+  panel->fillScreen(0);
+  panel->setFont(nullptr); panel->setTextSize(1);
+  text(14, "UPDATING TO", C(255, 190, 60));
+  text(26, ver.c_str(), C(230, 230, 230));
+  panel->drawRect(1, 42, W - 2, 8, C(90, 90, 110));
+  if (pct > 0) panel->fillRect(3, 44, (W - 6) * pct / 100, 4, C(60, 200, 110));
+  text(54, "DON'T UNPLUG", C(140, 140, 160));
+}
+static bool otaFromSite(const String &ver, const String &file, int size, const String &sha) {
+  Serial.printf("Update: %s -> %s (%d bytes)\n", FW_VERSION, ver.c_str(), size);
+  playerFree();
+  updateScreen(ver, 0);
+  bool ok = false;
+  String err;
+  uint32_t t0 = millis();
+  {
+    WiFiClientSecure tls;
+    tls.setCACert(SITE_CA);
+    tls.setHandshakeTimeout(8);
+    HTTPClient http;
+    http.setConnectTimeout(5000);
+    http.setTimeout(10000);
+    if (http.begin(tls, String(SITE) + "firmware/" + file)) {
+      int code = http.GET(), len = http.getSize();
+      if (code != 200 || len != size) err = "HTTP " + String(code) + ", size " + String(len);
+      else if (!Update.begin(len, U_FLASH)) err = Update.errorString();
+      else {
+        WiFiClient *st = http.getStreamPtr();
+        mbedtls_sha256_context c; mbedtls_sha256_init(&c); mbedtls_sha256_starts(&c, 0);
+        uint8_t buf[1024];
+        int got = 0, shown = -1;
+        uint32_t last = millis();
+        while (got < len && millis() - last < 15000) {
+          size_t av = st->available();
+          if (!av) { if (!st->connected()) break; delay(2); continue; }
+          int n = st->readBytes(buf, std::min(av, sizeof(buf)));
+          if (n <= 0) continue;
+          mbedtls_sha256_update(&c, buf, n);
+          if (Update.write(buf, n) != (size_t)n) { err = Update.errorString(); break; }
+          got += n; last = millis();
+          int pct = (int)(got * 100LL / len);
+          if (pct != shown) { shown = pct; updateScreen(ver, pct); }
+        }
+        uint8_t d[32]; mbedtls_sha256_finish(&c, d); mbedtls_sha256_free(&c);
+        char hex[65]; for (int i = 0; i < 32; i++) sprintf(hex + i * 2, "%02x", d[i]);
+        if (!err.length() && got != len) err = "download stopped at " + String(got);
+        else if (!err.length() && sha != hex) err = "checksum does not match";
+        if (!err.length() && Update.end(true)) ok = true;
+        else { if (!err.length()) err = Update.errorString(); Update.abort(); }
+      }
+      http.end();
+    } else err = "no connection";
+  }
+  Serial.printf("Update: %s in %u s %s\n", ok ? "installed" : "FAILED", (unsigned)((millis() - t0) / 1000), err.c_str());
+  if (ok) { delay(300); ESP.restart(); }
+  panel->clearScreen();
+  if (!playerAlloc()) { delay(200); ESP.restart(); }
+  shownValid = false;
+  return false;
+}
+// Reads info.json; installs a newer app if there is one. Returns the website's version ("" if unreachable).
+String updateCheck(bool install) {
+  String body;
+  if (!siteGet("firmware/info.json", body, 2000)) return "";
+  String ver = jsonStr(body, "version");
+  int app = body.indexOf("\"app\"");
+  if (!ver.length() || app < 0) return "";
+  String rest = body.substring(app);
+  String file = jsonStr(rest, "file"), sha = jsonStr(rest, "sha256");
+  int sz = rest.indexOf("\"size\""), colon = sz < 0 ? -1 : rest.indexOf(':', sz);
+  int size = colon >= 0 ? rest.substring(colon + 1).toInt() : 0;
+  Serial.printf("Update check: website has %s, this card %s\n", ver.c_str(), FW_VERSION);
+  if (install && verNum(ver) > verNum(FW_VERSION) && file.length() && sha.length() == 64 && size > 100000) otaFromSite(ver, file, size, sha);
+  return ver;
+}
+bool updateNow = false;                          // the page's "Update now" (web.ino): install from the website next turn
+void updateService() {
+  static int doneDay = -1;
+  if (updateNow) { updateNow = false; updateCheck(true); return; }
+  if (!autoUpdate || WiFi.status() != WL_CONNECTED || !timeValid()) return;
+  time_t t = time(nullptr); struct tm lt; localtime_r(&t, &lt);
+  uint8_t mac[6]; WiFi.macAddress(mac);
+  if (lt.tm_hour != 3 || lt.tm_min < mac[5] % 50 || lt.tm_yday == doneDay) return;
+  doneDay = lt.tm_yday;
+  updateCheck(true);
 }

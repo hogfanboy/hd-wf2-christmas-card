@@ -135,6 +135,12 @@
     <div class="status" id="timeStatus"></div>
   </div>
 
+  <div class="box stack" id="auBox" hidden>
+    <h2>Software updates</h2>
+    <label class="flex"><input type="checkbox" id="au" style="width:auto"> <span>Update by itself (checks the website at 3 am)</span></label>
+    <div class="status" id="auStatus"></div>
+  </div>
+
   <div class="box stack">
     <details>
       <summary>Advanced: install a software update file</summary>
@@ -196,15 +202,24 @@ const tctx = tcan.getContext('2d', { willReadFrequently: true });
 const CAP = { 1: 14, 2: 17, 3: 25, 4: 34 };
 const fontCss = (f) => f == 1 ? `bold ${Math.round(CAP[1] / 0.72)}px monospace`
   : `bold ${Math.round(CAP[f] / 0.72)}px Arial, Helvetica, sans-serif`;
-const setF = (f) => { tctx.font = fontCss(f); tctx.letterSpacing = '0px'; };
-const smallF = () => { tctx.font = '8px monospace'; tctx.letterSpacing = '0px'; };
+// 8-12: our own "Jumbo" font (web/pjfont.js): the exact pixels the card draws. curPJ = the PJ size in use (0 = canvas font).
+let curPJ = 0, curLabels = false;          // curLabels: this item uses Jumbo, so its small labels use thin Jumbo too
+const setF = (f) => { curPJ = f >= 8 ? f : 0; if (!curPJ) tctx.font = fontCss(f); tctx.letterSpacing = '0px'; };
+const smallF = () => { curPJ = curLabels ? 8 : 0; tctx.font = '8px monospace'; tctx.letterSpacing = '0px'; };
+const M = (s) => curPJ ? PJFont.width(curPJ, s) : tctx.measureText(s).width;
+function T(s, x, y) {                      // fillText in the current font (PJ: baseline, or top when textBaseline is 'top')
+  if (!curPJ) return tctx.fillText(s, x, y);
+  const base = tctx.textBaseline === 'top' ? y + PJFont.SIZES[curPJ][0] : y, ga = tctx.globalAlpha;
+  PJFont.draw(curPJ, s, Math.round(x), Math.round(base), (px, py, a) => { tctx.globalAlpha = ga * a; tctx.fillRect(px, py, 1, 1); });
+  tctx.globalAlpha = ga;
+}
 // Same as the card's fitBig: the largest font (up to the item's size, at least medium) that fits.
 function fitBig(f, s, maxW, extra = 0) {
-  const l = f == 4 ? [4, 3, 2] : [3, 2];
-  for (const x of l) { setF(x); if (tctx.measureText(s).width + extra <= maxW) return x; }
+  const l = f >= 8 ? (f == 12 ? [12, 11, 10] : [11, 10]) : f == 4 ? [4, 3, 2] : [3, 2];
+  for (const x of l) { setF(x); if (M(s) + extra <= maxW) return x; }
   return l[l.length - 1];
 }
-const capOf = () => +tctx.font.match(/(\d+)px/)[1] * 0.72;
+const capOf = () => curPJ ? PJFont.SIZES[curPJ][0] : +tctx.font.match(/(\d+)px/)[1] * 0.72;
 const hue = (h) => `hsl(${(h % 1536) / 1536 * 360},100%,50%)`;
 // ---------- Effects: a JS copy of the card's effects library (show.ino), for the preview ----------
 const FX = { none: 'None', snow: 'Snow', sparkle: 'Sparkle', hearts: 'Hearts', confetti: 'Confetti', fireworks: 'Fireworks',
@@ -357,7 +372,7 @@ function paintBg(it, t) {
   tctx.putImageData(img, 0, 0);
   if (it.fx.glyphs.length) {
     const keep = tctx.font, kb = tctx.textBaseline;
-    smallF(); tctx.textBaseline = 'top';
+    tctx.font = '8px monospace'; tctx.textBaseline = 'top';
     for (const [ch, x, y, col] of it.fx.glyphs) { tctx.fillStyle = col; tctx.fillText(ch, x, y); }
     tctx.font = keep; tctx.textBaseline = kb;
   }
@@ -370,73 +385,49 @@ const wxWord = (c) => c === 0 ? 'CLEAR' : c === 1 ? 'MOSTLY CLEAR' : c === 2 ? '
   : c >= 51 && c <= 57 ? 'DRIZZLE' : c >= 61 && c <= 67 ? 'RAIN' : c >= 71 && c <= 77 ? 'SNOW' : c >= 80 && c <= 82 ? 'SHOWERS'
   : c === 85 || c === 86 ? 'SNOW SHOWERS' : c >= 95 ? 'THUNDERSTORM' : '';
 const disc = (x, y, r) => { tctx.beginPath(); tctx.arc(x + 0.5, y + 0.5, r + 0.5, 0, 6.2832); tctx.fill(); };
-function wxCloud(x, y, col) { tctx.fillStyle = col; disc(x - 7, y + 2, 6); disc(x + 1, y - 3, 8); disc(x + 9, y + 2, 6); tctx.fillRect(x - 7, y + 2, 16, 7); }
-function wxSun(x, y, r, f) {
-  tctx.fillStyle = tctx.strokeStyle = '#ffc828'; disc(x, y, r); tctx.lineWidth = 1;
-  for (let i = 0; i < 8; i++) {
-    const a = i * 0.7854 + f * 0.02; tctx.beginPath();
-    tctx.moveTo(x + 0.5 + Math.cos(a) * (r + 3), y + 0.5 + Math.sin(a) * (r + 3)); tctx.lineTo(x + 0.5 + Math.cos(a) * (r + 6), y + 0.5 + Math.sin(a) * (r + 6)); tctx.stroke();
+function wxSpr(name, x, y) {            // x, y = sprite center, like the card's wxSprite
+  const r = WXI.spr[name]; if (!r || !WXI.img.complete) return;
+  tctx.drawImage(WXI.img, r[0], r[1], r[2], r[3], x + r[4], y + r[5], r[2], r[3]);
+}
+function wxFall(snow, x0, w, y0, h, n, f) {
+  for (let i = 0; i < n; i++) {
+    const x = x0 + (i * 37) % w, y = tr((f * (snow ? 1 : 5) / (snow ? 3 : 2)) + i * 11) % h;
+    if (snow) { const sx = x + tr((sin8(f * 3 + i * 50) - 128) / 64); tctx.fillStyle = 'rgba(220,230,255,.45)'; tctx.fillRect(sx - 1, y0 + y, 3, 1); tctx.fillRect(sx, y0 + y - 1, 1, 3); tctx.fillStyle = '#fff'; tctx.fillRect(sx, y0 + y, 1, 1); }
+    else { const sx = x - tr(y / 4); tctx.fillStyle = '#3c82e6'; tctx.fillRect(sx + 1, y0 + y - 3, 1, 1); tctx.fillStyle = '#50a0ff'; tctx.fillRect(sx, y0 + y - 1, 1, 1); tctx.fillStyle = '#8cd2ff'; tctx.fillRect(sx, y0 + y, 1, 1); }
   }
 }
-function wxMoon(x, y, it, f) {
-  tctx.fillStyle = '#e6e6c8'; disc(x, y, 10); tctx.fillStyle = it.bg; disc(x + 6, y - 4, 9);
-  for (let i = 0; i < 4; i++) { const v = sin8(f * 4 + i * 64); tctx.fillStyle = `rgb(${v},${v},${v})`; tctx.fillRect(x - 14 + i * 9, y - 12 + (i * 7) % 20, 1, 1); }
+function wxStars(cx, cy, f) {
+  [[-17, -12], [13, -16], [18, 4], [-19, 9], [4, 17]].forEach(([dx, dy], i) => { const v = sin8(f * 3 + i * 51); tctx.fillStyle = `rgb(${v},${v},${v})`; tctx.fillRect(cx + dx, cy + dy, 1, 1); });
 }
 function wxIcon(kind, day, it, f) {
-  const cx = 23, cy = 22, drift = tr((sin8(f * 2) - 128) / 64);
-  if (kind === 'sun') day ? wxSun(cx, cy, 9, f) : wxMoon(cx, cy, it, f);
-  else if (kind === 'partly') { day ? wxSun(cx - 6, cy - 6, 7, f) : wxMoon(cx - 5, cy - 6, it, f); wxCloud(cx + 3 + drift, cy + 5, '#dcdce6'); }
-  else if (kind === 'cloud') { wxCloud(cx - 4 - drift, cy - 4, '#8c8c9b'); wxCloud(cx + 3 + drift, cy + 4, '#dcdce6'); }
-  else if (kind === 'fog') { wxCloud(cx, cy - 4, '#8c8c9b'); tctx.fillStyle = '#b4b4be'; for (let i = 0; i < 3; i++) tctx.fillRect(cx - 14 + (tr(f / 6) + i * 3) % 6, cy + 9 + i * 4, 24, 1); }
-  else {
-    for (let i = 0; i < 6; i++) {
-      const x = cx - 11 + i * 4 + (i & 1), y = cy + 6 + (tr(f * (kind === 'snow' ? 1 : 3) / 2) + i * 7) % 16;
-      if (kind === 'snow') { tctx.fillStyle = 'rgba(255,255,255,.35)'; tctx.fillRect(x - 1, y, 3, 1); tctx.fillStyle = '#fff'; tctx.fillRect(x, y, 1, 1); }
-      else { tctx.fillStyle = '#50a0ff'; tctx.fillRect(x, y, 1, 3); }
-    }
-    if (kind === 'storm' && tr(f / 4) % 10 < 2) {
-      tctx.strokeStyle = '#fff050'; tctx.lineWidth = 1; tctx.beginPath();
-      tctx.moveTo(cx + 2.5, cy + 4.5); tctx.lineTo(cx - 2.5, cy + 13.5); tctx.lineTo(cx + 2.5, cy + 13.5); tctx.lineTo(cx - 2.5, cy + 22.5); tctx.stroke();
-    }
-    wxCloud(cx, cy - 4, kind === 'storm' ? '#6e6e7d' : '#aaaab9');
-  }
+  const cx = 23, cy = 21, drift = tr((sin8(f * 2) - 128) / 64), sunF = tr(f / 5) % 6, flash = kind === 'storm' && tr(f / 4) % 12 < 2;
+  if (kind === 'sun') { if (day) wxSpr('SUN' + sunF, cx, cy); else { wxStars(cx, cy, f); wxSpr('MOON', cx, cy); } }
+  else if (kind === 'partly') { if (day) wxSpr('SUNS' + sunF, cx - 7, cy - 7); else { wxStars(cx, cy, f); wxSpr('MOONS', cx - 7, cy - 7); } wxSpr('CLOUD_L', cx + 3 + drift, cy + 6); }
+  else if (kind === 'cloud') { wxSpr('CLOUD_B', cx - 4 - drift, cy - 6); wxSpr('CLOUD_L', cx + 3 + drift, cy + 5); }
+  else if (kind === 'fog') { wxSpr('CLOUD_M', cx + 1, cy - 5); for (let i = 0; i < 3; i++) { tctx.fillStyle = i === 1 ? '#a0a8b8' : '#8c94a4'; tctx.fillRect(cx - 15 + (tr(f / 6) + i * 3) % 6, cy + 10 + i * 4, 26, 1); } }
+  else if (kind === 'snow') { wxFall(true, cx - 13, 28, cy + 3, 20, 9, f); wxSpr('CLOUD_L', cx + 1, cy - 6); }
+  else { wxFall(false, cx - 12, 26, cy + 4, 20, 8, f); if (flash) wxSpr('BOLT', cx + 1, cy + 12); wxSpr(flash ? 'CLOUD_L' : kind === 'storm' ? 'CLOUD_D' : 'CLOUD_M', cx + 1, cy - 6); }
 }
 const SAMPLE_WX = { temp: 72, hi: 75, lo: 58, code: 2, day: true, fc: [[2, 75, 58], [61, 68, 55], [3, 64, 50], [0, 70, 49], [71, 38, 29]] };
 // 5-day forecast screen (copy of playForecast/wxMini in show.ino).
+const MINI_IX = { sun: 0, partly: 1, cloud: 2, fog: 3, rain: 4, snow: 5, storm: 6 };
 function wxMini(kind, cx, cy, f) {
-  const cloud = (x, y, col) => { tctx.fillStyle = col; disc(x - 4, y + 1, 3); disc(x + 1, y - 2, 4); disc(x + 5, y + 1, 3); tctx.fillRect(x - 4, y + 1, 9, 4); };
-  const sun = (x, y, r) => {
-    tctx.fillStyle = '#ffc828'; disc(x, y, r);
-    for (let i = 0; i < 8; i++) { const a = i * 0.7854 + f * 0.02; tctx.fillRect(x + Math.round(Math.cos(a) * (r + 2)), y + Math.round(Math.sin(a) * (r + 2)), 1, 1); }
-  };
-  if (kind === 'sun') sun(cx, cy, 4);
-  else if (kind === 'partly') { sun(cx - 3, cy - 3, 3); cloud(cx + 2, cy + 2, '#dcdce6'); }
-  else if (kind === 'cloud') { cloud(cx - 2, cy - 2, '#8c8c9b'); cloud(cx + 2, cy + 2, '#dcdce6'); }
-  else if (kind === 'fog') { cloud(cx, cy - 2, '#8c8c9b'); tctx.fillStyle = '#b4b4be'; tctx.fillRect(cx - 6, cy + 5, 12, 1); tctx.fillRect(cx - 4, cy + 7, 12, 1); }
-  else {
-    for (let i = 0; i < 3; i++) {
-      const x = cx - 4 + i * 4, y = cy + 4 + (tr(f / (kind === 'snow' ? 4 : 2)) + i * 3) % 6;
-      tctx.fillStyle = kind === 'snow' ? '#fff' : '#50a0ff'; tctx.fillRect(x, y, 1, 1);
-    }
-    if (kind === 'storm' && tr(f / 4) % 10 < 2) {
-      tctx.strokeStyle = '#fff050'; tctx.lineWidth = 1; tctx.beginPath();
-      tctx.moveTo(cx + 1.5, cy + 2.5); tctx.lineTo(cx - 1.5, cy + 7.5); tctx.lineTo(cx + 1.5, cy + 7.5); tctx.lineTo(cx - 1.5, cy + 11.5); tctx.stroke();
-    }
-    cloud(cx, cy - 2, kind === 'storm' ? '#6e6e7d' : '#aaaab9');
-  }
+  if (kind === 'rain' || kind === 'storm' || kind === 'snow') wxFall(kind === 'snow', cx - 6, 13, cy + 2, 8, 3, f);
+  if (kind === 'storm' && tr(f / 4) % 12 < 2) { tctx.strokeStyle = '#fff07a'; tctx.lineWidth = 1; tctx.beginPath(); tctx.moveTo(cx + 1.5, cy + 2.5); tctx.lineTo(cx - 1.5, cy + 6.5); tctx.lineTo(cx + 1.5, cy + 6.5); tctx.lineTo(cx - 1.5, cy + 10.5); tctx.stroke(); }
+  wxSpr('MINI' + MINI_IX[kind], ['sun', 'partly', 'cloud'].includes(kind) ? cx : cx + 2, cy + 1);
 }
 function drawForecast(it, w, t) {
   const f = Math.floor(t / 40), dow = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'], today = new Date().getDay();
   smallF(); tctx.textBaseline = 'top';
   w.fc.slice(0, 5).forEach(([code, hi, lo], i) => {
     const cx = 2 + i * 25 + 12, d = dow[(today + i) % 7], h = String(Math.round(hi)), l = String(Math.round(lo));
-    tctx.fillStyle = '#ffbe3c'; tctx.fillText(d, cx - tctx.measureText(d).width / 2, 1);
+    tctx.fillStyle = '#ffbe3c'; T(d, cx - M(d) / 2, 1);
     wxMini(wxKind(code), cx, 19, f + i * 7);
-    tctx.fillStyle = it.rainbow ? hue(t / 8 + i * 300) : it.fg; tctx.fillText(h, cx - tctx.measureText(h).width / 2, 35);
-    tctx.fillStyle = '#8c8ca0'; tctx.fillText(l, cx - tctx.measureText(l).width / 2, 45);
+    tctx.fillStyle = it.rainbow ? hue(t / 8 + i * 300) : it.fg; T(h, cx - M(h) / 2, 35);
+    tctx.fillStyle = '#8c8ca0'; T(l, cx - M(l) / 2, 45);
   });
   const pl = wxPlace(it).toUpperCase().slice(0, 21);
-  tctx.fillStyle = '#b4b4c8'; tctx.fillText(pl, (W - tctx.measureText(pl).width) / 2, 56);
+  tctx.fillStyle = '#b4b4c8'; T(pl, (W - M(pl)) / 2, 55);
 }
 // ---------- News + stocks: the screen reads the same small files from the website (made hourly, tools/build-feeds.mjs) ----------
 const FEEDS = SITE + 'feeds/';
@@ -459,14 +450,14 @@ function drawNews(it, t) {          // same as the card's playNews: ~55 px a sec
   const lines = it.news || SAMPLE_NEWS;
   setF(it.font);
   let tt = t, i = 0;
-  for (; i < 500; i++) { const d = (W + tctx.measureText(lines[i % lines.length][1]).width) * 18; if (tt < d) break; tt -= d; }
+  for (; i < 500; i++) { const d = (W + M(lines[i % lines.length][1])) * 18; if (tt < d) break; tt -= d; }
   const [src, head] = lines[i % lines.length];
   drawStr(it, head, W - Math.floor(tt / 18), Math.round(10 + (H - 10 + capOf()) / 2), t);
   tctx.fillStyle = '#1e1e32'; tctx.fillRect(0, 0, W, 10);
   smallF(); tctx.textBaseline = 'top';
-  tctx.fillStyle = '#ffbe3c'; tctx.fillText(NEWS_TITLE[it.topic] || 'NEWS', 2, 1);
+  tctx.fillStyle = '#ffbe3c'; T(NEWS_TITLE[it.topic] || 'NEWS', 2, 1);
   const d = new Date(), right = src + ' ' + (d.getHours() % 12 || 12) + ':' + String(d.getMinutes()).padStart(2, '0');
-  tctx.fillStyle = '#8c8ca0'; tctx.fillText(right, W - 1 - tctx.measureText(right).width, 1);
+  tctx.fillStyle = '#8c8ca0'; T(right, W - 1 - M(right), 1);
 }
 function drawStocks(it, t) {        // same as the card's playStocks: one symbol at a time
   const all = it.quotes || SAMPLE_MKT;
@@ -477,16 +468,16 @@ function drawStocks(it, t) {        // same as the card's playStocks: one symbol
   const up = q[3][0] !== '-', col = up ? '#30dc6e' : '#ff4650';
   const price = commas(q[2]), pct = (up ? '+' : '-') + q[4].replace('-', '') + '%', chg = commas(q[3]);
   smallF(); tctx.textBaseline = 'top';
-  tctx.fillStyle = '#ffbe3c'; tctx.fillText(q[1], 2, 1);
-  tctx.fillStyle = col; tctx.fillText(pct, W - 1 - tctx.measureText(pct).width, 1);
+  tctx.fillStyle = '#ffbe3c'; T(q[1], 2, 1);
+  tctx.fillStyle = col; T(pct, W - 1 - M(pct), 1);
   tctx.textBaseline = 'alphabetic';
-  fitBig(Math.min(it.font, 3), price, W - 2);
-  drawStr(it, price, (W - tctx.measureText(price).width) / 2, Math.round(9 + (30 + capOf()) / 2), t);
+  fitBig(Math.min(it.font, it.font >= 8 ? 11 : 3), price, W - 2);
+  drawStr(it, price, (W - M(price)) / 2, Math.round(9 + (30 + capOf()) / 2), t);
   smallF(); tctx.textBaseline = 'top';
-  const cx = (W - tctx.measureText(chg).width - 9) / 2;
+  const cx = (W - M(chg) - 9) / 2;
   tctx.fillStyle = col; tctx.beginPath();
   if (up) { tctx.moveTo(cx, 47); tctx.lineTo(cx + 6, 47); tctx.lineTo(cx + 3, 41); } else { tctx.moveTo(cx, 41); tctx.lineTo(cx + 6, 41); tctx.lineTo(cx + 3, 47); }
-  tctx.fill(); tctx.fillText(chg, cx + 9, 41);
+  tctx.fill(); T(chg, cx + 9, curLabels ? 40 : 41);
   const v = (q[5] || '').split(',').map(Number);
   tctx.strokeStyle = col; tctx.lineWidth = 1; tctx.beginPath();
   v.forEach((y, i) => { const x = 2 + i * (W - 4) / Math.max(1, v.length - 1) + 0.5, yy = 63 - Math.trunc(y * 14 / 15) + 0.5; i ? tctx.lineTo(x, yy) : tctx.moveTo(x, yy); });
@@ -502,8 +493,9 @@ async function wxFetch(it) {
   } catch { it.wx = null; }
 }
 function drawStr(it, s, x, y, t) {
-  if (!it.rainbow) { tctx.fillStyle = it.fg; tctx.fillText(s, x, y); return; }
-  for (let i = 0; i < s.length; i++) { tctx.fillStyle = hue(t / 4 + i * 120); tctx.fillText(s[i], x, y); x += tctx.measureText(s[i]).width; }
+  if (!it.rainbow) { tctx.fillStyle = it.fg; T(s, x, y); return; }
+  const gap = curPJ ? PJFont.font(curPJ).gap : 0;
+  for (let i = 0; i < s.length; i++) { tctx.fillStyle = hue(t / 4 + i * 120); T(s[i], x, y); x += M(s[i]) + gap; }
 }
 function daysUntil(mmdd) {
   const now = new Date(), [m, d] = mmdd.split('-').map(Number);
@@ -514,6 +506,7 @@ function daysUntil(mmdd) {
 }
 const wxPlace = (it) => it.place || (it.lat === 'auto' ? card.place || '' : '');
 function renderItem(it, t) {      // t = ms since the item started
+  curLabels = it.font >= 8;
   paintBg(it, t);
   tctx.textBaseline = 'alphabetic';
   if (it.kind === 'fx') return tctx.getImageData(0, 0, W, H);
@@ -523,21 +516,20 @@ function renderItem(it, t) {      // t = ms since the item started
     const w = it.wx || SAMPLE_WX, f = Math.floor(t / 40), per = (it.secs || 10) * 1000;
     if (it.fc && w.fc && Math.floor(t / per) % 2 === 1) { drawForecast(it, w, t); return tctx.getImageData(0, 0, W, H); }
     wxIcon(wxKind(w.code), w.day, it, f);
-    const temp = String(Math.round(w.temp));
-    fitBig(it.font, temp, 70);
-    const tw = tctx.measureText(temp).width, x = 48 + Math.floor((80 - tw - 8) / 2), base = Math.round(2 + (38 + capOf()) / 2);
+    const temp = String(Math.round(w.temp)) + (curLabels ? '\x7f' : ''), deg = curLabels ? 0 : 8;   // Jumbo has a degree sign
+    fitBig(it.font, temp, curLabels ? 78 : 70);
+    const tw = M(temp), x = 48 + Math.floor((80 - tw - deg) / 2), base = Math.round(2 + (38 + capOf()) / 2);
     drawStr(it, temp, x, base, t);
-    tctx.strokeStyle = it.rainbow ? hue(t / 4) : it.fg; tctx.lineWidth = 1.5;
-    tctx.beginPath(); tctx.arc(x + tw + 4.5, base - capOf() + 3.5, 2, 0, 6.2832); tctx.stroke();
+    if (!curLabels) { tctx.strokeStyle = it.rainbow ? hue(t / 4) : it.fg; tctx.lineWidth = 1.5; tctx.beginPath(); tctx.arc(x + tw + 4.5, base - capOf() + 3.5, 2, 0, 6.2832); tctx.stroke(); }
     smallF(); tctx.textBaseline = 'top';
     const word = wxWord(w.code), l2 = `H${Math.round(w.hi)} L${Math.round(w.lo)} ${wxPlace(it).toUpperCase()}`.slice(0, 21);
-    tctx.fillStyle = '#ffbe3c'; tctx.fillText(word, 48 + (80 - tctx.measureText(word).width) / 2, 44);
-    tctx.fillStyle = '#b4b4c8'; tctx.fillText(l2, (W - tctx.measureText(l2).width) / 2, 55);
+    tctx.fillStyle = '#ffbe3c'; T(word, 48 + (80 - M(word)) / 2, 44);
+    tctx.fillStyle = '#b4b4c8'; T(l2, (W - M(l2)) / 2, 55);
     return tctx.getImageData(0, 0, W, H);
   }
   if (it.kind === 'text') {
     setF(it.font);
-    const tw = tctx.measureText(it.text).width;
+    const tw = M(it.text);
     const x = tw > W - 4 ? W - (Math.floor(t / 25) % (W + tw)) : (W - tw) / 2;
     drawStr(it, it.text, x, Math.round((H + capOf()) / 2), t);
   } else {
@@ -550,14 +542,14 @@ function renderItem(it, t) {      // t = ms since the item started
       const n = daysUntil(it.date);
       bigS = n ? String(n) : 'TODAY!'; l1 = n ? (n === 1 ? 'DAY UNTIL' : 'DAYS UNTIL') : it.text.toUpperCase(); l2 = n ? it.text.toUpperCase() : '';
     }
-    const pmW = it.kind === 'clock' && !it.h24 ? 13 : 0;      // 12-hour clock: small AM/PM beside the time
+    const pmW = it.kind === 'clock' && !it.h24 ? (curLabels ? PJFont.width(8, 'PM') + 2 : 13) : 0;      // 12-hour clock: small AM/PM beside the time
     fitBig(it.font, bigS, W - 2, pmW);
-    const bw = tctx.measureText(bigS).width, bx = (W - bw - pmW) / 2, by = Math.round((40 + capOf()) / 2), top = by - Math.round(capOf());
+    const bw = M(bigS), bx = (W - bw - pmW) / 2, by = Math.round((40 + capOf()) / 2), top = by - Math.round(capOf());
     drawStr(it, bigS, bx, by, t);
-    if (pmW) { smallF(); tctx.textBaseline = 'top'; tctx.fillStyle = it.rainbow ? '#fff' : it.fg; tctx.fillText(new Date().getHours() < 12 ? 'AM' : 'PM', bx + bw + 2, top); }
+    if (pmW) { smallF(); tctx.textBaseline = 'top'; tctx.fillStyle = it.rainbow ? '#fff' : it.fg; T(new Date().getHours() < 12 ? 'AM' : 'PM', bx + bw + 2, top); }
     smallF(); tctx.textBaseline = 'top';
-    if (it.kind === 'clock') { tctx.fillStyle = '#b4b4c8'; tctx.fillText(l2, (W - tctx.measureText(l2).width) / 2, 50); }
-    else { tctx.fillStyle = '#fff'; tctx.fillText(l1, (W - tctx.measureText(l1).width) / 2, 42); tctx.fillStyle = '#ffbe3c'; tctx.fillText(l2, (W - tctx.measureText(l2).width) / 2, 53); }
+    if (it.kind === 'clock') { tctx.fillStyle = '#b4b4c8'; T(l2, (W - M(l2)) / 2, 50); }
+    else { tctx.fillStyle = '#fff'; T(l1, (W - M(l1)) / 2, 42); tctx.fillStyle = '#ffbe3c'; T(l2, (W - M(l2)) / 2, 53); }
   }
   return tctx.getImageData(0, 0, W, H);
 }
@@ -936,9 +928,11 @@ const META = { text: 'Message', clock: 'Shows the time (needs internet)', countd
   fx: 'Drawn by the screen itself: takes no space', weather: 'Pick your town below, or where the screen is',
   news: 'Scrolls the latest headlines (needs internet, updated every hour)', stocks: 'Market prices and today\'s change (needs internet, updated every hour, may be delayed)' };
 const usesF = () => /^en-(US|LR|MM)$/i.test(navigator.language) || /-(US)$/i.test(navigator.language);
+const SIZE_NAME = { 8: 'Jumbo thin', 9: 'Jumbo small', 10: 'Jumbo medium', 11: 'Jumbo big', 12: 'Jumbo huge',
+  1: 'Pixel', 2: 'Classic small', 3: 'Classic medium', 4: 'Classic big' };
 function addDrawn(kind, o = {}) {
   const it = Object.assign({ kind, secs: 0, fg: kind === 'clock' ? '#5ac8ff' : ['weather', 'news', 'stocks'].includes(kind) ? '#ffffff' : COLORS.fg, bg: COLORS.bg, rainbow: false,
-    font: kind === 'text' || kind === 'stocks' ? 3 : kind === 'news' ? 2 : 4, topic: 'top', syms: '^GSPC,^DJI,^IXIC', effect: kind === 'countdown' ? 'snow' : kind === 'fx' ? 'fireworks' : 'none',
+    font: kind === 'text' || kind === 'stocks' ? 11 : kind === 'news' ? 8 : 12, topic: 'top', syms: '^GSPC,^DJI,^IXIC', effect: kind === 'countdown' ? 'snow' : kind === 'fx' ? 'fireworks' : 'none',
     text: kind === 'text' ? 'Happy Birthday!' : kind === 'countdown' ? 'Christmas' : '', date: '12-25',
     unit: usesF() ? 'F' : 'C', lat: '', lon: '', place: '', lead: '', fc: kind === 'weather',
     h24: !new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12 }, o);
@@ -949,11 +943,9 @@ function addDrawn(kind, o = {}) {
   const ed = document.createElement('div'); ed.className = 'edit';
   const colors = `<label>Color <input type="color" data-k="fg"> <input type="checkbox" data-k="rainbow"> Rainbow
       &nbsp; Background <input type="color" data-k="bg"></label>`;
-  const sizes = kind === 'weather'
-    ? '<option value="3">Medium</option><option value="4">Big</option>'
-    : kind === 'stocks' ? '<option value="2">Small</option><option value="3">Medium</option>'
-    : kind === 'news' ? '<option value="1">Pixel</option><option value="2">Small</option><option value="3">Medium</option>'
-    : '<option value="1">Pixel</option><option value="2">Small</option><option value="3">Medium</option><option value="4">Big</option>';
+  const opt = (l) => l.map(v => `<option value="${v}">${SIZE_NAME[v]}</option>`).join('');
+  const sizes = opt(kind === 'weather' ? [11, 12, 3, 4] : kind === 'stocks' ? [10, 11, 2, 3] : kind === 'news' ? [8, 9, 10, 1, 2, 3]
+    : kind === 'text' ? [9, 10, 11, 12, 1, 2, 3, 4] : [10, 11, 12, 2, 3, 4]);
   ed.innerHTML = kind === 'fx'
     ? `<label>Effect <select data-k="effect">${fxOptions().replace('<option value="none">None</option>', '')}</select>
        &nbsp; Background <input type="color" data-k="bg"></label>`
@@ -1119,7 +1111,7 @@ async function loadShow(auto) {
         const r = await fetch('/api/file?name=' + encodeURIComponent(f[2]));
         if (r.ok) await addFile(new File([await r.blob()], f[2]), secs, true);
       } else {
-        const o = { lead: op.lead, fc: op.fc, secs, fg: f[2] === 'rainbow' ? '#ffffff' : '#' + f[2], rainbow: f[2] === 'rainbow', bg: '#' + f[3], font: +f[4] >= 5 && +f[4] <= 7 ? +f[4] - 3 : Math.max(1, Math.min(4, +f[4] || 3)), effect: FX[f[5]] ? f[5] : 'none' };
+        const o = { lead: op.lead, fc: op.fc, secs, fg: f[2] === 'rainbow' ? '#ffffff' : '#' + f[2], rainbow: f[2] === 'rainbow', bg: '#' + f[3], font: +f[4] >= 8 && +f[4] <= 12 ? +f[4] : +f[4] >= 5 && +f[4] <= 7 ? +f[4] - 3 : Math.max(1, Math.min(4, +f[4] || 3)), effect: FX[f[5]] ? f[5] : 'none' };
         if (f[0] === 'text') addDrawn('text', { ...o, text: f[6] });
         if (f[0] === 'clock') addDrawn('clock', { ...o, h24: f[6] === '24' });
         if (f[0] === 'countdown') addDrawn('countdown', { ...o, date: f[6], text: f[7] || '' });
@@ -1264,7 +1256,13 @@ $('bright').oninput = (e) => {
 };
 for (const id of ['nf', 'nt']) $(id).innerHTML = '<option value="-1">—</option>' +
   Array.from({ length: 24 }, (_, h) => `<option value="${h}">${new Date(2000, 0, 1, h).toLocaleTimeString([], { hour: 'numeric' })}</option>`).join('');
+$('au').onchange = async () => {
+  const st = $('auStatus'); st.className = 'status';
+  try { await api('/api/settings?au=' + ($('au').checked ? 1 : 0), { method: 'POST' }); st.className = 'status ok'; st.textContent = 'Saved.'; }
+  catch (err) { st.className = 'status err'; st.textContent = 'Couldn\'t save: ' + err.message; }
+};
 function showTime() {
+  if (card.autoUpdate !== undefined) { $('auBox').hidden = false; $('au').checked = card.autoUpdate; }
   $('nf').value = card.nightFrom ?? -1; $('nt').value = card.nightTo ?? -1; $('nl').value = card.nightLevel ?? 0;
   if (card.time === undefined) { $('timeInfo').textContent = 'Needs newer screen software.'; return; }
   $('timeInfo').textContent = card.time ? 'The screen\'s clock is set' + (card.night ? ' (night mode is on now).' : '.') : 'The screen hasn\'t got the time yet (needs internet).';

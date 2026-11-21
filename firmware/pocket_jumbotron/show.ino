@@ -112,7 +112,7 @@ void loadPlaylist() {
         it.bg = hex(f[3]);
         int fn = f[4].toInt();
         if (fn >= 5 && fn <= 7) fn -= 3;                                // 0.9.4 jumbo S/M/B -> classic S/M/B
-        it.font = constrain(fn, 1, 4);
+        it.font = isPJ(fn) ? fn : constrain(fn, 1, 4);
         it.effect = fxByName(f[5]);
         f.resize(std::max<size_t>(f.size(), 10));
         if (it.type == 't') it.text = f[6];

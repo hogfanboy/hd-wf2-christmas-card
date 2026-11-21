@@ -44,6 +44,7 @@ void settingsLoad() {
   nightFrom = prefs.getChar("nfrom", -1);
   nightTo = prefs.getChar("nto", -1);
   nightLevel = prefs.getUChar("nlevel", 0);
+  autoUpdate = prefs.getBool("aupd", true);
   if (apPass.length() != 8) {                      // first boot: make this card's own hotspot password
     char buf[9];
     for (int i = 0; i < 8; i++) buf[i] = '0' + (esp_random() % 10);
@@ -241,6 +242,7 @@ void netBegin() {
 }
 
 void netService() {
+  improvPoll();                                    // WiFi details from the install page over USB
   if (portalActive) {
     dns.processNextRequest();
     web->handleClient();
@@ -268,5 +270,102 @@ void netService() {
       loadPlaylist();
       playIdx = 0;
     }
+  }
+}
+
+// ---------- Improv WiFi over USB (the install page sends the home WiFi right after installing) ----------
+// Improv Serial (improv-wifi.com): packets "IMPROV" ver type len data checksum on the USB serial port. Log lines
+// on the same port are ignored by the page. On good WiFi details the card saves them, answers with its address
+// and restarts into the home network (same as the hotspot setup page).
+static uint8_t imBuf[200];
+static uint8_t imLen = 0;
+static void imSend(uint8_t type, const uint8_t *d, uint8_t n) {
+  uint8_t h[9] = {'I', 'M', 'P', 'R', 'O', 'V', 1, type, n};
+  uint8_t sum = 0;
+  for (uint8_t b : h) sum += b;
+  for (int i = 0; i < n; i++) sum += d[i];
+  Serial.write(h, 9); Serial.write(d, n); Serial.write(sum); Serial.write('\n');
+  Serial.flush();
+}
+static void imState(uint8_t s) { imSend(0x01, &s, 1); }
+static void imError(uint8_t e) { imSend(0x02, &e, 1); }
+static void imResult(uint8_t cmd, std::initializer_list<String> strs) {
+  uint8_t d[200]; int n = 2;
+  for (auto &s : strs) { int l = std::min<int>(s.length(), 60); if (n + 1 + l > (int)sizeof(d)) break; d[n++] = l; memcpy(d + n, s.c_str(), l); n += l; }
+  d[0] = cmd; d[1] = n - 2;
+  imSend(0x04, d, n);
+}
+static String myUrl() { return "http://" + WiFi.localIP().toString(); }
+static void imCommand(const uint8_t *d, uint8_t n) {
+  uint8_t cmd = d[0];
+  if (cmd == 0x02) {                                         // current state
+    if (WiFi.status() == WL_CONNECTED) { imState(0x04); imResult(0x02, {myUrl()}); } else imState(0x02);
+  } else if (cmd == 0x03) {                                  // device info
+    imResult(0x03, {"Pocket Jumbotron", FW_VERSION, "ESP32-S3", hostName});
+  } else if (cmd == 0x04) {                                  // WiFi networks
+    int k = WiFi.scanNetworks(false, false);
+    std::vector<String> seen;
+    for (int i = 0; i < k && seen.size() < 20; i++) {
+      String s = WiFi.SSID(i);
+      if (s.isEmpty() || std::find(seen.begin(), seen.end(), s) != seen.end()) continue;
+      seen.push_back(s);
+      imResult(0x04, {s, String(WiFi.RSSI(i)), WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "NO" : "YES"});
+    }
+    WiFi.scanDelete();
+    imResult(0x04, {});
+  } else if (cmd == 0x01 && n >= 3) {                        // WiFi settings: ssid, password
+    uint8_t sl = d[2];
+    if (!sl || 4 + sl > n || 4 + sl + d[3 + sl] > n) { imError(0x01); return; }
+    String ssid((const char *)d + 3, sl);
+    uint8_t pl = d[3 + sl];
+    String pass((const char *)d + 4 + sl, pl);
+    Serial.printf("Improv: joining %s ...\n", ssid.c_str());
+    imState(0x03);
+    playerFree();
+    panel->fillScreen(0); panel->setFont(nullptr); panel->setTextSize(1);
+    text(20, "Joining WiFi", C(90, 200, 255)); text(32, ssid.c_str(), C(255, 255, 255));
+    if (!portalActive) WiFi.mode(WIFI_STA);
+    WiFi.setHostname(hostName.c_str());
+    WiFi.begin(ssid.c_str(), pass.c_str());
+    uint32_t t0 = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) delay(100);
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("Improv: couldn't join");
+      imError(0x03); imState(0x02);
+      text(44, "Wrong password?", C(255, 90, 110));
+      delay(1500);
+      WiFi.disconnect();                                     // back to how it was; the page lets them try again
+      if (!staSsid.isEmpty()) WiFi.begin(staSsid.c_str(), staPass.c_str());
+      panel->clearScreen();
+      if (!portalActive && !playerAlloc()) ESP.restart();
+      shownValid = false;
+      return;
+    }
+    prefs.putString("ssid", ssid);
+    prefs.putString("pass", pass);
+    Serial.printf("Improv: joined, %s\n", myUrl().c_str());
+    imState(0x04);
+    imResult(0x01, {myUrl()});
+    text(44, myUrl().substring(7).c_str(), C(60, 220, 120));
+    delay(1500);
+    ESP.restart();
+  } else imError(0x02);
+}
+void improvPoll() {
+  while (Serial.available()) {
+    uint8_t b = Serial.read();
+    if (imLen < 6) {
+      if (b == (uint8_t)"IMPROV"[imLen]) imBuf[imLen++] = b; else imLen = b == 'I' ? (imBuf[0] = b, 1) : 0;
+      continue;
+    }
+    imBuf[imLen++] = b;
+    if (imLen > 9 && imLen == 10 + imBuf[8]) {
+      uint8_t sum = 0;
+      for (int i = 0; i < imLen - 1; i++) sum += imBuf[i];
+      uint8_t type = imBuf[7], n = imBuf[8];
+      imLen = 0;
+      if (sum != imBuf[9 + n]) { imError(0x01); continue; }
+      if (type == 0x03 && n >= 2) imCommand(imBuf + 9, n);
+    } else if (imLen >= sizeof(imBuf)) imLen = 0;
   }
 }

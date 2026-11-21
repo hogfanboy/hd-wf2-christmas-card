@@ -17,12 +17,14 @@ gifenc = gifenc.replace(/export\{([^}]*)\};?/, (_, list) => {
   const pairs = list.split(',').map(s => s.trim().split(/\s+as\s+/)).map(([local, name]) => `${name || local}:${local}`);
   return `window.gifenc={${pairs.join(',')}};`;
 });
-const vendor = `<script>/* omggif (MIT) */${omggif}</script>\n<script>/* gifenc (MIT, Matt DesLauriers) */(function(){${gifenc}})();</script>`;
+const pjfont = fs.readFileSync(path.join(root, 'web/pjfont.js'), 'utf8');   // our font: same pixels as the card
+const wxicons = fs.readFileSync(path.join(root, 'web/wxicons.js'), 'utf8');   // weather icon sprites (tools/make-wxicons.mjs)
+const vendor = `<script>/* omggif (MIT) */${omggif}</script>\n<script>/* gifenc (MIT, Matt DesLauriers) */(function(){${gifenc}})();</script>\n<script>${pjfont}</script>\n<script>${wxicons}</script>`;
 
 // Build stamp shown on the page ("app 2026-11-20 abc1234"); the website copy is what cards normally run.
 let rev = ''; try { rev = (await import('node:child_process')).execSync('git rev-parse --short HEAD', { cwd: root }).toString().trim(); } catch (e) {}
 const stamp = new Date().toISOString().slice(0, 10) + (rev ? ' ' + rev : '');
-const html = fs.readFileSync(path.join(root, 'web/index.html'), 'utf8').replace('<!--VENDOR-->', vendor).replace('/*APP_BUILD*/', stamp);
+const html = fs.readFileSync(path.join(root, 'web/index.html'), 'utf8').replace('<!--VENDOR-->', () => vendor).replace('/*APP_BUILD*/', stamp);
 const outDir = path.join(root, 'firmware/build/web');
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(path.join(outDir, 'index.html'), html);

@@ -1,6 +1,7 @@
 // ---------- Text / clock / countdown items ----------
 
 static void playText(const ShowItem &it) {
+  pjLabels = isPJ(it.font);
   setFont(it.font);
   effectInit(it); FxGuard fxg;
   int tw = textWidth(it.text);
@@ -26,6 +27,7 @@ static void playClock(const ShowItem &it) {
   effectInit(it); FxGuard fxg;
   uint32_t total = (it.sec ? it.sec : 8) * 1000UL, start = millis(), frame = 0;
   bool h12 = it.extra != "24";
+  pjLabels = isPJ(it.font);
   shownValid = false;
   while (millis() - start < total) {
     uint32_t t0 = millis();
@@ -36,16 +38,13 @@ static void playClock(const ShowItem &it) {
     strftime(date, sizeof(date), "%a %b %e", &lt);
     paintBackground(it, frame);
     // 12-hour: a small AM/PM beside the time, its top level with the digits (11 px wide + 2 px gap).
-    const int PM_W = h12 ? 13 : 0;
+    const int PM_W = h12 ? labelW("PM") + 2 : 0;
     fitBig(it.font, hm, W - 2, PM_W);
-    int tw = textWidth(hm), x = (W - tw - PM_W) / 2, base = textBaseline(it.font, 2, 40);
-    int16_t x1, y1; uint16_t bw, bh;
-    cg.getTextBounds("0", 0, base, &x1, &y1, &bw, &bh);
+    int tw = textWidth(hm), x = (W - tw - PM_W) / 2, base = textBaseline(curFont, 2, 40);
+    int top = digitTop(base);
     drawText(hm, x, base, it, millis());
-    setFont(1); cg.setTextSize(1);
-    if (h12) { cg.rgb(it.rainbow ? 0xFFFFFF : it.fg); cg.setCursor(x + tw + 2, y1); cg.print(lt.tm_hour < 12 ? "AM" : "PM"); }
-    String d = upcase(date);
-    cg.rgb(0xB4B4C8); cg.setCursor((W - textWidth(d)) / 2, 50); cg.print(d);
+    if (h12) label(lt.tm_hour < 12 ? "AM" : "PM", x + tw + 2, top, it.rainbow ? 0xFFFFFF : it.fg);
+    labelC(upcase(date), W / 2, 50, 0xB4B4C8);
     pushCanvas();
     frame++;
     int32_t wait = 40 - (int32_t)(millis() - t0);
@@ -74,16 +73,15 @@ static void playCountdown(const ShowItem &item) {
   String l2 = upcase(it.text);
   if (days == 0) { l1 = l2; l2 = ""; }
   uint32_t total = (it.sec ? it.sec : 8) * 1000UL, start = millis(), frame = 0;
+  pjLabels = isPJ(it.font);
   shownValid = false;
   while (millis() - start < total) {
     uint32_t t0 = millis();
     paintBackground(it, frame);
     fitBig(it.font, big, W - 2, 0);
-    drawText(big, (W - textWidth(big)) / 2, textBaseline(3, 0, 40), it, millis());
-    setFont(1); cg.setTextSize(1);
-    cg.rgb(0xFFFFFF);
-    if (l1.length()) { cg.setCursor((W - textWidth(l1)) / 2, 42); cg.print(l1); }
-    if (l2.length()) { cg.rgb(0xFFBE3C); cg.setCursor((W - textWidth(l2)) / 2, 53); cg.print(l2); }
+    drawText(big, (W - textWidth(big)) / 2, textBaseline(curFont, 0, 40), it, millis());
+    if (l1.length()) labelC(l1, W / 2, 42, 0xE6E6E6);
+    if (l2.length()) labelC(l2, W / 2, 53, 0xFFBE3C);
     pushCanvas();
     frame++;
     int32_t wait = 40 - (int32_t)(millis() - t0);

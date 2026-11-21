@@ -77,74 +77,78 @@ static const char *wxWord(int c) {
   if (c >= 71 && c <= 77) return "SNOW"; if (c >= 80 && c <= 82) return "SHOWERS"; if (c == 85 || c == 86) return "SNOW SHOWERS";
   if (c >= 95) return "THUNDERSTORM"; return "";
 }
-static void wxCloud(int x, int y, uint32_t c) {
-  cg.rgb(c);
-  cg.fillCircle(x - 7, y + 2, 6, 0); cg.fillCircle(x + 1, y - 3, 8, 0); cg.fillCircle(x + 9, y + 2, 6, 0); cg.fillRect(x - 7, y + 2, 16, 7, 0);
-}
-static void wxSun(int x, int y, int r, uint32_t frame) {
-  cg.rgb(0xFFC828);
-  cg.fillCircle(x, y, r, 0);
-  for (int i = 0; i < 8; i++) {
-    float a = i * 0.7854f + frame * 0.02f;
-    cg.drawLine(x + cosf(a) * (r + 3), y + sinf(a) * (r + 3), x + cosf(a) * (r + 6), y + sinf(a) * (r + 6), 0);
+// Icons: shaded sprites drawn by tools/make-wxicons.mjs (wx_icons.h), animated here with drifting clouds, a turning
+// sun, rain streaks, swaying snowflakes, twinkling stars and lightning flashes.
+static void wxSprite(int id, int x, int y) {      // x, y = the sprite's center
+  const WxSprite &sp = WX_SPR[id];
+  const uint8_t *p = sp.px;
+  int x0 = x + sp.ox, y0 = y + sp.oy;
+  for (int j = 0; j < sp.h; j++) for (int i = 0; i < sp.w; i++, p += 3) {
+    uint8_t a = p[0];
+    int X = x0 + i, Y = y0 + j;
+    if (!a || (unsigned)X >= (unsigned)W || (unsigned)Y >= (unsigned)H) continue;
+    uint16_t c = p[1] << 8 | p[2];
+    uint8_t r = (c >> 11) << 3 | (c >> 13), g = ((c >> 5) & 63) << 2 | ((c >> 9) & 3), b = (c & 31) << 3 | ((c >> 2) & 7);
+    uint8_t *q = canvas[Y][X];
+    if (a == 255) { q[0] = r; q[1] = g; q[2] = b; continue; }
+    q[0] = (q[0] * (255 - a) + r * a) / 255; q[1] = (q[1] * (255 - a) + g * a) / 255; q[2] = (q[2] * (255 - a) + b * a) / 255;
   }
 }
-static void wxMoon(int x, int y, const ShowItem &it, uint32_t frame) {
-  cg.rgb(0xE6E6C8); cg.fillCircle(x, y, 10, 0);
-  cg.rgb(it.bg); cg.fillCircle(x + 6, y - 4, 9, 0);
-  for (int i = 0; i < 4; i++) pxAdd(x - 14 + i * 9, y - 12 + (i * 7) % 20, 0xFFFFFF, sin8(frame * 4 + i * 64));
+// Rain streaks (slanted, bright head, fading tail) or snowflakes falling through rows [y0, y0+h) across x0..x0+w.
+static void wxFall(bool snow, int x0, int w, int y0, int h, int n, uint32_t frame) {
+  for (int i = 0; i < n; i++) {
+    int x = x0 + (i * 37) % w, sp = snow ? 1 : 5;
+    int y = (int)((frame * sp / (snow ? 3 : 2) + i * 11) % h);
+    if (snow) {
+      int sx = x + (sin8(frame * 3 + i * 50) - 128) / 64;
+      px(sx, y0 + y, 0xFFFFFF);
+      pxAdd(sx - 1, y0 + y, 0xDCE6FF, 110); pxAdd(sx + 1, y0 + y, 0xDCE6FF, 110);
+      pxAdd(sx, y0 + y - 1, 0xDCE6FF, 110); pxAdd(sx, y0 + y + 1, 0xDCE6FF, 110);
+    } else {
+      int sx = x - y / 4;
+      px(sx, y0 + y, 0x8CD2FF);
+      pxAdd(sx, y0 + y - 1, 0x50A0FF, 170); pxAdd(sx + 1, y0 + y - 3, 0x3C82E6, 90);
+    }
+  }
+}
+static void wxStars(int cx, int cy, uint32_t frame) {
+  static const int8_t S[][2] = {{-17, -12}, {13, -16}, {18, 4}, {-19, 9}, {4, 17}};
+  for (int i = 0; i < 5; i++) pxAdd(cx + S[i][0], cy + S[i][1], 0xFFFFFF, sin8(frame * 3 + i * 51));
 }
 static void wxIcon(int kind, bool day, const ShowItem &it, uint32_t frame) {
-  const int cx = 23, cy = 22;
+  const int cx = 23, cy = 21;
   int drift = (sin8(frame * 2) - 128) / 64;
+  int sunF = (frame / 5) % 6;
+  bool flash = kind == WX_STORM && (frame / 4) % 12 < 2;
   switch (kind) {
-    case WX_SUN: if (day) wxSun(cx, cy, 9, frame); else wxMoon(cx, cy, it, frame); break;
+    case WX_SUN:
+      if (day) wxSprite(WXS_SUN0 + sunF, cx, cy); else { wxStars(cx, cy, frame); wxSprite(WXS_MOON, cx, cy); }
+      break;
     case WX_PARTLY:
-      if (day) wxSun(cx - 6, cy - 6, 7, frame); else wxMoon(cx - 5, cy - 6, it, frame);
-      wxCloud(cx + 3 + drift, cy + 5, 0xDCDCE6); break;
-    case WX_CLOUD: wxCloud(cx - 4 - drift, cy - 4, 0x8C8C9B); wxCloud(cx + 3 + drift, cy + 4, 0xDCDCE6); break;
+      if (day) wxSprite(WXS_SUNS0 + sunF, cx - 7, cy - 7); else { wxStars(cx, cy, frame); wxSprite(WXS_MOONS, cx - 7, cy - 7); }
+      wxSprite(WXS_CLOUD_L, cx + 3 + drift, cy + 6);
+      break;
+    case WX_CLOUD: wxSprite(WXS_CLOUD_B, cx - 4 - drift, cy - 6); wxSprite(WXS_CLOUD_L, cx + 3 + drift, cy + 5); break;
     case WX_FOG:
-      wxCloud(cx, cy - 4, 0x8C8C9B);
-      for (int i = 0; i < 3; i++) { cg.rgb(0xB4B4BE); cg.drawFastHLine(cx - 14 + ((frame / 6 + i * 3) % 6), cy + 9 + i * 4, 24, 0); }
+      wxSprite(WXS_CLOUD_M, cx + 1, cy - 5);
+      for (int i = 0; i < 3; i++) { cg.rgb(i == 1 ? 0xA0A8B8 : 0x8C94A4); cg.drawFastHLine(cx - 15 + ((frame / 6 + i * 3) % 6), cy + 10 + i * 4, 26, 0); }
       break;
-    case WX_RAIN: case WX_SNOW: case WX_STORM: {
-      for (int i = 0; i < 6; i++) {
-        int x = cx - 11 + i * 4 + (i & 1), y = cy + 6 + (int)((frame * (kind == WX_SNOW ? 1 : 3) / 2 + i * 7) % 16);
-        if (kind == WX_SNOW) { px(x, y, 0xFFFFFF); pxAdd(x - 1, y, 0xFFFFFF, 90); pxAdd(x + 1, y, 0xFFFFFF, 90); }
-        else { px(x, y, 0x50A0FF); px(x, y + 1, 0x50A0FF); pxAdd(x, y + 2, 0x50A0FF, 100); }
-      }
-      if (kind == WX_STORM && (frame / 4) % 10 < 2) {
-        cg.rgb(0xFFF050);
-        cg.drawLine(cx + 2, cy + 4, cx - 3, cy + 13, 0); cg.drawLine(cx - 3, cy + 13, cx + 2, cy + 13, 0); cg.drawLine(cx + 2, cy + 13, cx - 3, cy + 22, 0);
-      }
-      wxCloud(cx, cy - 4, kind == WX_STORM ? 0x6E6E7D : 0xAAAAB9);
+    case WX_RAIN: case WX_STORM:
+      wxFall(false, cx - 12, 26, cy + 4, 20, 8, frame);
+      if (flash) wxSprite(WXS_BOLT, cx + 1, cy + 12);
+      wxSprite(flash ? WXS_CLOUD_L : kind == WX_STORM ? WXS_CLOUD_D : WXS_CLOUD_M, cx + 1, cy - 6);
       break;
-    }
+    case WX_SNOW:
+      wxFall(true, cx - 13, 28, cy + 3, 20, 9, frame);
+      wxSprite(WXS_CLOUD_L, cx + 1, cy - 6);
+      break;
   }
 }
 // 5-day forecast: 5 columns of 25 px: weekday, small icon, high (item color), low (gray).
 static void wxMini(int kind, int cx, int cy, uint32_t frame) {
-  auto cloud = [&](int x, int y, uint32_t c) {
-    cg.rgb(c); cg.fillCircle(x - 4, y + 1, 3, 0); cg.fillCircle(x + 1, y - 2, 4, 0); cg.fillCircle(x + 5, y + 1, 3, 0); cg.fillRect(x - 4, y + 1, 9, 4, 0);
-  };
-  auto sun = [&](int x, int y, int r) {
-    cg.rgb(0xFFC828); cg.fillCircle(x, y, r, 0);
-    for (int i = 0; i < 8; i++) { float a = i * 0.7854f + frame * 0.02f; px(x + lroundf(cosf(a) * (r + 2)), y + lroundf(sinf(a) * (r + 2)), 0xFFC828); }
-  };
-  switch (kind) {
-    case WX_SUN: sun(cx, cy, 4); break;
-    case WX_PARTLY: sun(cx - 3, cy - 3, 3); cloud(cx + 2, cy + 2, 0xDCDCE6); break;
-    case WX_CLOUD: cloud(cx - 2, cy - 2, 0x8C8C9B); cloud(cx + 2, cy + 2, 0xDCDCE6); break;
-    case WX_FOG: cloud(cx, cy - 2, 0x8C8C9B); cg.rgb(0xB4B4BE); cg.drawFastHLine(cx - 6, cy + 5, 12, 0); cg.drawFastHLine(cx - 4, cy + 7, 12, 0); break;
-    default: {
-      for (int i = 0; i < 3; i++) {
-        int x = cx - 4 + i * 4, y = cy + 4 + (int)((frame / (kind == WX_SNOW ? 4 : 2) + i * 3) % 6);
-        px(x, y, kind == WX_SNOW ? 0xFFFFFF : 0x50A0FF);
-      }
-      if (kind == WX_STORM && (frame / 4) % 10 < 2) { cg.rgb(0xFFF050); cg.drawLine(cx + 1, cy + 2, cx - 2, cy + 7, 0); cg.drawLine(cx - 2, cy + 7, cx + 1, cy + 7, 0); cg.drawLine(cx + 1, cy + 7, cx - 2, cy + 11, 0); }
-      cloud(cx, cy - 2, kind == WX_STORM ? 0x6E6E7D : 0xAAAAB9);
-    }
-  }
+  if (kind == WX_RAIN || kind == WX_STORM || kind == WX_SNOW) wxFall(kind == WX_SNOW, cx - 6, 13, cy + 2, 8, 3, frame);
+  if (kind == WX_STORM && (frame / 4) % 12 < 2) { cg.rgb(0xFFF07A); cg.drawLine(cx + 1, cy + 2, cx - 2, cy + 6, 0); cg.drawLine(cx - 2, cy + 6, cx + 1, cy + 6, 0); cg.drawLine(cx + 1, cy + 6, cx - 2, cy + 10, 0); }
+  wxSprite(WXS_MINI0 + kind, kind == WX_SUN || kind == WX_PARTLY || kind == WX_CLOUD ? cx : cx + 2, cy + 1);
 }
 static void playForecast(const ShowItem &it, uint32_t frame) {
   static const char *const DOW[] = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
@@ -155,19 +159,18 @@ static void playForecast(const ShowItem &it, uint32_t frame) {
   while (millis() - start < total) {
     uint32_t t0 = millis();
     paintBackground(it, frame);
-    setFont(1); cg.setTextSize(1);
     for (int i = 0; i < wx.fcN; i++) {
       int cx = 2 + i * 25 + 12;
       String d = DOW[(today + i) % 7];
       String hi = String((int)lroundf(wx.fcHi[i])), lo = String((int)lroundf(wx.fcLo[i]));
-      cg.rgb(0xFFBE3C); cg.setCursor(cx - textWidth(d) / 2, 1); cg.print(d);
+      labelC(d, cx, 1, 0xFFBE3C);
       wxMini(wxKind(wx.fcCode[i]), cx, 19, frame + i * 7);
-      cg.rgb(it.rainbow ? hsv((millis() / 8 + i * 300) % 1536) : it.fg); cg.setCursor(cx - textWidth(hi) / 2, 35); cg.print(hi);
-      cg.rgb(0x8C8CA0); cg.setCursor(cx - textWidth(lo) / 2, 45); cg.print(lo);
+      labelC(hi, cx, 35, it.rainbow ? hsv((millis() / 8 + i * 300) % 1536) : it.fg);
+      labelC(lo, cx, 45, 0x8C8CA0);
     }
     String place = upcase(it.text);
     if (place.length() > 21) place = place.substring(0, 21);
-    cg.rgb(0xB4B4C8); cg.setCursor((W - textWidth(place)) / 2, 56); cg.print(place);
+    labelC(place, W / 2, 55, 0xB4B4C8);
     pushCanvas();
     frame++;
     int32_t wait = 40 - (int32_t)(millis() - t0);
@@ -189,21 +192,22 @@ static void playWeather(const ShowItem &item) {
   if (line2.length() > 21) line2 = line2.substring(0, 21);
   String word = wxWord(wx.code);
   int kind = wxKind(wx.code);
+  pjLabels = isPJ(it.font);
+  if (pjLabels) temp += '';                    // the PJ font has a degree sign
   uint32_t total = (it.sec ? it.sec : 10) * 1000UL, start = millis(), frame = 0;
   shownValid = false;
   while (millis() - start < total) {
     uint32_t t0 = millis();
     paintBackground(it, frame);
     wxIcon(kind, wx.day, it, frame);
-    uint8_t f = fitBig(it.font, temp, 70, 0);
-    int tw = textWidth(temp), x = 48 + (80 - tw - 8) / 2, base = textBaseline(f, 2, 40);
-    int16_t x1, y1; uint16_t bw, bh;
-    cg.getTextBounds("0", 0, base, &x1, &y1, &bw, &bh);
+    uint8_t f = fitBig(it.font, temp, pjLabels ? 78 : 70, 0);
+    int deg = pjLabels ? 0 : 8;
+    int tw = textWidth(temp), x = 48 + (80 - tw - deg) / 2, base = textBaseline(f, 2, 40);
+    int y1 = digitTop(base);
     drawText(temp, x, base, it, millis());
-    cg.drawCircle(x + tw + 4, y1 + 3, 2, 0); cg.drawCircle(x + tw + 4, y1 + 3, 1, 0);   // degree sign
-    setFont(1); cg.setTextSize(1);
-    cg.rgb(0xFFBE3C); cg.setCursor(48 + (80 - textWidth(word)) / 2, 44); cg.print(word);
-    cg.rgb(0xB4B4C8); cg.setCursor((W - textWidth(line2)) / 2, 55); cg.print(line2);
+    if (!pjLabels) { cg.rgb(it.rainbow ? 0xFFFFFF : it.fg); cg.drawCircle(x + tw + 4, y1 + 3, 2, 0); cg.drawCircle(x + tw + 4, y1 + 3, 1, 0); }
+    labelC(word, 48 + 40, 44, 0xFFBE3C);
+    labelC(line2, W / 2, 55, 0xB4B4C8);
     pushCanvas();
     frame++;
     int32_t wait = 40 - (int32_t)(millis() - t0);

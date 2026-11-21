@@ -40,6 +40,11 @@
   pre { white-space:pre-wrap; word-break:break-word; max-height:220px; overflow:auto; background:#0a0a10; border-radius:8px; padding:10px; font-size:12px; }
   footer { border-top:1px solid var(--line); margin-top:30px; padding:24px 0 40px; color:var(--muted); font-size:14px; }
   [hidden] { display:none !important; }
+  .wifi label { display:block; font-size:15px; color:var(--muted); margin:10px 0 4px; }
+  .wifi input, .wifi select { width:100%; font:17px Inter,system-ui,sans-serif; padding:11px 12px; border-radius:10px; border:1px solid var(--line); background:#0a0a10; color:var(--text); }
+  .wifi .row { display:flex; gap:10px; margin-top:14px; } .wifi .row button { flex:1; }
+  button.ghost { background:none; border:1px solid var(--line); color:var(--muted); font-size:15px; padding:10px 14px; width:auto; }
+  #wstat { margin-top:12px; font-weight:600; min-height:27px; }
 </style>
 </head>
 <body>
@@ -79,9 +84,30 @@
     <b>Didn't catch the screen?</b> No problem. Unplug the cable from the computer (leave it in the board), click the yellow button again, then <b>hold the button and plug it back into the computer</b>. If you've connected once before, the page notices by itself and no window is needed.
   </div>
 
+  <div class="box wifi" id="wifi" hidden>
+    <b style="font-size:19px">Connect it to your home WiFi</b>
+    <div style="color:var(--muted);font-size:15px">Leave the cable plugged in for this step. The screen joins your WiFi now, so there's no setup with the button later.</div>
+    <div id="wform" hidden>
+      <label for="wssid">WiFi network</label>
+      <select id="wssid"><option value="">Looking for networks…</option></select>
+      <input id="wssid2" placeholder="Network name" hidden autocomplete="off" style="margin-top:8px">
+      <label for="wpass">Password</label>
+      <input id="wpass" type="password" autocomplete="off" placeholder="WiFi password">
+      <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="wshow" style="width:auto"> Show password</label>
+      <div class="row"><button id="wgo">Connect</button></div>
+    </div>
+    <div id="wstat"></div>
+    <div class="row"><button class="ghost" id="wskip">Skip, I'll use the button later</button></div>
+  </div>
+
   <div class="box" id="done" hidden>
     <div class="ok" style="font-size:22px;font-weight:800">Done! 🎉</div>
-    <ol>
+    <ol id="steps-wifi" hidden>
+      <li>Unplug the USB cable, plug the panel's data ribbon and power lead back in, then plug the screen's own power supply back in.</li>
+      <li>The screen joins your WiFi by itself and shows its web address.</li>
+      <li>Open <a id="waddr" href="#" target="_blank" rel="noopener"></a> on any phone or computer on your WiFi to build your show.</li>
+    </ol>
+    <ol id="steps-button">
       <li>Unplug the USB cable, plug the panel's data ribbon and power lead back in, then plug the screen's own power supply back in.</li>
       <li>The screen plays a few starter animations and says <b>"Hold the button 2 sec to set up"</b>.</li>
       <li>Hold the button for 2 seconds and follow the screen: join its WiFi on your phone and pick your home WiFi.</li>
@@ -181,9 +207,9 @@ async function install(port) {
     try { await transport.disconnect(); } catch {}
     progress(1);
     status('Done!', 'ok');
-    $('done').hidden = false;
     $('go').textContent = 'Installed';
     armed = false;
+    improvSetup();
   } catch (e) {
     log('\nERROR: ' + (e && e.message || e) + '\n');
     try { await transport?.disconnect(); } catch {}
@@ -193,6 +219,124 @@ async function install(port) {
     $('go').textContent = 'Try again';
   }
   busy = false;
+}
+
+// ---------- Improv WiFi: hand the home WiFi to the freshly installed screen over the same USB cable ----------
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const wstat = (s, cls = '') => { $('wstat').className = cls; $('wstat').textContent = s; };
+let imp = null;
+function improvDone(url) {
+  $('wifi').hidden = true; $('done').hidden = false;
+  if (url) { $('steps-wifi').hidden = false; $('steps-button').hidden = true; $('waddr').href = url; $('waddr').textContent = url; }
+  imp?.close(); imp = null;
+}
+$('wskip').onclick = () => improvDone('');
+$('wshow').onchange = () => { $('wpass').type = $('wshow').checked ? 'text' : 'password'; };
+$('wssid').onchange = () => { $('wssid2').hidden = $('wssid').value !== '*'; };
+
+class Improv {
+  constructor(port) { this.port = port; this.buf = []; this.waiters = []; }
+  async start() {
+    this.reader = this.port.readable.getReader();
+    (async () => {
+      try { for (;;) { const { value, done } = await this.reader.read(); if (done) break; this.feed(value); } } catch (e) {}
+    })();
+  }
+  feed(bytes) {
+    for (const b of bytes) this.buf.push(b);
+    for (;;) {
+      const i = this.findHeader();
+      if (i < 0) { if (this.buf.length > 5) this.buf.splice(0, this.buf.length - 5); return; }
+      if (i) this.buf.splice(0, i);
+      if (this.buf.length < 10) return;
+      const n = this.buf[8], total = 10 + n;
+      if (this.buf.length < total) return;
+      const p = this.buf.splice(0, total);
+      let sum = 0; for (let k = 0; k < total - 1; k++) sum = (sum + p[k]) & 255;
+      if (sum !== p[total - 1]) continue;
+      this.onPacket(p[7], p.slice(9, 9 + n));
+    }
+  }
+  findHeader() {
+    const H = [73, 77, 80, 82, 79, 86];
+    for (let i = 0; i + 6 <= this.buf.length; i++) if (H.every((h, k) => this.buf[i + k] === h)) return i;
+    return -1;
+  }
+  onPacket(type, d) {
+    let msg;
+    if (type === 1) msg = { kind: 'state', v: d[0] };
+    else if (type === 2) msg = { kind: 'error', v: d[0] };
+    else if (type === 4) {
+      const strs = [];
+      for (let k = 2; k < 2 + d[1];) { const l = d[k]; strs.push(new TextDecoder().decode(new Uint8Array(d.slice(k + 1, k + 1 + l)))); k += 1 + l; }
+      msg = { kind: 'result', cmd: d[0], strs };
+    } else return;
+    log(`[improv ${msg.kind} ${msg.v ?? msg.cmd}${msg.strs ? ' ' + JSON.stringify(msg.strs) : ''}]\n`);
+    this.waiters = this.waiters.filter(w => !w(msg));
+  }
+  wait(test, ms) {
+    return new Promise((res) => {
+      const fn = (m) => { if (!test(m)) return false; clearTimeout(t); res(m); return true; };
+      const t = setTimeout(() => { this.waiters = this.waiters.filter(w => w !== fn); res(null); }, ms);
+      this.waiters.push(fn);
+    });
+  }
+  async send(cmd, data = []) {
+    const d = [cmd, data.length, ...data], p = [73, 77, 80, 82, 79, 86, 1, 3, d.length, ...d];
+    let sum = 0; for (const b of p) sum = (sum + b) & 255;
+    p.push(sum);
+    const w = this.port.writable.getWriter();
+    try { await w.write(new Uint8Array(p)); } finally { w.releaseLock(); }
+  }
+  async close() { try { await this.reader?.cancel(); } catch {} try { this.reader?.releaseLock(); } catch {} try { await this.port.close(); } catch {} }
+}
+
+async function improvSetup() {
+  $('wifi').hidden = false; $('wform').hidden = true;
+  wstat('Waiting for the screen to start up…');
+  let port = null;
+  for (let t = 0; t < 40 && !port; t++) {
+    await sleep(500);
+    const ports = (await navigator.serial.getPorts()).filter(p => p.getInfo().usbVendorId === ESPRESSIF_VID);
+    for (const p of ports) { try { await p.open({ baudRate: 115200 }); port = p; break; } catch (e) {} }
+  }
+  if (!port) { wstat('Couldn\'t reach the screen over USB. That\'s OK: set up WiFi with the button instead.', 'bad'); return; }
+  imp = new Improv(port);
+  await imp.start();
+  let st = null;
+  for (let t = 0; t < 25 && !st; t++) { await imp.send(2); st = await imp.wait(m => m.kind === 'state', 1000); }
+  if (!st) { wstat('The screen didn\'t answer. Set up WiFi with the button instead.', 'bad'); return; }
+  if (st.v === 4) {
+    const r = await imp.wait(m => m.kind === 'result', 1500);
+    const url = r?.strs?.[0] || '';
+    wstat(`It's already on your WiFi${url ? ' at ' + url : ''}. Pick another network below to change it.`, 'ok');
+    $('wskip').textContent = 'Keep this WiFi';
+    $('wskip').onclick = () => improvDone(url);
+  } else wstat('');
+  $('wform').hidden = false;
+  // Networks the screen can see (strongest first).
+  const sel = $('wssid'), seen = [];
+  await imp.send(4);
+  for (;;) {
+    const r = await imp.wait(m => m.kind === 'result' && m.cmd === 4, 15000);
+    if (!r || !r.strs.length) break;
+    seen.push(r.strs);
+  }
+  const esc = (t) => t.replace(/[<&"]/g, c => ({ '<': '&lt;', '&': '&amp;', '"': '&quot;' })[c]);
+  sel.innerHTML = seen.map(([ssid]) => `<option value="${esc(ssid)}">${esc(ssid)}</option>`).join('') + '<option value="*">Other network…</option>';
+  if (!seen.length) { sel.value = '*'; $('wssid2').hidden = false; }
+  $('wgo').onclick = async () => {
+    const ssid = sel.value === '*' ? $('wssid2').value.trim() : sel.value, pass = $('wpass').value;
+    if (!ssid) { wstat('Pick your WiFi network first.', 'bad'); return; }
+    const enc = new TextEncoder(), a = [...enc.encode(ssid)], b = [...enc.encode(pass)];
+    $('wgo').disabled = true;
+    wstat(`Joining ${ssid}… (up to 20 seconds)`);
+    await imp.send(1, [a.length, ...a, b.length, ...b]);
+    const r = await imp.wait(m => (m.kind === 'result' && m.cmd === 1) || (m.kind === 'error' && m.v === 3), 30000);
+    $('wgo').disabled = false;
+    if (r?.kind === 'result') { wstat('Connected!', 'ok'); improvDone(r.strs[0]); }
+    else wstat(r ? 'Couldn\'t join that network. Check the password and try again.' : 'No answer from the screen. Try again, or skip and use the button.', 'bad');
+  };
 }
 </script>
 </body>
