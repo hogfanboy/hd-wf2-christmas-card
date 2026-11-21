@@ -47,6 +47,7 @@ static void handleClear() {
   LittleFS.remove("/show.txt");
   LittleFS.mkdir("/gifs");
   playlist.clear();
+  playOrder.clear();
   upCount = 0;
   Serial.printf("Cleared %u pictures, %u KB used\n", (unsigned)names.size(), (unsigned)(LittleFS.usedBytes() / 1024));
   panel->clearScreen();
@@ -233,7 +234,7 @@ static void startHomeWeb() {
   web->on("/api/fcprobe", HTTP_POST, []() {
     touch();
     fcStyle = constrain((int)web->arg("s").toInt(), 0, 3); fcProbeUntil = millis() + 60000;
-    for (size_t i = 0; i < playlist.size(); i++) if (playlist[i].type == 'w') { playIdx = i; skipItem = true; break; }
+    for (size_t i = 0; i < playOrder.size(); i++) if (playlist[playOrder[i]].type == 'w') { playIdx = i; skipItem = true; break; }
     sendJson("{\"ok\":true}");
   });
   web->on("/api/update-site", HTTP_POST, []() { touch(); updateNow = true; sendJson("{\"ok\":true}"); });   // card fetches it itself

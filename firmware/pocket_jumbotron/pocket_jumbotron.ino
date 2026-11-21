@@ -5,7 +5,7 @@
 //   canvas.ino    drawing helpers (canvas text, fonts, pixels, panel text colors)
 //   effects.ino   effects library (snow, fireworks, fire...) and effect-only items
 //   net.ino       WiFi, settings (NVS), hotspot setup mode, address/QR screen
-//   online.ino    HTTPS from the website, news ticker, stocks, automatic location + time zone
+//   online.ino    HTTPS from the website, stocks, automatic location + time zone
 //   panel.ino     panel driver setup: chip registers, fast scan (QR), restart
 //   player.ino    GIF and full-color .pjm players, canvas push
 //   screens.ino   text, clock and countdown items
@@ -37,7 +37,7 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "1.0.0-beta2";
+static const char *FW_VERSION = "1.0.0-beta3";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
@@ -88,6 +88,8 @@ struct ShowItem {
 };
 struct Theme { uint32_t main, acc, dim; };   // color theme: main text, accent, dim (canvas.ino THEMES)
 std::vector<ShowItem> playlist;
+std::vector<uint16_t> playOrder;               // play order: playlist indexes, shuffled each round in shuffle mode
+bool shuffleShow = false;                      // show.txt "order shuffle" line (show.ino)
 struct Flake { int16_t x, y; uint8_t spd, bri; };   // effect particles (show.ino)
 // Effect names in show lines (show.ino); index = ShowItem.effect.
 const char *const FX_NAMES[] = {"none", "snow", "sparkle", "hearts", "confetti", "fireworks", "stars", "fire", "matrix",
@@ -184,9 +186,10 @@ void loop() {
   }
   updateService();                                   // 3 am: newer firmware on the website? (online.ino)
   if (holdPlayback || playlist.empty()) { delay(5); return; }
-  if (playIdx >= playlist.size()) playIdx = 0;
+  if (playOrder.size() != playlist.size()) shuffleOrder();
+  if (playIdx >= playlist.size()) { playIdx = 0; shuffleOrder(); }   // next round (a new random order in shuffle mode)
   static size_t skipped = 0;                         // items in a row that are off schedule right now
-  const ShowItem &it = playlist[playIdx++];
+  const ShowItem &it = playlist[playOrder[playIdx++]];
   if (!itemActive(it)) {
     if (++skipped >= playlist.size()) { skipped = 0; panel->clearScreen(); shownValid = false; waitMs(1000); }
     return;

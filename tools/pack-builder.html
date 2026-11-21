@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pack Builder</title>
+<style>
+  :root { --bg:#0b0b12; --bg2:#15151f; --bg3:#101019; --line:#2a2a3a; --text:#ecebf5; --muted:#a3a2b8; --gold:#ffbe3c; --cyan:#5ac8ff; --red:#ff5a6e; --green:#4ee08a; --violet:#d6b8ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  main { max-width:1180px; margin:0 auto; padding:16px; }
+  h1 { font-size:22px; margin:0; color:var(--gold); } h1 span { color:var(--cyan); }
+  h2 { font-size:16px; margin:0 0 10px; }
+  .muted { color:var(--muted); font-size:13px; }
+  .top { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  .layout { display:grid; grid-template-columns:260px minmax(0,1fr); gap:16px; margin-top:14px; }
+  @media (max-width:760px) { .layout { grid-template-columns:1fr; } }
+  .box { background:var(--bg2); border:1px solid var(--line); border-radius:14px; padding:14px; }
+  .packs { display:grid; gap:8px; }
+  .pk { text-align:left; background:var(--bg3); border:1px solid var(--line); border-radius:10px; padding:9px 11px; color:var(--text); cursor:pointer; font:inherit; width:100%; }
+  .pk b { display:block; font-size:14px; } .pk.on { border-color:var(--gold); } .pk.skip { opacity:.55; }
+  button { font:600 14px system-ui,sans-serif; border:0; border-radius:10px; padding:9px 14px; cursor:pointer; }
+  .primary { background:var(--gold); color:#1a1300; } .secondary { background:#24243a; color:var(--text); border:1px solid var(--line); }
+  button:disabled { opacity:.45; cursor:default; }
+  input[type=text], input[type=number] { background:#1b1b28; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 9px; font:14px system-ui,sans-serif; width:100%; }
+  .fields { display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; }
+  .fields label { display:grid; gap:3px; font-size:12px; color:var(--muted); }
+  .fields .wide { grid-column:1 / -1; }
+  .drop { margin-top:14px; border:2px dashed var(--line); border-radius:14px; padding:18px; text-align:center; color:var(--muted); cursor:pointer; }
+  .drop.over { border-color:var(--cyan); color:var(--cyan); background:#0f1a24; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:12px; margin-top:14px; }
+  .tile { position:relative; background:var(--bg3); border:1px solid var(--line); border-radius:12px; padding:8px; }
+  .tile.drag { opacity:.4; } .tile.target { border-color:var(--cyan); }
+  .tile canvas { width:100%; aspect-ratio:2/1; display:block; border-radius:6px; background:#07070b; cursor:grab; }
+  .tile .nm { font-size:13px; margin-top:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:4px; }
+  .tile .info { font-size:12px; color:var(--muted); }
+  .tile .btns { display:flex; gap:6px; margin-top:6px; }
+  .tile .btns button { padding:4px 9px; font-size:12px; }
+  .num { position:absolute; top:12px; left:12px; background:rgba(0,0,0,.7); color:var(--gold); font:700 12px system-ui; padding:1px 7px; border-radius:6px; }
+  .tag { font:700 11px system-ui; padding:1px 7px; border-radius:6px; background:#2b2440; color:var(--violet); margin-left:4px; }
+  .tag.full { background:#3a2a14; color:var(--gold); }
+  .status { font-size:13px; min-height:20px; margin-top:8px; white-space:pre-wrap; }
+  .ok { color:var(--green); } .err { color:var(--red); }
+  .bar { height:8px; border-radius:99px; background:#22222f; overflow:hidden; margin-top:6px; } .bar i { display:block; height:100%; background:var(--green); }
+  .bar.over i { background:var(--red); }
+  pre.log { background:#07070b; border:1px solid var(--line); border-radius:8px; padding:8px; font-size:12px; max-height:220px; overflow:auto; white-space:pre-wrap; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <div><h1>Pack <span>Builder</span></h1><div class="muted" id="repo"></div></div>
+    <div class="row"><span class="muted" id="changes"></span><button class="primary" id="publish">Publish to the website</button></div>
+  </div>
+  <div class="status" id="pubStatus"></div>
+  <pre class="log" id="pubLog" hidden></pre>
+
+  <div class="layout">
+    <div class="box">
+      <h2>Packs</h2>
+      <div class="packs" id="packs"></div>
+      <div style="margin-top:14px" class="muted">New pack</div>
+      <div class="row" style="margin-top:4px"><input type="text" id="newName" placeholder="Folder, e.g. Smith Family"><button class="secondary" id="newBtn">+ Add</button></div>
+      <div class="status" id="newStatus"></div>
+    </div>
+
+    <div>
+      <div class="box" id="editor" hidden>
+        <div class="top"><h2 id="edTitle" style="margin:0"></h2><span class="muted" id="edFolder"></span></div>
+        <div class="fields" id="meta" style="margin-top:10px">
+          <label>Title (shown on the phone page)<input type="text" data-m="title"></label>
+          <label>List order (lower = higher on the page, default 50)<input type="number" data-m="order" placeholder="50"></label>
+          <label class="wide">About (one line under the title)<input type="text" data-m="about"></label>
+          <label class="wide">Only for these screens (names like PocketJumbo-EED0, commas; empty = every screen)<input type="text" data-m="cards"></label>
+        </div>
+        <div class="row" style="margin-top:10px"><button class="secondary" id="saveMeta">Save details</button><span class="status" id="metaStatus" style="margin:0"></span></div>
+        <div class="muted" id="loose" hidden style="margin-top:6px">Loose pictures in the repo root become the "New pictures" pack (no details to set).</div>
+
+        <div class="drop" id="drop">Drop pictures here, or click to choose (GIF, PNG, JPG, WEBP; animated is fine)
+          <input type="file" id="files" accept=".gif,.png,.jpg,.jpeg,.webp" multiple hidden></div>
+        <div style="margin-top:12px">
+          <div class="row" style="justify-content:space-between"><span class="muted" id="total"></span><span class="muted">Drag pictures to change the play order.</span></div>
+          <div class="bar" id="bar"><i></i></div>
+        </div>
+        <div class="grid" id="grid"></div>
+      </div>
+      <div class="box" id="empty"><div class="muted">Pick a pack on the left, or add a new one.</div></div>
+    </div>
+  </div>
+</main>
+
+<!--VENDOR-->
+<script>
+const $ = (id) => document.getElementById(id);
+const kb = (b) => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.round(b / 1024) + ' KB';
+const SCREEN = 4.3 * 1048576;                     // a screen's picture space
+let packs = [], cur = null, tiles = [];
+async function api(path, opts) {
+  const r = await fetch(path, opts), j = await r.json();
+  if (!r.ok || j.error) throw new Error(j.error || r.status);
+  return j;
+}
+const enc = encodeURIComponent;
+
+// ---- LED preview (same look as the phone page: round dots with dark gaps) ----
+const S = 4, small = document.createElement('canvas'); small.width = W; small.height = H;
+const sctx = small.getContext('2d');
+const mask = (() => {
+  const m = document.createElement('canvas'); m.width = W * S; m.height = H * S;
+  const c = m.getContext('2d'); c.fillStyle = '#000'; c.fillRect(0, 0, m.width, m.height);
+  c.globalCompositeOperation = 'destination-out';
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { c.beginPath(); c.arc(x * S + S / 2, y * S + S / 2, S * 0.42, 0, 7); c.fill(); }
+  return m;
+})();
+function drawLED(cv, img) {
+  const c = cv.getContext('2d');
+  sctx.putImageData(img, 0, 0);
+  c.imageSmoothingEnabled = false; c.drawImage(small, 0, 0, W * S, H * S); c.drawImage(mask, 0, 0);
+}
+function animate(now) {
+  for (const t of tiles) {
+    if (!t.frames || !t.frames.length || now < t.next) continue;
+    t.fi = (t.fi + 1) % t.frames.length; t.next = now + t.frames[t.fi].delay;
+    drawLED(t.cv, t.frames[t.fi].img);
+  }
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+// Converts like a phone does when the pack is added (web/index.html addFile + build): fit by shape, then auto.
+async function convert(t) {
+  const r = await fetch(`/api/file?pack=${enc(cur.id)}&name=${enc(t.name)}`);
+  const file = new File([await r.blob()], t.name);
+  const src = await decode(file, {});
+  const ratio = src[0].canvas.width / src[0].canvas.height, fit = ratio >= 1.6 ? 'fill' : 'fit';
+  const frames = src.map(s => ({ img: scale(s.canvas, fit), delay: s.delay }));
+  const full = !gifFits(frames);
+  const out = full ? await encodePjm(frames) : encodeGif(frames);
+  Object.assign(t, { frames: out.shown, fi: -1, next: 0, full, phone: out.blob.size, nf: frames.length });
+}
+
+function renderPacks() {
+  $('packs').innerHTML = '';
+  for (const p of packs) {
+    const b = document.createElement('button');
+    b.className = 'pk' + (cur && p.id === cur.id ? ' on' : '') + (p.skipped ? ' skip' : '');
+    b.innerHTML = '<b></b><span class="muted"></span>';
+    b.querySelector('b').textContent = (p.meta.cards ? '🎁 ' : '') + (p.meta.title || p.folder);
+    b.querySelector('span').textContent = `${p.folder} · ${p.files.length} picture${p.files.length === 1 ? '' : 's'}${p.skipped ? ' · skipped (starts with _)' : ''}`;
+    b.onclick = () => openPack(p.id);
+    $('packs').appendChild(b);
+  }
+}
+async function load(keep) {
+  const j = await api('/api/packs');
+  packs = j.packs;
+  $('repo').textContent = 'Content repo: ' + j.repo;
+  const n = j.status ? j.status.split('\n').length : 0;
+  $('changes').textContent = n ? `${n} change${n === 1 ? '' : 's'} not published yet` : 'Everything is published';
+  renderPacks();
+  if (keep != null) await openPack(keep);
+}
+
+async function openPack(id) {
+  cur = packs.find(p => p.id === id);
+  if (!cur) return;
+  renderPacks();
+  $('empty').hidden = true; $('editor').hidden = false;
+  $('edTitle').textContent = cur.meta.title || cur.folder;
+  $('edFolder').textContent = cur.loose ? 'repo root' : 'folder ' + cur.folder;
+  $('meta').hidden = $('saveMeta').parentElement.hidden = !!cur.loose; $('loose').hidden = !cur.loose;
+  const m = cur.meta;
+  for (const inp of $('meta').querySelectorAll('[data-m]')) {
+    const k = inp.dataset.m;
+    inp.value = k === 'cards' ? [].concat(m.cards || []).join(', ') : m[k] ?? '';
+  }
+  $('metaStatus').textContent = '';
+  renderTiles();
+}
+function renderTiles() {
+  const g = $('grid'); g.innerHTML = '';
+  const old = new Map(tiles.map(t => [t.name, t]));
+  tiles = cur.files.map(f => old.get(f.name)?.size === f.size && old.get(f.name)?.pack === cur.id ? old.get(f.name) : { name: f.name, size: f.size, pack: cur.id });
+  tiles.forEach((t, i) => {
+    const el = document.createElement('div'); el.className = 'tile'; el.draggable = true;
+    el.innerHTML = `<span class="num">${i + 1}</span><canvas width="${W * S}" height="${H * S}"></canvas><div class="nm"></div><div class="info">Converting…</div>
+      <div class="btns"><button class="secondary" data-a="-1" title="Earlier">◀</button><button class="secondary" data-a="1" title="Later">▶</button><button class="secondary" data-a="del" style="color:var(--red);margin-left:auto">Delete</button></div>`;
+    el.querySelector('.nm').textContent = t.name; el.querySelector('.nm').title = t.name;
+    t.cv = el.querySelector('canvas'); t.info = el.querySelector('.info'); t.el = el;
+    if (t.frames) { t.next = 0; showInfo(t); }
+    el.querySelectorAll('[data-a]').forEach(b => b.onclick = () => b.dataset.a === 'del' ? del(t) : move(i, i + +b.dataset.a));
+    el.ondragstart = (e) => { e.dataTransfer.setData('text/x-tile', String(i)); el.classList.add('drag'); };
+    el.ondragend = () => el.classList.remove('drag');
+    el.ondragover = (e) => { if (e.dataTransfer.types.includes('text/x-tile')) { e.preventDefault(); el.classList.add('target'); } };
+    el.ondragleave = () => el.classList.remove('target');
+    el.ondrop = (e) => { const from = e.dataTransfer.getData('text/x-tile'); if (from === '') return; e.preventDefault(); e.stopPropagation(); el.classList.remove('target'); move(+from, i); };
+    g.appendChild(el);
+  });
+  updateTotal();
+  (async () => { for (const t of tiles) if (!t.frames && !t.failed) { try { await convert(t); showInfo(t); } catch (e) { t.failed = true; t.info.innerHTML = '<span class="err">A phone couldn\'t read this picture</span>'; } updateTotal(); } })();
+}
+function showInfo(t) {
+  t.info.innerHTML = `${t.nf} frame${t.nf === 1 ? '' : 's'} · file ${kb(t.size)} · on a screen ${kb(t.phone)}<span class="tag${t.full ? ' full' : ''}">${t.full ? 'Full color' : 'GIF'}</span>`;
+}
+function updateTotal() {
+  const done = tiles.filter(t => t.phone), need = done.reduce((s, t) => s + t.phone + 4096, 0);
+  $('total').textContent = tiles.length ? `Adds ${kb(need)} to a screen (${done.length} of ${tiles.length} measured) · a screen holds about ${kb(SCREEN)}` : 'No pictures yet.';
+  $('bar').querySelector('i').style.width = Math.min(100, need / SCREEN * 100) + '%';
+  $('bar').classList.toggle('over', need > SCREEN);
+}
+
+async function move(from, to) {
+  if (to < 0 || to >= tiles.length || from === to) return;
+  const names = tiles.map(t => t.name), [n] = names.splice(from, 1); names.splice(to, 0, n);
+  try {
+    const j = await api(`/api/order?pack=${enc(cur.id)}`, { method: 'POST', body: JSON.stringify(names) });
+    const byOld = new Map(tiles.map(t => [t.name, t]));
+    tiles = names.map((nm, i) => Object.assign(byOld.get(nm), { name: j.names[i] }));
+    await load(cur.id);
+  } catch (e) { alert(e.message); await load(cur.id); }
+}
+async function del(t) {
+  if (!confirm(`Delete ${t.name} from this pack? (It stays in git history until you publish; after that it's only in the history.)`)) return;
+  try { await api(`/api/delete?pack=${enc(cur.id)}&name=${enc(t.name)}`, { method: 'POST' }); } catch (e) { alert(e.message); }
+  await load(cur.id);
+}
+async function addFiles(list) {
+  const files = [...list].filter(f => /\.(gif|png|jpe?g|webp)$/i.test(f.name));
+  if (!files.length) { alert('Packs take GIF, PNG, JPG or WEBP pictures.'); return; }
+  for (let i = 0; i < files.length; i++) {
+    $('total').textContent = `Adding ${i + 1} of ${files.length}…`;
+    try { await api(`/api/upload?pack=${enc(cur.id)}&name=${enc(files[i].name)}`, { method: 'POST', body: files[i] }); }
+    catch (e) { alert(files[i].name + ': ' + e.message); }
+  }
+  await load(cur.id);
+}
+
+$('saveMeta').onclick = async () => {
+  const m = {}; $('meta').querySelectorAll('[data-m]').forEach(i => m[i.dataset.m] = i.value);
+  try { await api(`/api/meta?pack=${enc(cur.id)}`, { method: 'POST', body: JSON.stringify(m) }); $('metaStatus').className = 'status ok'; $('metaStatus').textContent = '✓ Saved'; await load(cur.id); }
+  catch (e) { $('metaStatus').className = 'status err'; $('metaStatus').textContent = e.message; }
+};
+$('newBtn').onclick = async () => {
+  const st = $('newStatus');
+  try { const j = await api(`/api/new?name=${enc($('newName').value)}`, { method: 'POST' }); $('newName').value = ''; st.textContent = ''; await load(j.id); }
+  catch (e) { st.className = 'status err'; st.textContent = e.message; }
+};
+const drop = $('drop');
+drop.onclick = (e) => { if (e.target === drop) $('files').click(); };
+$('files').onchange = (e) => { addFiles(e.target.files); e.target.value = ''; };
+drop.ondragover = (e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); drop.classList.add('over'); } };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('over'); addFiles(e.dataTransfer.files); };
+$('publish').onclick = async () => {
+  const msg = prompt('What changed? (the commit message)', 'Pack update' + (cur ? ': ' + (cur.meta.title || cur.folder) : ''));
+  if (msg === null) return;
+  const st = $('pubStatus'), lg = $('pubLog');
+  st.className = 'status'; st.textContent = 'Publishing…'; $('publish').disabled = true;
+  try {
+    const j = await api(`/api/publish?msg=${enc(msg)}`, { method: 'POST' });
+    lg.hidden = false; lg.textContent = j.log.join('\n\n');
+    st.className = j.ok ? 'status ok' : 'status err';
+    st.textContent = !j.ok ? 'Publishing failed (see below).' : j.site ? '✓ Pushed. The website is rebuilding now; phones see it in about 3 minutes.' : '✓ Pushed. The website picks it up within the hour (couldn\'t start the rebuild with gh).';
+  } catch (e) { st.className = 'status err'; st.textContent = e.message; }
+  $('publish').disabled = false;
+  await load(cur && cur.id);
+};
+load().then(() => { if (packs.length) openPack(packs[packs.length - 1].id); }).catch(e => { $('empty').innerHTML = '<span class="err">' + e.message + '</span>'; });
+</script>
+</body>
+</html>

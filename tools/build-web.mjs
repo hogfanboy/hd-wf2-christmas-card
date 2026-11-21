@@ -1,5 +1,5 @@
 // Builds the phone setup page that the card serves:
-//  web/index.html + vendored libs (omggif, gifenc; MIT) -> one self-contained page,
+//  web/index.html + vendored libs (omggif, gifenc: MIT; jpeg-js encoder: BSD) -> one self-contained page,
 //  gzipped into firmware/pocket_jumbotron/web_index.h (built-in copy at /local) and copied to docs/app/ (the
 //  website copy that the card's front page loads). Also writes firmware/build/web/index.html for testing.
 import fs from 'node:fs';
@@ -17,9 +17,14 @@ gifenc = gifenc.replace(/export\{([^}]*)\};?/, (_, list) => {
   const pairs = list.split(',').map(s => s.trim().split(/\s+as\s+/)).map(([local, name]) => `${name || local}:${local}`);
   return `window.gifenc={${pairs.join(',')}};`;
 });
+// jpeg-js encoder: 4:4:4 JPEGs (full color resolution; the browser's own JPEGs halve it and smear reds/greens).
+const jpegjs = fs.readFileSync(path.join(nm, 'jpeg-js/lib/encoder.js'), 'utf8');
+const convert = fs.readFileSync(path.join(root, 'web/convert.js'), 'utf8');   // decoding/encoding pictures
 const pjfont = fs.readFileSync(path.join(root, 'web/pjfont.js'), 'utf8');   // our font: same pixels as the card
 const wxicons = fs.readFileSync(path.join(root, 'web/wxicons.js'), 'utf8');   // weather icon sprites (tools/make-wxicons.mjs)
-const vendor = `<script>/* omggif (MIT) */${omggif}</script>\n<script>/* gifenc (MIT, Matt DesLauriers) */(function(){${gifenc}})();</script>\n<script>${pjfont}</script>\n<script>${wxicons}</script>`;
+const vendor = `<script>/* omggif (MIT) */${omggif}</script>\n<script>/* gifenc (MIT, Matt DesLauriers) */(function(){${gifenc}})();</script>\n<script>/* jpeg-js encoder (BSD, Adobe / Andreas Ritter) */(function(){var module;${jpegjs}})();</script>
+<script>${convert}</script>
+<script>${pjfont}</script>\n<script>${wxicons}</script>`;
 
 // Build stamp shown on the page ("app 2026-11-20 abc1234"); the website copy is what cards normally run.
 let rev = ''; try { rev = (await import('node:child_process')).execSync('git rev-parse --short HEAD', { cwd: root }).toString().trim(); } catch (e) {}

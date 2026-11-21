@@ -7,8 +7,7 @@ At the end of a session: promote what was built and verified to PROJECT-NOTES.md
 1. **Content packs**: done (0.6.3; source moved to the private repo in 0.9.6, family codes dropped). Next: the card fetches new packs daily by itself (HTTPS on the card; tight on RAM, pause the player while downloading).
 2. **Per-family messages**: done in 0.6.3 via `cards` in pack.json. Next: card shows a "new pack for you" hint on the panel.
 3. **Show builder**: done in 0.7.0 (messages, clock, countdown, seconds per item). Effects + weather in 0.8.0. Next: two-line messages, drag to reorder.
-4. **News headline scroll** (user wants it, not yet): weather done in 0.8.0 (Open-Meteo over http). Headlines from RSS digested by a GitHub Actions cron into a small text file on Pages (the card would need HTTPS: ~40 KB RAM for TLS, or serve it over http from elsewhere); scroll them as a ticker.
-9. **Finance / market item**: follow the market on the screen: a few tickers (S&P 500, Dow, a stock or two picked on the page), price + day change in green/red, maybe a tiny day chart. Same data path as news (Actions cron writes a small JSON on Pages, or the card fetches a free quote API); quotes can be delayed 15 min, say so on the page.
+9. **Finance / market item**: done in 0.9.7 (stocks item, hourly feed on Pages).
 5. **Night schedule**: done in 0.7.0.
 6. **Updates from GitHub**: one-tap button on the card page done in 0.7.0. Next: card checks by itself.
 7. **Short videos**: done in 1.0 (page reads MP4/MOV/WEBM, start + length, up to 30 s). Next: crop/zoom per clip.
@@ -37,14 +36,6 @@ Phone OTG install dropped (no iPhone path). Options: borrow any Chrome/Edge comp
 3 boards ordered (N32R16, microSD, ES8311 audio, USB-C; no speaker included, so a 4–8 Ω speaker is needed). Idea: MJPEG video + audio from SD. Confirm it drives a 128x64 panel (2x 64x64 chained). Don't mix assumptions with the WF2 (it has no PSRAM). Distribute only your own family video, not commercial specials.
 
 ## Parking Lot
-- Colorful weather icons: hand-drawn pixel-art sprites (24x24 big + 12x12 forecast, shaded sun with glow, layered
-  clouds, colored drops/flakes, lightning), 2-4 animation frames each, stored as RGB565 arrays in flash (~1 KB per
-  frame). Draw them in a tool that also renders the page preview from the same data; judge on the panel with an
-  "icon test" item that shows them all. Our own art only (no copied icon sets). 
+- Bring soft font edges back for the huge font only, if it looks better there (`SOFT = { 34: 1 }` in web/pjfont.js).
+- Weather icon animation frames beyond the breathing sun (cloud puff wobble, raindrop splash) if the crisp set is liked.
 - Research: scan GitHub for projects built on the ESP32-HUB75-MatrixPanel-DMA library, and Huidu's HDPlayer feature list, for things worth adding.
-- News: works as designed but adds little (headlines too vague). Explore: a slow bottom-row crawl with longer, more
-  detailed lines (like CNN's), under another item; or drop news from this card (may not be a good fit).
-- Test: drop the soft shading around font edges. Looks OK on the big font, muddy on the thin fonts; try crisp
-  edges on thin fonts only (LEDs shine with contrast: black around everything).
-- Pack builder web site (just for me): drag in pictures, set title/cards/order, preview at 128x64, then it commits
-  the folder + pack.json to the private content repo (so no hand-made folders or pack.json typos).

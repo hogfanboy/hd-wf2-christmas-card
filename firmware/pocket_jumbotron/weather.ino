@@ -77,7 +77,7 @@ static const char *wxWord(int c) {
   if (c >= 71 && c <= 77) return "SNOW"; if (c >= 80 && c <= 82) return "SHOWERS"; if (c == 85 || c == 86) return "SNOW SHOWERS";
   if (c >= 95) return "THUNDERSTORM"; return "";
 }
-// Icons: shaded sprites drawn by tools/make-wxicons.mjs (wx_icons.h), animated here with drifting clouds, a turning
+// Icons: crisp sprites drawn by tools/make-wxicons.mjs (wx_icons.h), animated here with drifting clouds, a turning
 // sun, rain streaks, swaying snowflakes, twinkling stars and lightning flashes.
 static void wxSprite(int id, int x, int y) {      // x, y = the sprite's center
   const WxSprite &sp = WX_SPR[id];
@@ -94,20 +94,18 @@ static void wxSprite(int id, int x, int y) {      // x, y = the sprite's center
     q[0] = (q[0] * (255 - a) + r * a) / 255; q[1] = (q[1] * (255 - a) + g * a) / 255; q[2] = (q[2] * (255 - a) + b * a) / 255;
   }
 }
-// Rain streaks (slanted, bright head, fading tail) or snowflakes falling through rows [y0, y0+h) across x0..x0+w.
+// Rain drops (2 px, slanted fall) or snowflakes (solid plus) falling through rows [y0, y0+h) across x0..x0+w.
 static void wxFall(bool snow, int x0, int w, int y0, int h, int n, uint32_t frame) {
   for (int i = 0; i < n; i++) {
     int x = x0 + (i * 37) % w, sp = snow ? 1 : 5;
     int y = (int)((frame * sp / (snow ? 3 : 2) + i * 11) % h);
     if (snow) {
       int sx = x + (sin8(frame * 3 + i * 50) - 128) / 64;
-      px(sx, y0 + y, 0xFFFFFF);
-      pxAdd(sx - 1, y0 + y, 0xDCE6FF, 110); pxAdd(sx + 1, y0 + y, 0xDCE6FF, 110);
-      pxAdd(sx, y0 + y - 1, 0xDCE6FF, 110); pxAdd(sx, y0 + y + 1, 0xDCE6FF, 110);
+      px(sx, y0 + y, 0xFFFFFF); px(sx - 1, y0 + y, 0xFFFFFF); px(sx + 1, y0 + y, 0xFFFFFF);   // solid white plus
+      px(sx, y0 + y - 1, 0xFFFFFF); px(sx, y0 + y + 1, 0xFFFFFF);
     } else {
       int sx = x - y / 4;
-      px(sx, y0 + y, 0x8CD2FF);
-      pxAdd(sx, y0 + y - 1, 0x50A0FF, 170); pxAdd(sx + 1, y0 + y - 3, 0x3C82E6, 90);
+      px(sx, y0 + y, 0x46AAFF); px(sx, y0 + y - 1, 0x46AAFF);                         // solid 2 px drop
     }
   }
 }

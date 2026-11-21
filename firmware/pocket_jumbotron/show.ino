@@ -7,8 +7,9 @@
 //     fx        <sec> <fg> <bg> <font> <effect>                      (an effect on its own, full screen)
 //     weather   <sec> <fg> <bg> <font> <effect> <F|C|A> <lat> <lon> <place>   lat/lon "auto" = where the card is
 //               (found by its internet address, online.ino), A = F in the US, else C; empty place = that town
-//     news      <sec> <fg> <bg> <font> <effect> <topic>     top, world, business, sports, tech, science (fw 0.9.7)
 //     stocks    <sec> <fg> <bg> <font> <effect> <symbols>   e.g. ^GSPC,^DJI,AAPL (see tools/build-feeds.mjs)
+//     order     shuffle | inorder                              (fw 1.0: a line on its own, anywhere; shuffle =
+//               random order, new each round, never the same item twice in a row. Older firmware skips it)
 //   sec 0 = automatic (pictures: 8-20 s by their own length; scrolling text: one pass; others: 8-10 s).
 //   fg/bg are RRGGBB hex, fg may be "rainbow". effect: one of FX_NAMES (none, snow, sparkle, hearts, confetti,
 //   fireworks, stars, fire, matrix; sleigh, balloons, fish, rain since 1.0). Unknown names (e.g. the removed "plasma") play as none.
@@ -87,8 +88,22 @@ bool itemActive(const ShowItem &it) {
   return true;
 }
 
+// Play order for the next round: 0..n-1, or a random order in shuffle mode (Fisher-Yates) that doesn't start
+// with the item that just played.
+void shuffleOrder() {
+  size_t n = playlist.size();
+  int last = playOrder.size() == n && n ? playOrder.back() : -1;
+  playOrder.resize(n);
+  for (size_t i = 0; i < n; i++) playOrder[i] = i;
+  if (!shuffleShow || n < 2) return;
+  for (size_t i = n; i > 1; i--) std::swap(playOrder[i - 1], playOrder[esp_random() % i]);
+  if (playOrder[0] == last) std::swap(playOrder[0], playOrder[1 + esp_random() % (n - 1)]);
+}
+
 void loadPlaylist() {
   playlist.clear();
+  playOrder.clear();
+  shuffleShow = false;
   File sf = LittleFS.open("/show.txt", "r");
   if (sf) {
     while (sf.available()) {
@@ -97,6 +112,7 @@ void loadPlaylist() {
       std::vector<String> f;
       int s = 0;
       for (;;) { int t = line.indexOf('\t', s); if (t < 0) { f.push_back(line.substring(s)); break; } f.push_back(line.substring(s, t)); s = t + 1; }
+      if (f[0] == "order") { shuffleShow = f.size() > 1 && f[1] == "shuffle"; continue; }
       ShowItem it;
       if (f.size() > 3 && f.back().startsWith("@")) { parseOptions(it, f.back().substring(1)); f.pop_back(); }
       if (f.size() < 3) continue;
@@ -105,7 +121,7 @@ void loadPlaylist() {
       else {
         if (f.size() < 6) continue;
         it.type = f[0] == "text" ? 't' : f[0] == "clock" ? 'c' : f[0] == "countdown" ? 'd' : f[0] == "fx" ? 'f' : f[0] == "weather" ? 'w' :
-                  f[0] == "news" ? 'n' : f[0] == "stocks" ? 's' : 0;
+                  f[0] == "stocks" ? 's' : 0;
         if (!it.type) continue;
         it.rainbow = f[2] == "rainbow";
         it.themed = f[2] == "theme";
@@ -120,13 +136,13 @@ void loadPlaylist() {
         if (it.type == 'c') it.extra = f[6];
         if (it.type == 'd') { it.extra = f[6]; it.text = f[7]; }
         if (it.type == 'f' && it.effect == FX_NONE) continue;          // removed effect
-        if (it.type == 'n' || it.type == 's') { it.extra = f[6]; if (it.type == 's' && it.extra.isEmpty()) continue; }
+        if (it.type == 's') { it.extra = f[6]; if (it.extra.isEmpty()) continue; }
         if (it.type == 'w') { it.extra = f[6] + "," + f[7] + "," + f[8]; it.text = f[9]; if (f[7].isEmpty()) continue; }
       }
       playlist.push_back(it);
     }
     sf.close();
-    if (!playlist.empty()) return;
+    if (!playlist.empty()) { shuffleOrder(); return; }
   }
   std::vector<String> names;
   File dir = LittleFS.open("/gifs");
@@ -134,6 +150,7 @@ void loadPlaylist() {
     for (File f = dir.openNextFile(); f; f = dir.openNextFile()) if (isPicture(f.name())) names.push_back(String("/gifs/") + f.name());
   std::sort(names.begin(), names.end());
   for (auto &n : names) { ShowItem it; it.file = n; playlist.push_back(it); }
+  shuffleOrder();
 }
 
 void playItem(const ShowItem &item) {
@@ -143,7 +160,6 @@ void playItem(const ShowItem &item) {
   switch (it.type) {
     case 'f': playFx(it); break;
     case 'w': playWeather(it); break;
-    case 'n': playNews(it); break;
     case 's': playStocks(it); break;
     case 't': playText(it); break;
     case 'c': playClock(it); break;

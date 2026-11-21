@@ -41,7 +41,7 @@ static uint32_t hsv(uint16_t h) {                // h 0..1535, full saturation a
   }
 }
 // Fonts: 1 tiny (5x7 doubled), 2-4 classic (FreeSans Bold) small/medium/big, 8-12 our own PJ font (pj_font.h,
-// drawn with soft edges): 8 thin small, 9 small, 10 medium, 11 big, 12 extra big.
+// crisp edges since 1.0.0-beta3): 8 thin small, 9 small, 10 medium, 11 big, 12 extra big.
 static const PJFontDef *pjf = nullptr;           // the current font when it's a PJ size, else null (Adafruit GFX)
 static uint8_t curFont = 2;
 static inline bool isPJ(uint8_t f) { return f >= 8 && f <= 12; }

@@ -175,7 +175,10 @@ static int jpegDraw(JPEGDRAW *d) {
       int xx = d->x + x;
       if (xx >= W) continue;
       uint32_t c = px[y * d->iWidth + x];            // 0xAABBGGRR
-      canvas[yy][xx][0] = c; canvas[yy][xx][1] = c >> 8; canvas[yy][xx][2] = c >> 16;
+      uint8_t r = c, g = c >> 8, b = c >> 16;
+      // Black floor: JPEG leaves faint noise in black areas that dimly lights LEDs in odd colors; make it black.
+      if (r < 16 && g < 16 && b < 16) r = g = b = 0;
+      canvas[yy][xx][0] = r; canvas[yy][xx][1] = g; canvas[yy][xx][2] = b;
     }
   }
   return 1;

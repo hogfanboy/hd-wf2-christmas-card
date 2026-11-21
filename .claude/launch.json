@@ -17,6 +17,14 @@
         "tools/fake-card.mjs"
       ],
       "port": 8090
+    },
+    {
+      "name": "pack-builder",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "tools/pack-builder.mjs"
+      ],
+      "port": 8095
     }
   ]
 }

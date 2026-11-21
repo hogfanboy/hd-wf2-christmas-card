@@ -1,8 +1,8 @@
 // Things the card looks up on the internet (weather is in weather.ino):
 //  * Where it is, once per start (http://ip-api.com, free, no key): a time zone when the page never set one, and
 //    the town for "weather here" items (lat "auto" in the show line). A fresh install works with no setup.
-//  * News headlines and market quotes over HTTPS from the website (docs/feeds/, rebuilt hourly by CI with
-//    tools/build-feeds.mjs, so the card only reads a small text file and never talks to news or quote sites).
+//  * Market quotes over HTTPS from the website (docs/feeds/, rebuilt hourly by CI with
+//    tools/build-feeds.mjs, so the card only reads a small text file and never talks to quote sites).
 //    TLS needs ~40 KB more RAM than is free while a picture plays, so the player's buffers are freed for the
 //    fetch and taken back right after. A fetch takes 1-3 s and happens at most every 20 minutes per feed.
 #include <WiFiClientSecure.h>
@@ -137,58 +137,6 @@ void geoService() {
   }
 }
 bool geoUsesF() { return !geoOk || geoCountry == "US" || geoCountry == "LR" || geoCountry == "MM" || geoCountry == "PR"; }
-
-// ---------- News ticker: headlines scroll under a title bar ----------
-static const char *newsTitle(const String &topic) {
-  if (topic == "world") return "WORLD NEWS"; if (topic == "business") return "BUSINESS"; if (topic == "sports") return "SPORTS";
-  if (topic == "tech") return "TECH NEWS"; if (topic == "science") return "SCIENCE"; return "NEWS";
-}
-static void newsBar(const char *title, const String &src) {
-  cg.rgb(0x1E1E32); cg.fillRect(0, 0, W, 10, 0);
-  label(title, 2, 1, th().acc);
-  String right = src;
-  if (timeValid()) {
-    time_t t = time(nullptr); struct tm lt; localtime_r(&t, &lt);
-    char hm[8]; snprintf(hm, sizeof(hm), "%d:%02d", lt.tm_hour % 12 ? lt.tm_hour % 12 : 12, lt.tm_min);
-    right = src + " " + hm;
-  }
-  label(right, W - 1 - labelW(right), 1, th().dim);
-}
-// it.extra = topic (top, world, business, sports, tech, science). sec 0 = three headlines, else that long.
-static void playNews(const ShowItem &it) {
-  const String *b = feedGet("news-" + (it.extra.length() ? it.extra : String("top")) + ".txt");
-  if (!b) return;
-  std::vector<String> lines;
-  splitLines(*b, lines);
-  if (lines.empty()) return;
-  static uint16_t next = 0;                      // each pass carries on with the next headlines
-  const char *title = newsTitle(it.extra);
-  pjLabels = isPJ(it.font);
-  effectInit(it); FxGuard fxg;
-  uint32_t total = it.sec * 1000UL, start = millis(), frame = 0;
-  shownValid = false;
-  for (int done = 0; it.sec || done < 3; done++) {
-    const String &ln = lines[next++ % lines.size()];
-    String src = field(ln, 0), head = field(ln, 1);
-    setFont(it.font);
-    int tw = textWidth(head), base = textBaseline(it.font, 10, H - 10);
-    uint32_t hs = millis();
-    for (;;) {
-      uint32_t t0 = millis();
-      int x = W - (int)((t0 - hs) / 18);       // ~55 px a second
-      if (x + tw < 0) break;
-      paintBackground(it, frame);
-      setFont(it.font);
-      drawText(head, x, base, it, t0);
-      newsBar(title, src);
-      pushCanvas();
-      frame++;
-      if (it.sec && millis() - start >= total) return;
-      int32_t wait = 25 - (int32_t)(millis() - t0);
-      if (waitMs(wait > 0 ? wait : 1)) return;
-    }
-  }
-}
 
 // ---------- Stocks: one symbol at a time: name, price, day change, today's line ----------
 static String withCommas(const String &n) {

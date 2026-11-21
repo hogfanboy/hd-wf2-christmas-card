@@ -1,46 +1,45 @@
 # PROGRESS
 
-## Working state (fw 1.0.0-beta2 on both cards via WiFi)
-- **1.0.0-beta2:** sun icon has no glow halo (it read as an off-color disc; black around it now). Pack builder is
-  forgiving (any names, no numbering, `title: ...` pack.json); the Christmas2026 pack failed only because the
-  folder had a capital and pack.json was not JSON. Not judged by eye yet.
-- **1.0.0-beta1 (heap ~79 KB, one full loop of every new effect with no resets; NOT judged by eye yet):**
-  - **New effects:** Santa's sleigh (2 reindeer, red-nosed lead, glitter trail; full screen at mid height under a
-    twinkling sky, behind text along the top), Balloons, Aquarium (fish both ways + bubbles; full screen adds
-    seaweed + blue water on a black background), Rain, and "Match the weather" (weather items only: snow/rain when
-    the weather is, else none). Sprites are letter rows in `effects.ino`, same rows in the page's `SPR`.
-    Probe: `tools/effects-probe.ps1` (plays them all ~77 s, then puts the card's own show back).
-  - **Videos on the page:** "+ Pictures or videos" takes MP4/MOV/WEBM; Start at / Length per clip (up to 30 s,
-    12 fps, ≤150 frames), then GIF or full color like pictures. Tested in the browser (fake card, recorded WEBM:
-    3 s -> 35 frames, 47 KB, <1 s; trim + Send OK). Not tried with a phone video yet.
-  - **Theme picker:** chosen swatch is bigger with a white ring, glow and check mark; the others are dimmed;
-    "Selected: <name>" in the theme's color under the row.
-  - **Versions:** `1.0.0-betaN` < `1.0.0` on both card (`verNum`) and page (`verKey`), so betas update to the
-    release. Old 0.9.x cards see 1.0.0-beta1 as newer (checked the math).
-- **Decided (user, 2026-11-21):** forecast stays the plain layout for now (no shaded/gray options; user likes high
-  contrast and will think about it; `fcStyle`/`/api/fcprobe` still in the code). Themes liked. No going back to
-  Huidu. No PIN (15-20 family members; anyone on the WiFi can change the show but not hurt the card).
-- 0.9.9 items (themes, QR redesign, readability colors, tz=auto) are on both cards; details in git history.
+## Working state (fw 1.0.0-beta3 on both cards via WiFi, 2026-11-21; NOT judged by eye yet)
+- **Crisp fonts:** Jumbo font pixels are fully on or off (no soft edge shading). `SOFT` in `web/pjfont.js` can bring
+  soft edges back per size (e.g. the huge font). Page preview uses the same pixels.
+- **Crisp weather icons:** redrawn as flat, saturated pixel art with no glow: gold sun + orange rays that breathe
+  (no turning), yellow moon, white/steel/slate clouds with a flat blue underside, yellow bolt; solid 2 px rain drops,
+  solid white plus snowflakes. Preview of all sprites: `node tools/make-wxicons.mjs <out.png>`.
+- **Shuffle:** page "Play order: In order / 🔀 Shuffle" writes `order<TAB>shuffle` into show.txt; card plays a new
+  random order each round, never the same item twice in a row. Tested on the fake card (Send + reload keeps it).
+- **News removed** (page button, card player, CI feed). Old shows with a news line just skip it. Stocks stay.
+- **Full-color fix:** the Christmas2026 pictures were picked as "full color" (1000+ colors from smoothing) and sent
+  as browser JPEGs that halve color resolution (reds/greens smeared). Now: auto picks GIF when a 254-color palette
+  matches (all 17 Christmas pictures -> GIF, error ~1), full color uses a 4:4:4 JPEG (jpeg-js, q92) with near-black
+  forced to black, and the card floors near-black too. Page GIFs store only changed pixels (smaller). Preview shows
+  the encoded result. Conversion code moved to `web/convert.js`.
+- **Pack builder:** `tools/pack-builder.mjs` (launch config `pack-builder`, http://localhost:8095). Edits
+  ../pocket-jumbotron-content: new pack, details as real JSON, drop pictures, drag to reorder, delete, previews as a
+  phone converts them, Publish = commit + push + `gh workflow run` (site rebuilds in ~3 min). Tested on a scratch
+  copy only (not yet published for real).
 - Card 1 (FM6124C): 192.168.50.16 / pocketjumbo-eed0 (PC USB COM10). Card 2 (RUL6024): 192.168.50.199 /
-  pocketjumbo-5df8.
-- Everything else (app on the website, schedule, news/stocks, night mode, packs): PROJECT-NOTES.md.
+  pocketjumbo-5df8. Both reachable, heap ~70 KB playing.
+- Everything else (app on the website, schedule, stocks, night mode, packs, effects): PROJECT-NOTES.md.
 
 ## Verified pins (HD-WF2)
 - HUB75: R1 2, G1 6, B1 10, R2 3, G2 7, B2 11, A 39, B 38, C 37, D 36, E 21, LAT 33, OE 35, CLK 34. S1: GPIO17.
 
 ## Key decisions
 - Card = display engine; the website = the app (loaded by the card's starter page). No bridge/popups, no https->card.
-- Fast-scan screens: draw with drawPixelRGB888 and 0/255 colors. Soft-edged text can't show in fast scan.
+- LEDs want crisp, high-contrast pixels with black around them: no soft edges, glows or shaded rims (fonts, icons).
+- Pictures: GIF unless GIF visibly loses detail; full color only as 4:4:4 JPEG (never the browser's JPEG).
+- Fast-scan screens: draw with drawPixelRGB888 and 0/255 colors.
 - One firmware and one panel setup for every card. Card stores GIF/JPEG frames, never WEBP (videos too).
 - Pictures live in the private repo; the website is public, so they're unlisted, not secret.
-- Build with `upload.maximum_size=1835008` (app 1.54 MB of 1.75). Structs used in function signatures go in the
+- Build with `upload.maximum_size=1835008` (app 1.53 MB of 1.75). Structs used in function signatures go in the
   main .ino; no default arguments in other .ino files (arduino prototypes).
 - Test uploads with curl: `-H "Content-Type: text/plain"` for /api/show, then POST /api/play.
 
 ## Next (the user can answer with one of these commands)
-1. **"Effects look good" / "change X"** - run `tools/effects-probe.ps1`, judge sleigh/balloons/aquarium/rain by eye
-   (size, speed, colors). Also look at the theme picker on the phone page.
-2. **"Try a phone video"** - add a short phone clip on the page, Send, judge it on the panel.
-3. **"Check the sun + Christmas 2026 pack"** - sun with no halo on the weather screen; pack listed on the page.
-4. **"Test the installer on card 2"** - USB, install.html end to end incl. the Improv WiFi step.
-5. Then 1.0.0 release: promote what's judged OK, ideas: Christmas lights border effect, bigger sleigh scene.
+1. **"Fonts/icons look good" / "change X"** - look at a weather item (with forecast) and a Jumbo text item.
+2. **"Re-add the Christmas pack"** - on the phone page, ★ Get the latest pictures, add Christmas 2026, Send; they
+   should now come in as GIF and look like the originals. Try Shuffle at the same time.
+3. **"Open the pack builder"** - start `pack-builder`, make or edit a pack, Publish.
+4. Still open from beta1/2: judge sleigh/balloons/aquarium/rain (`tools/effects-probe.ps1`), phone video,
+   installer test on card 2. Then 1.0.0 release.

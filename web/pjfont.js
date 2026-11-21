@@ -136,7 +136,10 @@
     return segs;
   }
 
-  // Renders one glyph: { w, h, dx, dy, adv, a: Uint8Array alpha 0..15 } (dx/dy = bitmap offset from pen/baseline).
+  // Edges are crisp (each pixel fully on or off): soft shading read as muddy on the LEDs. A cap height listed in
+  // SOFT keeps the old 4-bit soft edges (e.g. SOFT = { 34: 1 } brings them back for the huge font).
+  const SOFT = {}, CRISP = 0.42;                  // CRISP: share of a pixel a stroke must cover to light it
+  // Renders one glyph:{ w, h, dx, dy, adv, a: Uint8Array alpha 0..15 } (dx/dy = bitmap offset from pen/baseline).
   function glyph(ch, cap, w) {
     const g = GL[ch] || GL['?'];
     const s = (cap - w) / 100;
@@ -162,7 +165,8 @@
           if (ex * ex + ey * ey <= r2) { hit++; break; }
         }
       }
-      a[py * bw + px] = Math.round(hit / (SS * SS) * 15);
+      const cov = hit / (SS * SS);
+      a[py * bw + px] = SOFT[cap] ? Math.round(cov * 15) : cov >= CRISP ? 15 : 0;
     }
     return { w: bw, h: bh, dx: x0, dy: y0, adv, a };
   }
