@@ -36,6 +36,14 @@ fs.writeFileSync(path.join(outDir, 'index.html'), html);
 // The website copy the card's starter page loads (published by CI from docs/app/, not committed).
 fs.mkdirSync(path.join(root, 'docs/app'), { recursive: true });
 fs.writeFileSync(path.join(root, 'docs/app/index.html'), html);
+// The pack builder's hosted copy (docs/builder/): the same page tools/pack-builder.mjs serves on this PC, with the
+// picture libraries inlined; on the website it edits the private content repo through the GitHub API.
+const builderVendor = `<script>${omggif}</script>
+<script>(function(){${gifenc}})();</script>
+<script>(function(){var module;${jpegjs}})();</script>
+<script>${convert}</script>`;
+fs.mkdirSync(path.join(root, 'docs/builder'), { recursive: true });
+fs.writeFileSync(path.join(root, 'docs/builder/index.html'), fs.readFileSync(path.join(here, 'pack-builder.html'), 'utf8').replace('<!--VENDOR-->', () => builderVendor));
 
 const toC = (name, text) => {
   const gz = zlib.gzipSync(text, { level: 9 });

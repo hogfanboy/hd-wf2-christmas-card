@@ -77,7 +77,7 @@ static const char *wxWord(int c) {
   if (c >= 71 && c <= 77) return "SNOW"; if (c >= 80 && c <= 82) return "SHOWERS"; if (c == 85 || c == 86) return "SNOW SHOWERS";
   if (c >= 95) return "THUNDERSTORM"; return "";
 }
-// Icons: crisp sprites drawn by tools/make-wxicons.mjs (wx_icons.h), animated here with drifting clouds, a turning
+// Icons: shaded sprites with hard edges drawn by tools/make-wxicons.mjs (wx_icons.h), animated here with drifting clouds, a turning
 // sun, rain streaks, swaying snowflakes, twinkling stars and lightning flashes.
 static void wxSprite(int id, int x, int y) {      // x, y = the sprite's center
   const WxSprite &sp = WX_SPR[id];

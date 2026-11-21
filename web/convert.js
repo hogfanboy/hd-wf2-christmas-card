@@ -25,7 +25,10 @@ function keepFrames(n, delayOf, grab) {
 }
 const toCanvas = (src, w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(src, 0, 0); return c; };
 
-async function decode(file, it) {
+// Every picture goes through trimBorders: empty borders (a plain color around the art, like small text in a big
+// square) are cut off so the art fills the 128x64 screen instead of being a tiny patch in the middle.
+async function decode(file, it) { return trimBorders(await decodeRaw(file, it)); }
+async function decodeRaw(file, it) {
   if (/^video\//.test(file.type) || /\.(mp4|mov|m4v|webm)$/i.test(file.name)) return decodeVideo(file, it);
   const buf = new Uint8Array(await file.arrayBuffer());
   const type = sniffType(buf, file.type);
@@ -171,6 +174,39 @@ async function decodePjm(buf) {           // our own full-color format, read bac
   }
   return out;
 }
+// Border = all four corners the same plain color. The box holding everything else (over up to 20 frames, so
+// moving parts stay inside) plus a small margin is kept, if it is clearly smaller than the picture. Frames already
+// at screen size (read back from a screen) are left alone.
+const TRIM_DIFF = 48;                      // summed RGB difference from the border color that counts as content
+function trimBorders(frames) {
+  const w = frames[0].canvas.width, h = frames[0].canvas.height;
+  if (w === W && h === H) return frames;
+  const px = (c) => c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+  const first = px(frames[0].canvas), at = (x, y) => (y * w + x) * 4;
+  const bg = [first[0], first[1], first[2]];
+  const near = (d, o) => Math.abs(d[o] - bg[0]) + Math.abs(d[o + 1] - bg[1]) + Math.abs(d[o + 2] - bg[2]) <= TRIM_DIFF;
+  if (![at(w - 1, 0), at(0, h - 1), at(w - 1, h - 1)].every(o => near(first, o))) return frames;
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  const step = Math.max(1, Math.ceil(frames.length / 20));
+  for (let i = 0; i < frames.length; i += step) {
+    const d = i ? px(frames[i].canvas) : first;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (near(d, at(x, y))) continue;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+  }
+  if (x1 < 0) return frames;                                   // nothing but border
+  const m = Math.round(Math.max(x1 - x0, y1 - y0) * 0.03);
+  x0 = Math.max(0, x0 - m); y0 = Math.max(0, y0 - m); x1 = Math.min(w - 1, x1 + m); y1 = Math.min(h - 1, y1 + m);
+  const cw = x1 - x0 + 1, ch = y1 - y0 + 1;
+  if (cw * ch > 0.8 * w * h) return frames;                    // hardly any border: keep the whole picture
+  return frames.map(f => {
+    const c = document.createElement('canvas'); c.width = cw; c.height = ch;
+    const g = c.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, cw, ch);
+    g.drawImage(f.canvas, x0, y0, cw, ch, 0, 0, cw, ch);
+    return { canvas: c, delay: f.delay };
+  });
+}
 function clearRect(rgba, w, f) {
   for (let y = f.y; y < f.y + f.height; y++) rgba.fill(0, (y * w + f.x) * 4, (y * w + f.x + f.width) * 4);
 }
@@ -185,7 +221,9 @@ function scale(src, fit) {
   wctx.fillStyle = '#000'; wctx.fillRect(0, 0, W, H);
   wctx.imageSmoothingEnabled = true; wctx.imageSmoothingQuality = 'high';
   wctx.drawImage(src, (W - dw) / 2, (H - dh) / 2, dw, dh);
-  return wctx.getImageData(0, 0, W, H);
+  const img = wctx.getImageData(0, 0, W, H), d = img.data;     // near-black = black (no faint glow, GIF too)
+  for (let i = 0; i < d.length; i += 4) if (d[i] < BLACK_FLOOR && d[i + 1] < BLACK_FLOOR && d[i + 2] < BLACK_FLOOR) d[i] = d[i + 1] = d[i + 2] = 0;
+  return img;
 }
 
 // ---------- Encoding for the screen ----------

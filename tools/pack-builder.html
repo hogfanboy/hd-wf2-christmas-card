@@ -6,7 +6,7 @@
 <title>Pack Builder</title>
 <style>
   :root { --bg:#0b0b12; --bg2:#15151f; --bg3:#101019; --line:#2a2a3a; --text:#ecebf5; --muted:#a3a2b8; --gold:#ffbe3c; --cyan:#5ac8ff; --red:#ff5a6e; --green:#4ee08a; --violet:#d6b8ff; }
-  * { box-sizing:border-box; }
+  * { box-sizing:border-box; } [hidden] { display:none !important; }
   body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
   main { max-width:1180px; margin:0 auto; padding:16px; }
   h1 { font-size:22px; margin:0; color:var(--gold); } h1 span { color:var(--cyan); }
@@ -45,18 +45,39 @@
   .bar.over i { background:var(--red); }
   pre.log { background:#07070b; border:1px solid var(--line); border-radius:8px; padding:8px; font-size:12px; max-height:220px; overflow:auto; white-space:pre-wrap; }
   .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .signin { max-width:640px; margin:18px auto 0; }
+  .signin ol { padding-left:20px; margin:8px 0 12px; } .signin li { margin:3px 0; }
+  .signin a { color:var(--cyan); }
+  label.chk { display:flex; gap:6px; align-items:center; font-size:13px; color:var(--muted); }
 </style>
 </head>
 <body>
 <main>
   <div class="top">
     <div><h1>Pack <span>Builder</span></h1><div class="muted" id="repo"></div></div>
-    <div class="row"><span class="muted" id="changes"></span><button class="primary" id="publish">Publish to the website</button></div>
+    <div class="row"><span class="muted" id="changes"></span><button class="primary" id="publish" hidden>Publish to the website</button><button class="secondary" id="signout" hidden>Sign out</button></div>
   </div>
   <div class="status" id="pubStatus"></div>
   <pre class="log" id="pubLog" hidden></pre>
 
-  <div class="layout">
+  <!-- Hosted copy (GitHub Pages): edits the private content repo through the GitHub API with your own token. -->
+  <div class="box signin" id="signin" hidden>
+    <h2>Sign in with a GitHub token</h2>
+    <div class="muted">This page edits your private picture repo straight on GitHub. It needs an access token, made once.
+      The token stays in this browser only and goes to nobody but GitHub.</div>
+    <ol class="muted">
+      <li>Open <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHub → new fine-grained token</a>.</li>
+      <li>Name it "Pack builder", pick an expiration (a year is fine).</li>
+      <li>Repository access: <b>Only select repositories</b> → <b>pocket-jumbotron-content</b> and <b>hd-wf2-christmas-card</b>.</li>
+      <li>Repository permissions: <b>Contents: Read and write</b>, <b>Actions: Read and write</b> (lets Publish rebuild the website right away).</li>
+      <li>Generate, copy it, paste it here.</li>
+    </ol>
+    <div class="row"><input type="text" id="token" placeholder="github_pat_…" autocomplete="off" spellcheck="false" style="flex:1;min-width:220px"><button class="primary" id="signinBtn">Sign in</button></div>
+    <label class="chk" style="margin-top:8px"><input type="checkbox" id="remember" checked> Remember on this device</label>
+    <div class="status" id="signinStatus"></div>
+  </div>
+
+  <div class="layout" id="work" hidden>
     <div class="box">
       <h2>Packs</h2>
       <div class="packs" id="packs"></div>
@@ -92,16 +113,180 @@
 
 <!--VENDOR-->
 <script>
+// Two homes, one page: served by tools/pack-builder.mjs on this PC (talks to its /api, which edits the local
+// clone and pushes with git), or hosted on the website (docs/builder/, built by tools/build-web.mjs), where it
+// edits the private repo through the GitHub API: changes wait in this page, then Publish makes one commit and asks
+// GitHub to rebuild the website.
 const $ = (id) => document.getElementById(id);
 const kb = (b) => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.round(b / 1024) + ' KB';
+const enc = encodeURIComponent;
 const SCREEN = 4.3 * 1048576;                     // a screen's picture space
-let packs = [], cur = null, tiles = [];
+const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && location.port === '8095';
+const PIC = /\.(gif|png|jpe?g|webp)$/i;
+const collator = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
+const byName = (a, b) => collator.compare(a, b);
+let packs = [], cur = null, tiles = [], store = null;
+
+// ---- Picture names, pack.json and play order: the same rules as tools/pack-meta.mjs and the local server ----
+function safeName(name) {
+  const dot = name.lastIndexOf('.'), ext = dot > 0 ? name.slice(dot).toLowerCase() : '', base = dot > 0 ? name.slice(0, dot) : name;
+  return (base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'picture') + ext;
+}
+function parseMeta(text) {
+  text = (text || '').replace(/^﻿/, '').trim();
+  if (!text) return {};
+  try { return JSON.parse(text); } catch { /* "key: value" lines */ }
+  const meta = {};
+  for (const line of text.split(/\r?\n/)) {
+    const m = line.match(/^\s*"?(\w+)"?\s*[:=]\s*(.*?)\s*,?\s*$/); if (!m) continue;
+    let v = m[2].replace(/^"(.*)"$/, '$1'); const key = m[1].toLowerCase();
+    if (key === 'cards') v = v.replace(/[[\]"]/g, '').split(/[,\s]+/).filter(Boolean);
+    else if (key === 'order') v = Number(v) || 50;
+    meta[key] = v;
+  }
+  return meta;
+}
+function metaJson(m) {                            // the form -> pack.json text
+  const o = {};
+  if (m.title) o.title = String(m.title).trim(); if (m.about) o.about = String(m.about).trim();
+  const cards = String(m.cards || '').split(/[,\s]+/).filter(Boolean); if (cards.length) o.cards = cards;
+  if (m.order !== '' && m.order != null && !isNaN(+m.order)) o.order = +m.order;
+  return JSON.stringify(o, null, 2) + '\n';
+}
+function badFolder(name) {
+  if (!name || /[/\\:*?"<>|]/.test(name) || name.startsWith('.') || name.startsWith('_')) return 'pick a folder name without / \\ : * ? " < > | (and not starting with . or _)';
+  return '';
+}
+function orderedNames(names) {                    // play order = name order: 01-name, 02-name...
+  const w = Math.max(2, String(names.length).length);
+  return names.map((n, i) => String(i + 1).padStart(w, '0') + '-' + n.replace(/^\d{2,3}-/, ''));
+}
+
+// ---- Local store: tools/pack-builder.mjs ----
 async function api(path, opts) {
   const r = await fetch(path, opts), j = await r.json();
   if (!r.ok || j.error) throw new Error(j.error || r.status);
   return j;
 }
-const enc = encodeURIComponent;
+const localStore = {
+  async load() { const j = await api('/api/packs'); return { label: 'Content repo: ' + j.repo, packs: j.packs, changes: j.status ? j.status.split('\n').length : 0 }; },
+  async file(pack, name) { return (await fetch(`/api/file?pack=${enc(pack)}&name=${enc(name)}`)).blob(); },
+  async newPack(name) { return (await api(`/api/new?name=${enc(name)}`, { method: 'POST' })).id; },
+  async saveMeta(pack, m) { await api(`/api/meta?pack=${enc(pack)}`, { method: 'POST', body: JSON.stringify(m) }); },
+  async upload(pack, file) { return (await api(`/api/upload?pack=${enc(pack)}&name=${enc(file.name)}`, { method: 'POST', body: file })).name; },
+  async order(pack, names) { return (await api(`/api/order?pack=${enc(pack)}`, { method: 'POST', body: JSON.stringify(names) })).names; },
+  async del(pack, name) { await api(`/api/delete?pack=${enc(pack)}&name=${enc(name)}`, { method: 'POST' }); },
+  async publish(msg) { return api(`/api/publish?msg=${enc(msg)}`, { method: 'POST' }); },
+};
+
+// ---- GitHub store: the private repo through the GitHub API ----
+const CONTENT = 'hogfanboy/pocket-jumbotron-content', SITE = 'hogfanboy/hd-wf2-christmas-card', BRANCH = 'main';
+const WORKFLOW = 'build-and-publish.yml';
+const TOKEN_KEY = 'pj-builder-token';
+function savedToken() { try { return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; } }
+function keepToken(t, remember) {
+  try { localStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(TOKEN_KEY); (remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, t); } catch {}
+}
+function b64(u8) { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); }
+function githubStore(token) {
+  const gh = async (path, opts = {}) => {
+    const r = await fetch('https://api.github.com' + path, { method: opts.method || 'GET', body: opts.body ? JSON.stringify(opts.body) : undefined,
+      headers: { Authorization: 'Bearer ' + token, Accept: opts.accept || 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', ...(opts.body ? { 'Content-Type': 'application/json' } : {}) } });
+    if (!r.ok) {
+      let m = ''; try { m = (await r.json()).message; } catch {}
+      const e = new Error(r.status === 401 ? 'GitHub did not accept the token (wrong, expired or revoked).' : r.status === 404 ? 'GitHub says not found: does the token include the ' + path.split('/')[3] + ' repo?' : `GitHub ${r.status}: ${m}`);
+      e.status = r.status; throw e;
+    }
+    return opts.raw ? r : r.status === 204 ? null : r.json();
+  };
+  let base = new Map();                           // path -> { sha, size } as on GitHub
+  const pend = new Map();                         // path -> { bytes | sha, size } (added/changed), or null (deleted)
+  const blobs = new Map();                        // sha -> Uint8Array (downloaded once)
+  const view = () => { const m = new Map(base); for (const [p, v] of pend) v === null ? m.delete(p) : m.set(p, v); return m; };
+  const put = (p, bytes) => pend.set(p, { bytes, size: bytes.length });
+  const bytesOf = async (v) => {
+    if (v.bytes) return v.bytes;
+    if (!blobs.has(v.sha)) blobs.set(v.sha, new Uint8Array(await (await gh(`/repos/${CONTENT}/git/blobs/${v.sha}`, { accept: 'application/vnd.github.raw+json', raw: true })).arrayBuffer()));
+    return blobs.get(v.sha);
+  };
+  const dirOf = (pack) => pack === '' ? '' : pack + '/';
+  const picsIn = (m, pack) => [...m.keys()].filter(p => p.startsWith(dirOf(pack)) && !p.slice(dirOf(pack).length).includes('/') && PIC.test(p)).map(p => p.slice(dirOf(pack).length)).sort(byName);
+  return {
+    async check() { await gh(`/repos/${CONTENT}`); },
+    async load(fresh) {
+      if (fresh || !base.size) {
+        const head = await gh(`/repos/${CONTENT}/git/ref/heads/${BRANCH}`);
+        const commit = await gh(`/repos/${CONTENT}/git/commits/${head.object.sha}`);
+        const tree = await gh(`/repos/${CONTENT}/git/trees/${commit.tree.sha}?recursive=1`);
+        if (tree.truncated) throw new Error('the repo is too big to list in one go');
+        base = new Map(tree.tree.filter(t => t.type === 'blob').map(t => [t.path, { sha: t.sha, size: t.size }]));
+      }
+      const m = view(), out = [];
+      const sizeOf = (pack, f) => m.get(dirOf(pack) + f).size;
+      const loose = picsIn(m, '');
+      if (loose.length) out.push({ id: '', folder: '(loose pictures)', meta: { title: 'New pictures' }, loose: true, files: loose.map(f => ({ name: f, size: sizeOf('', f) })) });
+      const folders = [...new Set([...m.keys()].filter(p => p.includes('/')).map(p => p.split('/')[0]))].filter(d => !d.startsWith('.')).sort(byName);
+      for (const d of folders) {
+        const pj = m.get(d + '/pack.json');
+        const meta = pj ? parseMeta(new TextDecoder().decode(await bytesOf(pj))) : {};
+        out.push({ id: d, folder: d, skipped: d.startsWith('_'), meta, files: picsIn(m, d).map(f => ({ name: f, size: sizeOf(d, f) })) });
+      }
+      return { label: 'GitHub: ' + CONTENT, packs: out, changes: pend.size };
+    },
+    async file(pack, name) { return new Blob([await bytesOf(view().get(dirOf(pack) + name))]); },
+    async newPack(name) {
+      if (view().has(name + '/pack.json') || [...view().keys()].some(p => p.startsWith(name + '/'))) throw new Error('that folder already exists');
+      put(name + '/pack.json', new TextEncoder().encode(JSON.stringify({ title: name }, null, 2) + '\n'));
+      return name;
+    },
+    async saveMeta(pack, m) { put(pack + '/pack.json', new TextEncoder().encode(metaJson(m))); },
+    async upload(pack, file) {
+      let name = safeName(file.name); if (!PIC.test(name)) throw new Error('packs take gif, png, jpg or webp');
+      const have = view(), first = name;
+      for (let i = 2; have.has(dirOf(pack) + name); i++) name = first.replace(/(\.\w+)$/, `-${i}$1`);
+      put(dirOf(pack) + name, new Uint8Array(await file.arrayBuffer()));
+      return name;
+    },
+    async order(pack, names) {
+      const m = view(), have = picsIn(m, pack);
+      if (names.length !== have.length || names.some(n => !have.includes(n))) throw new Error('the list changed; reload');
+      const final = orderedNames(names), entries = names.map(n => m.get(dirOf(pack) + n));
+      names.forEach(n => base.has(dirOf(pack) + n) ? pend.set(dirOf(pack) + n, null) : pend.delete(dirOf(pack) + n));
+      final.forEach((n, i) => {
+        const p = dirOf(pack) + n, b = base.get(p), e = entries[i];
+        if (b && e.sha === b.sha) pend.delete(p); else pend.set(p, e);   // back where it was = no change
+      });
+      return final;
+    },
+    async del(pack, name) { const p = dirOf(pack) + name; base.has(p) ? pend.set(p, null) : pend.delete(p); },
+    async publish(msg) {
+      const log = [], R = `/repos/${CONTENT}`;
+      if (pend.size) {
+        const head = (await gh(`${R}/git/ref/heads/${BRANCH}`)).object.sha;
+        const baseTree = (await gh(`${R}/git/commits/${head}`)).tree.sha;
+        const tree = [];
+        for (const [p, v] of pend) {
+          if (v === null) { tree.push({ path: p, mode: '100644', type: 'blob', sha: null }); continue; }
+          let sha = v.sha;
+          if (!sha) { sha = (await gh(`${R}/git/blobs`, { method: 'POST', body: { content: b64(v.bytes), encoding: 'base64' } })).sha; log.push('uploaded ' + p); }
+          tree.push({ path: p, mode: '100644', type: 'blob', sha });
+        }
+        const newTree = (await gh(`${R}/git/trees`, { method: 'POST', body: { base_tree: baseTree, tree } })).sha;
+        const me = await gh('/user');                 // commits as your GitHub noreply address, never your email
+        const who = { name: me.login, email: `${me.id}+${me.login}@users.noreply.github.com` };
+        const commit = await gh(`${R}/git/commits`, { method: 'POST', body: { message: msg || 'Pack builder update', tree: newTree, parents: [head], author: who, committer: who } });
+        await gh(`${R}/git/refs/heads/${BRANCH}`, { method: 'PATCH', body: { sha: commit.sha } });
+        log.push(`commit ${commit.sha.slice(0, 7)}: ${pend.size} change${pend.size === 1 ? '' : 's'} (${msg})`);
+        pend.clear(); base = new Map();
+      } else log.push('nothing new to commit');
+      let site = false;
+      try { await gh(`/repos/${SITE}/actions/workflows/${WORKFLOW}/dispatches`, { method: 'POST', body: { ref: 'main' } }); site = true; log.push('asked GitHub to rebuild the website'); }
+      catch (e) { log.push('could not start the website rebuild: ' + e.message); }
+      return { ok: true, site, log };
+    },
+    get pending() { return pend.size; },
+  };
+}
 
 // ---- LED preview (same look as the phone page: round dots with dark gaps) ----
 const S = 4, small = document.createElement('canvas'); small.width = W; small.height = H;
@@ -130,8 +315,7 @@ requestAnimationFrame(animate);
 
 // Converts like a phone does when the pack is added (web/index.html addFile + build): fit by shape, then auto.
 async function convert(t) {
-  const r = await fetch(`/api/file?pack=${enc(cur.id)}&name=${enc(t.name)}`);
-  const file = new File([await r.blob()], t.name);
+  const file = new File([await store.file(cur.id, t.name)], t.name);
   const src = await decode(file, {});
   const ratio = src[0].canvas.width / src[0].canvas.height, fit = ratio >= 1.6 ? 'fill' : 'fit';
   const frames = src.map(s => ({ img: scale(s.canvas, fit), delay: s.delay }));
@@ -152,14 +336,13 @@ function renderPacks() {
     $('packs').appendChild(b);
   }
 }
-async function load(keep) {
-  const j = await api('/api/packs');
+async function load(keep, fresh) {
+  const j = await store.load(fresh);
   packs = j.packs;
-  $('repo').textContent = 'Content repo: ' + j.repo;
-  const n = j.status ? j.status.split('\n').length : 0;
-  $('changes').textContent = n ? `${n} change${n === 1 ? '' : 's'} not published yet` : 'Everything is published';
+  $('repo').textContent = j.label;
+  $('changes').textContent = j.changes ? `${j.changes} change${j.changes === 1 ? '' : 's'} not published yet` : 'Everything is published';
   renderPacks();
-  if (keep != null) await openPack(keep);
+  if (keep != null && packs.some(p => p.id === keep)) await openPack(keep);
 }
 
 async function openPack(id) {
@@ -198,7 +381,7 @@ function renderTiles() {
     g.appendChild(el);
   });
   updateTotal();
-  (async () => { for (const t of tiles) if (!t.frames && !t.failed) { try { await convert(t); showInfo(t); } catch (e) { t.failed = true; t.info.innerHTML = '<span class="err">A phone couldn\'t read this picture</span>'; } updateTotal(); } })();
+  (async () => { for (const t of tiles) if (!t.frames && !t.failed) { try { await convert(t); showInfo(t); } catch (e) { console.warn(e); t.failed = true; t.info.innerHTML = '<span class="err">A phone couldn\'t read this picture</span>'; } updateTotal(); } })();
 }
 function showInfo(t) {
   t.info.innerHTML = `${t.nf} frame${t.nf === 1 ? '' : 's'} · file ${kb(t.size)} · on a screen ${kb(t.phone)}<span class="tag${t.full ? ' full' : ''}">${t.full ? 'Full color' : 'GIF'}</span>`;
@@ -214,36 +397,35 @@ async function move(from, to) {
   if (to < 0 || to >= tiles.length || from === to) return;
   const names = tiles.map(t => t.name), [n] = names.splice(from, 1); names.splice(to, 0, n);
   try {
-    const j = await api(`/api/order?pack=${enc(cur.id)}`, { method: 'POST', body: JSON.stringify(names) });
+    const final = await store.order(cur.id, names);
     const byOld = new Map(tiles.map(t => [t.name, t]));
-    tiles = names.map((nm, i) => Object.assign(byOld.get(nm), { name: j.names[i] }));
-    await load(cur.id);
-  } catch (e) { alert(e.message); await load(cur.id); }
+    tiles = names.map((nm, i) => Object.assign(byOld.get(nm), { name: final[i] }));
+  } catch (e) { alert(e.message); }
+  await load(cur.id);
 }
 async function del(t) {
-  if (!confirm(`Delete ${t.name} from this pack? (It stays in git history until you publish; after that it's only in the history.)`)) return;
-  try { await api(`/api/delete?pack=${enc(cur.id)}&name=${enc(t.name)}`, { method: 'POST' }); } catch (e) { alert(e.message); }
+  if (!confirm(`Delete ${t.name} from this pack? (After you publish, it's only in the repo's history.)`)) return;
+  try { await store.del(cur.id, t.name); } catch (e) { alert(e.message); }
   await load(cur.id);
 }
 async function addFiles(list) {
-  const files = [...list].filter(f => /\.(gif|png|jpe?g|webp)$/i.test(f.name));
+  const files = [...list].filter(f => PIC.test(f.name));
   if (!files.length) { alert('Packs take GIF, PNG, JPG or WEBP pictures.'); return; }
   for (let i = 0; i < files.length; i++) {
     $('total').textContent = `Adding ${i + 1} of ${files.length}…`;
-    try { await api(`/api/upload?pack=${enc(cur.id)}&name=${enc(files[i].name)}`, { method: 'POST', body: files[i] }); }
-    catch (e) { alert(files[i].name + ': ' + e.message); }
+    try { await store.upload(cur.id, files[i]); } catch (e) { alert(files[i].name + ': ' + e.message); }
   }
   await load(cur.id);
 }
 
 $('saveMeta').onclick = async () => {
   const m = {}; $('meta').querySelectorAll('[data-m]').forEach(i => m[i.dataset.m] = i.value);
-  try { await api(`/api/meta?pack=${enc(cur.id)}`, { method: 'POST', body: JSON.stringify(m) }); $('metaStatus').className = 'status ok'; $('metaStatus').textContent = '✓ Saved'; await load(cur.id); }
+  try { await store.saveMeta(cur.id, m); $('metaStatus').className = 'status ok'; $('metaStatus').textContent = '✓ Saved' + (LOCAL ? '' : ' (goes up when you publish)'); await load(cur.id); }
   catch (e) { $('metaStatus').className = 'status err'; $('metaStatus').textContent = e.message; }
 };
 $('newBtn').onclick = async () => {
-  const st = $('newStatus');
-  try { const j = await api(`/api/new?name=${enc($('newName').value)}`, { method: 'POST' }); $('newName').value = ''; st.textContent = ''; await load(j.id); }
+  const st = $('newStatus'), name = $('newName').value.trim();
+  try { const bad = badFolder(name); if (bad) throw new Error(bad); const id = await store.newPack(name); $('newName').value = ''; st.textContent = ''; await load(id); }
   catch (e) { st.className = 'status err'; st.textContent = e.message; }
 };
 const drop = $('drop');
@@ -258,15 +440,49 @@ $('publish').onclick = async () => {
   const st = $('pubStatus'), lg = $('pubLog');
   st.className = 'status'; st.textContent = 'Publishing…'; $('publish').disabled = true;
   try {
-    const j = await api(`/api/publish?msg=${enc(msg)}`, { method: 'POST' });
+    const j = await store.publish(msg);
     lg.hidden = false; lg.textContent = j.log.join('\n\n');
     st.className = j.ok ? 'status ok' : 'status err';
-    st.textContent = !j.ok ? 'Publishing failed (see below).' : j.site ? '✓ Pushed. The website is rebuilding now; phones see it in about 3 minutes.' : '✓ Pushed. The website picks it up within the hour (couldn\'t start the rebuild with gh).';
-  } catch (e) { st.className = 'status err'; st.textContent = e.message; }
+    st.textContent = !j.ok ? 'Publishing failed (see below).' : j.site ? '✓ Published. The website is rebuilding now; phones see it in about 3 minutes.' : '✓ Published. The website picks it up within the hour (couldn\'t start the rebuild right away).';
+  } catch (e) { st.className = 'status err'; st.textContent = 'Publishing failed: ' + e.message; }
   $('publish').disabled = false;
-  await load(cur && cur.id);
+  await load(cur && cur.id, true);
 };
-load().then(() => { if (packs.length) openPack(packs[packs.length - 1].id); }).catch(e => { $('empty').innerHTML = '<span class="err">' + e.message + '</span>'; });
+window.addEventListener('beforeunload', (e) => { if (store && store.pending) { e.preventDefault(); e.returnValue = ''; } });
+
+async function start() {
+  $('signin').hidden = true; $('work').hidden = false; $('publish').hidden = false; $('signout').hidden = LOCAL;
+  await load();
+  if (packs.length) openPack(packs[packs.length - 1].id);
+}
+function showSignin(msg) {
+  $('work').hidden = true; $('publish').hidden = true; $('signout').hidden = true; $('signin').hidden = false;
+  $('repo').textContent = 'Edits the picture packs in ' + CONTENT;
+  $('signinStatus').className = 'status err'; $('signinStatus').textContent = msg || '';
+}
+$('signinBtn').onclick = async () => {
+  const t = $('token').value.trim(); if (!t) return;
+  $('signinStatus').className = 'status'; $('signinStatus').textContent = 'Checking…';
+  try { const s = githubStore(t); await s.check(); keepToken(t, $('remember').checked); $('token').value = ''; store = s; await start(); }
+  catch (e) { showSignin(e.message); }
+};
+$('signout').onclick = () => {
+  if (store && store.pending && !confirm('You have changes that are not published. Sign out and lose them?')) return;
+  keepToken('', false); try { sessionStorage.removeItem(TOKEN_KEY); } catch {}
+  store = null; showSignin('');
+};
+
+(async () => {
+  try {
+    if (LOCAL) { store = localStore; await start(); return; }
+    const t = savedToken();
+    if (!t) return showSignin('');
+    store = githubStore(t); await start();
+  } catch (e) {
+    if (!LOCAL && (e.status === 401 || e.status === 404)) return showSignin(e.message);
+    $('work').hidden = false; $('empty').innerHTML = '<span class="err">' + e.message + '</span>';
+  }
+})();
 </script>
 </body>
 </html>

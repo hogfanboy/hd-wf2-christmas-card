@@ -31,6 +31,7 @@ private-content/
 
 # The card app, built by tools/build-web.mjs (published by GitHub Actions)
 docs/app/
+docs/builder/
 
 # Built by tools/build-feeds.mjs (published by GitHub Actions hourly)
 docs/feeds/

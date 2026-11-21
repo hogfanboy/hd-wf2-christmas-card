@@ -1,7 +1,7 @@
-// Draws our weather icons and writes them as sprites for the card: firmware/pocket_jumbotron/wx_icons.h
-// (RGB565 + alpha per pixel) and web/wxicons.js (the same pixels for the page preview).
-// Crisp pixel art: every pixel is fully on or off (no soft or shaded edges, no glow) in a few flat, saturated
-// colors, because LEDs look best sharp with black around everything. Clouds get a flat second tone underneath.
+// Draws our weather icons (shaded sun with turning rays, moon, layered clouds, lightning bolt, small forecast icons)
+// and writes them as sprites for the card: firmware/pocket_jumbotron/wx_icons.h (RGB565 + alpha per pixel) and
+// web/wxicons.js (the same pixels for the page preview). Shading inside the shapes, but hard outer edges: a pixel
+// is fully on or off (no soft rim, no glow), because LEDs look best sharp with black around everything.
 // Rain, snow, twinkles, drifting and the lightning flash are animated by the firmware on top of these.
 //   node tools/make-wxicons.mjs [preview.png]
 import fs from 'node:fs';
@@ -9,107 +9,118 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SS = 5;                                    // subsamples per pixel side (decides coverage, not blending)
-const ON = 0.45;                                 // a pixel lights when this much of it is covered
+const SS = 4;                                    // supersampling per pixel
 
-// A sprite canvas: shapes paint flat colors on subsamples; each pixel then takes its most common color
-// (never a blend of two) and lights only if covered enough.
+const ON = 0.5;                                  // a pixel lights when this much of it is covered
+// A sprite canvas: draw at SS x resolution as RGBA floats, then box-filter down (color only; alpha is on/off).
 function sprite(w, h) {
-  const W = w * SS, H = h * SS, c = new Int32Array(W * H).fill(-1);
-  return {
-    w, h,
-    paint(fn) {                                   // fn(x, y) -> 0xRRGGBB | null, x/y in sprite pixels
+  const W = w * SS, H = h * SS, c = new Float32Array(W * H * 4);
+  const S = {
+    w, h, W, H, c,
+    // Paint with fn(x, y) -> [r, g, b, a] | null over every subsample (x, y in sprite pixels), "over" blending.
+    paint(fn) {
       for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
-        const v = fn((i + 0.5) / SS, (j + 0.5) / SS); if (v != null) c[j * W + i] = v;
+        const v = fn((i + 0.5) / SS, (j + 0.5) / SS); if (!v || v[3] <= 0) continue;
+        const o = (j * W + i) * 4, a = Math.min(1, v[3]), ia = 1 - a;
+        c[o] = v[0] * a + c[o] * ia; c[o + 1] = v[1] * a + c[o + 1] * ia; c[o + 2] = v[2] * a + c[o + 2] * ia; c[o + 3] = a + c[o + 3] * ia;
       }
     },
-    out() {
+    out() {                                       // premultiplied average -> straight color + alpha, 0..255
       const px = [];
       for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-        const n = new Map(); let on = 0;
-        for (let j = 0; j < SS; j++) for (let i = 0; i < SS; i++) {
-          const v = c[(y * SS + j) * W + x * SS + i]; if (v < 0) continue;
-          on++; n.set(v, (n.get(v) || 0) + 1);
-        }
-        if (on < ON * SS * SS) { px.push([0, 0, 0, 0]); continue; }
-        let best = 0, bc = 0; for (const [k, v] of n) if (v > bc) { bc = v; best = k; }
-        px.push([(best >> 16) & 255, (best >> 8) & 255, best & 255, 1]);
+        let r = 0, g = 0, b = 0, a = 0;
+        for (let j = 0; j < SS; j++) for (let i = 0; i < SS; i++) { const o = ((y * SS + j) * W + x * SS + i) * 4; r += c[o]; g += c[o + 1]; b += c[o + 2]; a += c[o + 3]; }
+        const n = SS * SS; px.push(a / n >= ON ? [r / a, g / a, b / a, 1] : [0, 0, 0, 0]);
       }
       return px;
     },
   };
+  return S;
 }
+const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * Math.max(0, Math.min(1, t)));
+const hex = (n) => [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+const clamp01 = (t) => Math.max(0, Math.min(1, t));
 
-// Sun: a round gold disc and 8 straight orange rays, laid out on whole pixels so they stay clean: 2 px wide on the
-// axes, a 2 px staircase on the diagonals. f (0..5) makes the rays breathe in and out (long on the axes while the
-// diagonals are short, then the other way), so it moves without turning (turned rays get ragged at this size).
-// cx, cy sit on a pixel corner, so everything is symmetric.
-function sun(S, cx, cy, r, f) {
-  const DISC = 0xFFC800, RAY = 0xFF7A00, big = r > 5;
-  const wave = Math.round(Math.sin((f / 6) * 2 * Math.PI));        // -1, 0, 1
-  const gap = big ? 2 : 1, aLen = big ? 5 + wave : 2.5, dLen = big ? 4 - wave : 2;
+// Sun (no glow halo: it read as an off-color disc on the panel; LEDs want black around it): disc, gradient from a pale center to deep gold, 8 tapered rays (long/short), rotated by `rot`.
+function sun(S, cx, cy, r, rot) {
+  const core = hex(0xFFF6B0), edge = hex(0xFFB01E), ray = hex(0xFFC22E);
   S.paint((x, y) => {
-    const u = Math.floor(x) + 0.5 - cx, v = Math.floor(y) + 0.5 - cy;   // this pixel's center
-    const d = Math.hypot(u, v);
-    if (d <= r) return DISC;
-    const au = Math.abs(u), av = Math.abs(v);
-    if ((au < 1 && av > r + gap - 0.5 && av < r + gap + aLen) || (av < 1 && au > r + gap - 0.5 && au < r + gap + aLen)) return RAY;
-    const along = (au + av) / Math.SQRT2;
-    const k = au - av;
-    if ((k === 0 || (big && k === 1)) && along > r + gap - 0.3 && along < r + gap + dLen + 0.6) return RAY;
-    return null;
+    const dx = x - cx, dy = y - cy, d = Math.hypot(dx, dy);
+    const k = 8, seg = (2 * Math.PI) / k;
+    const a = Math.atan2(dy, dx) - rot + 20 * Math.PI;
+    const idx = Math.round(a / seg), off = Math.abs(a - idx * seg) * d;   // distance from the nearest ray's center line
+    const inner = r + 2.2, outer = r + (idx % 2 ? 5.5 : 8.5);
+    if (d < inner || d > outer) return null;
+    const halfW = 1.6 * (1 - (d - inner) / (outer - inner)) + 0.35;
+    return off < halfW ? [...ray, 1] : null;
+  });
+  S.paint((x, y) => {
+    const d = Math.hypot(x - cx, y - cy); if (d > r) return null;
+    const t = Math.hypot(x - (cx - r * 0.35), y - (cy - r * 0.35)) / (r * 1.3);
+    return [...mix(core, edge, t), 1];
   });
 }
-// Moon: a pale yellow crescent (cut out, so effects show through).
+// Moon: a shaded crescent (cut out with alpha, so effects show through) with two craters (no halo: it read as a gray disc on the panel).
 function moon(S, cx, cy, r) {
+  const lit = hex(0xF4EED4), dark = hex(0xC8C0A0);
+  const cut = (x, y) => Math.hypot(x - (cx + r * 0.62), y - (cy - r * 0.45)) < r * 0.9;
   S.paint((x, y) => {
-    if (Math.hypot(x - cx, y - cy) > r) return null;
-    if (Math.hypot(x - (cx + r * 0.58), y - (cy - r * 0.42)) < r * 0.88) return null;
-    return 0xFFE98A;
+    const d = Math.hypot(x - cx, y - cy); if (d > r || cut(x, y)) return null;
+    let c = mix(lit, dark, clamp01((Math.hypot(x - (cx - r * 0.4), y - (cy - r * 0.3)) / r) - 0.2));
+    if (Math.hypot(x - (cx - r * 0.45), y - (cy + r * 0.25)) < r * 0.2) c = mix(c, dark, 0.8);
+    if (Math.hypot(x - (cx - r * 0.1), y - (cy + r * 0.62)) < r * 0.14) c = mix(c, dark, 0.8);
+    return [...c, 1];
   });
 }
-// Cloud: round puffs on a flat base; the top color, then a flat second color on the lower part.
+// Cloud: union of round puffs on a flat base, lit from the top left, darker underneath, with a bright rim.
 function cloud(S, cx, cy, sc, top, bottom) {
   const puffs = [[-8, 3, 6.5], [0, -3, 9.5], [10, 0, 8], [16, 5, 4.5]].map(([x, y, r]) => [cx + x * sc, cy + y * sc, r * sc]);
-  const bx0 = cx - 9 * sc, bx1 = cx + 16 * sc, by = cy + 5 * sc, br = 4.5 * sc;
+  const bx0 = cx - 9 * sc, bx1 = cx + 16 * sc, by = cy + 5 * sc, br = 4.5 * sc;   // flat bottom: a capsule
   const inside = (x, y) => {
-    for (const [px, py, r] of puffs) if (Math.hypot(x - px, y - py) < r) return true;
+    let m = -1e9;
+    for (const [px, py, r] of puffs) m = Math.max(m, r - Math.hypot(x - px, y - py));
     const qx = Math.max(bx0, Math.min(bx1, x));
-    return Math.hypot(x - qx, y - by) < br;
+    m = Math.max(m, br - Math.hypot(x - qx, y - by));
+    return m;                                     // >0 inside, roughly the distance to the edge
   };
-  const split = cy + 3.2 * sc;                    // where the lower color starts
-  S.paint((x, y) => (inside(x, y) ? (y > split ? bottom : top) : null));
+  const T = hex(top), Bt = hex(bottom), rim = mix(hex(top), [255, 255, 255], 0.6);
+  const y0 = cy - 12.5 * sc, y1 = cy + 9.5 * sc, under = mix(hex(bottom), [0, 0, 0], 0.25);
+  S.paint((x, y) => {
+    const m = inside(x, y); if (m <= 0) return null;
+    let c = mix(T, Bt, (y - y0) / (y1 - y0));
+    const lx = inside(x + 0.9, y + 0.9);          // lit from the top left: edges facing it get the rim color
+    if (lx < m && m < 1.3) c = mix(c, rim, 0.55 * (1.3 - m));
+    else if (lx > m && m < 1.2 && y > cy) c = mix(c, under, 0.8);   // shadowed lower edge
+    return [...c, 1];
+  });
 }
 function bolt(S, ox, oy) {
   const P = [[7, 0], [2, 9], [6, 9], [1, 18], [11, 6], [7, 6], [11, 0]].map(([x, y]) => [ox + x, oy + y]);
   const inPoly = (x, y) => { let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const [xi, yi] = P[i], [xj, yj] = P[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
-  S.paint((x, y) => (inPoly(x, y) ? 0xFFE600 : null));
+  S.paint((x, y) => (inPoly(x, y) ? [255, 248, 170, 1] : null));
 }
-
-// Cloud colors: [top, underside]. Bright clouds are white over sky blue; rain clouds steel blue; storm slate.
-const C_WHITE = [0xFFFFFF, 0x9CC8FF], C_RAIN = [0xC8D2E6, 0x6E8CC8], C_STORM = [0x8A92B0, 0x50587C], C_BACK = [0xD6DEEE, 0x8EA6D2];
 
 const SPR = [];                                    // [name, w, h, ox, oy, px] (ox/oy: where the sprite's 0,0 sits from the anchor)
 function add(name, w, h, draw) { const S = sprite(w, h); draw(S); SPR.push([name, w, h, -Math.floor(w / 2), -Math.floor(h / 2), S.out()]); }
 const SUN_FRAMES = 6;
-for (let f = 0; f < SUN_FRAMES; f++) add(`SUN${f}`, 40, 40, (S) => sun(S, 20, 20, 9, f));
-for (let f = 0; f < SUN_FRAMES; f++) add(`SUNS${f}`, 30, 30, (S) => sun(S, 15, 15, 6.5, f));
+for (let f = 0; f < SUN_FRAMES; f++) add(`SUN${f}`, 40, 40, (S) => sun(S, 20, 20, 9, (f / SUN_FRAMES) * (Math.PI / 4)));
+for (let f = 0; f < SUN_FRAMES; f++) add(`SUNS${f}`, 30, 30, (S) => sun(S, 15, 15, 6.5, (f / SUN_FRAMES) * (Math.PI / 4)));
 add('MOON', 36, 36, (S) => moon(S, 18, 18, 10.5));
 add('MOONS', 26, 26, (S) => moon(S, 13, 13, 7.5));
-add('CLOUD_L', 38, 26, (S) => cloud(S, 16, 14, 1, ...C_WHITE));
-add('CLOUD_M', 38, 26, (S) => cloud(S, 16, 14, 1, ...C_RAIN));
-add('CLOUD_D', 38, 26, (S) => cloud(S, 16, 14, 1, ...C_STORM));
-add('CLOUD_B', 30, 21, (S) => cloud(S, 13, 11, 0.78, ...C_BACK));
+add('CLOUD_L', 38, 26, (S) => cloud(S, 16, 14, 1, 0xF8FAFF, 0xA8B2C6));
+add('CLOUD_M', 38, 26, (S) => cloud(S, 16, 14, 1, 0xC6CCD8, 0x7C8498));
+add('CLOUD_D', 38, 26, (S) => cloud(S, 16, 14, 1, 0x8C92A4, 0x4A5064));
+add('CLOUD_B', 30, 21, (S) => cloud(S, 13, 11, 0.78, 0xA4AAB8, 0x6E7486));
 add('BOLT', 16, 22, (S) => bolt(S, 2, 2));
 // Forecast icons (column 25 px wide): sun, partly, cloudy, fog, rain, snow, storm (particles added on the card).
 const MINI = [
-  (S) => sun(S, 12, 9, 4.2, 0),
-  (S) => { sun(S, 9, 6, 3.4, 0); cloud(S, 11, 10, 0.5, ...C_WHITE); },
-  (S) => { cloud(S, 8, 6, 0.42, ...C_BACK); cloud(S, 11, 10, 0.5, ...C_WHITE); },
-  (S) => { cloud(S, 10, 6, 0.5, ...C_RAIN); },
-  (S) => { cloud(S, 10, 6, 0.5, ...C_RAIN); },
-  (S) => { cloud(S, 10, 6, 0.5, ...C_WHITE); },
-  (S) => { cloud(S, 10, 6, 0.5, ...C_STORM); },
+  (S) => sun(S, 12, 9, 4.2, 0.2),
+  (S) => { sun(S, 9, 6, 3.4, 0.2); cloud(S, 11, 10, 0.5, 0xF8FAFF, 0xA8B2C6); },
+  (S) => { cloud(S, 8, 6, 0.42, 0xA4AAB8, 0x6E7486); cloud(S, 11, 10, 0.5, 0xF8FAFF, 0xA8B2C6); },
+  (S) => { cloud(S, 10, 6, 0.5, 0xC6CCD8, 0x7C8498); },
+  (S) => { cloud(S, 10, 6, 0.5, 0xC6CCD8, 0x7C8498); },
+  (S) => { cloud(S, 10, 6, 0.5, 0xF8FAFF, 0xA8B2C6); },
+  (S) => { cloud(S, 10, 6, 0.5, 0x8C92A4, 0x4A5064); },
 ];
 MINI.forEach((d, i) => add(`MINI${i}`, 24, 18, d));
 
