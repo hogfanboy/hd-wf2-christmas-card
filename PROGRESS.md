@@ -1,12 +1,15 @@
 # PROGRESS
 
-## Working state (fw 0.9.4, 2026-11-20; card 1 gets 0.9.4 via WiFi, card 2 still 0.6.2)
-- **0.9.4 (needs the user's eye):** Jumbo fonts = Serpentine Bold Oblique bitmaps (`font_jumbo.h`, cap 17/21/25/34 px,
-  ~28 KB flash, 0 RAM; made from the user's installed TTF by `tools/make-font.mjs`). Show font field 5-7 = jumbo
-  S/M/B (old cards clamp to 4 = Big). Clock/countdown/weather pick the biggest font that fits (`fitBig`).
-  12-hour clock: small AM/PM beside the time, top level with the digits (was tacked onto the date line).
-  App: Size menu has Classic + Jumbo groups (preview approximates jumbo with italic Arial Black);
-  "Something wrong?" box shows /api/info (family code removed) + app build + phone, for beta testers.
+## Working state (fw 0.9.5, 2026-11-20; card 1 on 0.9.4, card 2 still 0.6.2)
+- **0.9.5 (tested on the fake card, not on a panel yet):** slanted Jumbo font dropped (user: looked bad);
+  `font_jumbo.h` deleted, show font 5-7 loads as 2-4 (card + page). Page: opens by loading the screen's show
+  automatically (Send replaces all, so a sister adding 1 of 20 birthdays no longer wipes the other 19); only one
+  item open at a time, the rest are compact tap-to-open rows (name · date + schedule), ✓ Done closes, ✕ top right
+  removes; fixed the ⏰ When panel always showing (`.edit{display:grid}` beat `[hidden]`); 5-day forecast box on
+  by default for new weather items; PJ tab icon (`docs/favicon.svg`, inline data: URI on card pages).
+- **0.9.4:** 12-hour clock: small AM/PM beside the time, top level with the digits. Clock/countdown/weather pick
+  the biggest font that fits (`fitBig`). "Something wrong?" box shows /api/info (family code removed) + app build.
+  `tools/make-font.mjs` (TTF -> GFX bitmap header) kept for a future upright scoreboard font.
 - **0.9.3 restructure:** firmware split into one file per job (map at the top of pocket_jumbotron.ino), moved
   line for line by a script, no behavior change. Shared types/globals/includes in the main file.
 - **0.9.2:** QR screen at full panel brightness (user saw purple/dull white at the 55% cap: green drops first at
@@ -48,8 +51,9 @@
 - Test uploads with curl: `-H "Content-Type: text/plain"` for /api/show (form type = empty show), then POST /api/play.
 
 ## Next (1.0 plan)
-0. Beta testers 2026-11-21 evening: user checks 0.9.4 clock (12h + 24h, Jumbo big/medium), a Jumbo message,
-   overnight soak on card 1; then flash card 2 and the testers' cards (USB installer or WiFi update).
+0. Beta testers 2026-11-21 evening: user puts 0.9.5 on card 1, checks the clock (12h + 24h), the page with a
+   long reminder list, overnight soak; then flash card 2 and the testers' cards (USB installer or WiFi update).
 1. User checks the QR screen is now white and bright (0.9.2+), and a reminder made with + Reminder.
-2. Colorful pixel-art weather icons (IDEAS.md parking lot; user wants nicer icons).
+2. Optional: colorful pixel-art weather icons (IDEAS.md); user is fine with the current ones. Five cloudy days
+   = five identical icons is correct (one icon per WMO code group).
 3. Improv WiFi in the installer, news headlines item, update card 2 (and the other 13 cards) to 1.0.

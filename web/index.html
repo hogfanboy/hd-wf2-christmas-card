@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pocket Jumbotron</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='2' width='30' height='28' rx='5' fill='%230d0d14' stroke='%23c8202f' stroke-width='2.5'/%3E%3Cpath fill='%23ffbe3c' d='M4 7.25h3.5v3.5h-3.5zM7.5 7.25h3.5v3.5h-3.5zM11 7.25h3.5v3.5h-3.5zM4 10.75h3.5v3.5h-3.5zM11 10.75h3.5v3.5h-3.5zM4 14.25h3.5v3.5h-3.5zM7.5 14.25h3.5v3.5h-3.5zM11 14.25h3.5v3.5h-3.5zM4 17.75h3.5v3.5h-3.5zM4 21.25h3.5v3.5h-3.5z'/%3E%3Cpath fill='%234cc3ff' d='M17.5 7.25h3.5v3.5h-3.5zM21 7.25h3.5v3.5h-3.5zM24.5 7.25h3.5v3.5h-3.5zM24.5 10.75h3.5v3.5h-3.5zM24.5 14.25h3.5v3.5h-3.5zM17.5 17.75h3.5v3.5h-3.5zM24.5 17.75h3.5v3.5h-3.5zM21 21.25h3.5v3.5h-3.5z'/%3E%3C/svg%3E">
 <style>
   :root { --bg:#0b0b12; --bg2:#15151f; --line:#2a2a3a; --text:#ecebf5; --muted:#a3a2b8; --gold:#ffbe3c; --cyan:#5ac8ff; --red:#ff5a6e; --green:#4ee08a; }
   * { box-sizing: border-box; }
@@ -22,7 +23,18 @@
   .row2 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
   .row2 button { padding:10px 6px; font-size:14px; }
   .items { display:grid; gap:10px; margin-top:12px; }
-  .item { display:grid; grid-template-columns:128px 1fr; gap:12px; align-items:start; background:#101019; border:1px solid var(--line); border-radius:12px; padding:8px; }
+  [hidden] { display:none !important; }
+  .item { position:relative; display:grid; grid-template-columns:128px minmax(0,1fr); gap:12px; align-items:start; background:#101019; border:1px solid var(--line); border-radius:12px; padding:8px; }
+  .item .name { padding-right:30px; }
+  .item .del { position:absolute; top:6px; right:6px; width:28px; height:28px; padding:0; font-size:14px; line-height:1; }
+  /* Compact row (items loaded from the screen, and every item but the one being edited): small picture, name and
+     schedule. Tap it to open it. */
+  .item.mini { grid-template-columns:64px minmax(0,1fr); gap:10px; padding:6px 8px; cursor:pointer; }
+  .item.mini canvas { width:64px; height:32px; }
+  .item.mini .edit, .item.mini .row, .item.mini .meta.desc { display:none; }
+  .item.mini .meta { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .item.mini .name { white-space:normal; }
+  .item.mini .name { padding-right:32px; }
   .item.sel { border-color:var(--gold); }
   .item canvas { width:128px; height:64px; border-radius:4px; background:#07070b; image-rendering:pixelated; cursor:pointer; }
   .item .name { font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -71,7 +83,7 @@
 
   <div class="box stack">
     <h2>1. Build your show</h2>
-    <div class="muted">Items play top to bottom, then start over. Photos, GIFs and WEBPs are resized on this phone.</div>
+    <div class="muted">Items play top to bottom, then start over. Photos, GIFs and WEBPs are resized on this phone. Tap an item to change it.</div>
     <label class="btn secondary" for="files">+ Pictures</label>
     <input id="files" type="file" accept="image/*" multiple>
     <div class="row2">
@@ -182,16 +194,15 @@ blank();
 // ---------- Text / clock / countdown rendering (a close copy of what the screen draws) ----------
 const tcan = document.createElement('canvas'); tcan.width = W; tcan.height = H;
 const tctx = tcan.getContext('2d', { willReadFrequently: true });
-// Screen fonts: 1 pixel, 2-4 classic small/medium/big, 5-7 jumbo (a slanted sporty face) small/medium/big,
-// 8 jumbo between small and medium (clock fitting). CAP = capital-letter height in pixels.
-const CAP = { 1: 14, 2: 17, 3: 25, 4: 34, 5: 17, 6: 25, 7: 34, 8: 21 };
+// Screen fonts: 1 pixel, 2-4 small/medium/big. CAP = capital-letter height in pixels.
+const CAP = { 1: 14, 2: 17, 3: 25, 4: 34 };
 const fontCss = (f) => f == 1 ? `bold ${Math.round(CAP[1] / 0.72)}px monospace`
-  : f >= 5 ? `italic 900 ${Math.round(CAP[f] / 0.72)}px "Arial Black", Arial, sans-serif` : `bold ${Math.round(CAP[f] / 0.72)}px Arial, Helvetica, sans-serif`;
-const setF = (f) => { tctx.font = fontCss(f); tctx.letterSpacing = f >= 5 ? Math.round(CAP[f] * 0.12) + 'px' : '0px'; };
+  : `bold ${Math.round(CAP[f] / 0.72)}px Arial, Helvetica, sans-serif`;
+const setF = (f) => { tctx.font = fontCss(f); tctx.letterSpacing = '0px'; };
 const smallF = () => { tctx.font = '8px monospace'; tctx.letterSpacing = '0px'; };
-// Same as the card's fitBig: the largest font of the item's family (up to its size, at least medium) that fits.
+// Same as the card's fitBig: the largest font (up to the item's size, at least medium) that fits.
 function fitBig(f, s, maxW, extra = 0) {
-  const l = f >= 5 ? (f == 7 ? [7, 6, 8, 5] : [6, 8, 5]) : (f == 4 ? [4, 3, 2] : [3, 2]);
+  const l = f == 4 ? [4, 3, 2] : [3, 2];
   for (const x of l) { setF(x); if (tctx.measureText(s).width + extra <= maxW) return x; }
   return l[l.length - 1];
 }
@@ -723,7 +734,7 @@ function select(it) {
   if (it && it.kind !== 'pic') it.t0 = performance.now();
 }
 const label = (it) => it.kind === 'pic' ? it.name : it.kind === 'text' ? '“' + it.text + '”' : it.kind === 'clock' ? 'Clock'
-  : it.kind === 'fx' ? (FX[it.effect] || 'Effect') : it.kind === 'weather' ? 'Weather' + (it.place ? ' in ' + it.place : '') : (it.lead !== '' && it.lead != null ? '🔔 Reminder: ' : 'Countdown to ') + (it.text || '…');
+  : it.kind === 'fx' ? (FX[it.effect] || 'Effect') : it.kind === 'weather' ? 'Weather' + (it.place ? ' in ' + it.place : '') : (it.lead !== '' && it.lead != null ? '🔔 ' : 'Countdown to ') + (it.text || '…') + (/^\d\d-\d\d$/.test(it.date) ? ' · ' + md(it.date.replace('-', '')) : '');
 function move(it, d) {
   const i = items.indexOf(it), j = i + d;
   if (j < 0 || j >= items.length) return;
@@ -738,8 +749,9 @@ function remove(it) {
 function baseEl(it) {
   const el = document.createElement('div'); el.className = 'item';
   el.innerHTML = `<canvas width="128" height="64"></canvas><div><div class="name"></div><div class="meta"></div>
-    <div class="row"><span class="muted" style="font-size:12px">Seconds</span><input class="s secs" type="number" min="0" max="600" placeholder="auto">
-    <button class="chip" data-mv="-1">▲</button><button class="chip" data-mv="1">▼</button><button class="chip whenBtn">⏰ When</button><button class="chip del">Remove</button></div></div>`;
+    <div class="row"><button class="chip editBtn">✓ Done</button><span class="muted" style="font-size:12px">Seconds</span><input class="s secs" type="number" min="0" max="600" placeholder="auto">
+    <button class="chip" data-mv="-1">▲</button><button class="chip" data-mv="1">▼</button><button class="chip whenBtn">⏰ When</button></div></div>
+    <button class="chip del" title="Remove" aria-label="Remove">✕</button>`;
   it.el = el; it.thumb = el.querySelector('canvas'); it.metaEl = el.querySelector('.meta');
   el.querySelector('.name').textContent = label(it);
   const secs = el.querySelector('.secs');
@@ -747,11 +759,21 @@ function baseEl(it) {
   it.thumb.onclick = () => select(it);
   el.querySelectorAll('[data-mv]').forEach(b => b.onclick = () => move(it, +b.dataset.mv));
   el.querySelector('.del').onclick = () => remove(it);
+  el.querySelector('.editBtn').onclick = (e) => { e.stopPropagation(); setMini(it, true); };
+  el.addEventListener('click', (e) => { if (el.classList.contains('mini') && !e.target.closest('.del')) openItem(it); });
   whenPanel(it, el);
   $('items').appendChild(el);
   items.push(it);
+  loadingShow ? setMini(it, true) : openItem(it);
   return el;
 }
+// Only one item is open for editing at a time; the rest are compact rows, so a long list of reminders stays short.
+let loadingShow = false;
+function setMini(it, mini) {
+  it.el.classList.toggle('mini', mini);
+  if (mini) it.el.querySelector('.edit.when').hidden = true;
+}
+function openItem(it) { items.forEach(x => setMini(x, x !== it)); select(it); }
 
 // ---------- When an item plays (the screen checks it: dates every year, weekdays, hours) ----------
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -861,18 +883,17 @@ function addDrawn(kind, o = {}) {
   const it = Object.assign({ kind, secs: 0, fg: kind === 'clock' ? '#5ac8ff' : kind === 'weather' ? '#ffffff' : COLORS.fg, bg: COLORS.bg, rainbow: false,
     font: kind === 'text' ? 3 : 4, effect: kind === 'countdown' ? 'snow' : kind === 'fx' ? 'fireworks' : 'none',
     text: kind === 'text' ? 'Happy Birthday!' : kind === 'countdown' ? 'Christmas' : '', date: '12-25',
-    unit: usesF() ? 'F' : 'C', lat: '', lon: '', place: '', lead: '', fc: false,
+    unit: usesF() ? 'F' : 'C', lat: '', lon: '', place: '', lead: '', fc: kind === 'weather',
     h24: !new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12 }, o);
   const el = baseEl(it);
-  it.metaEl.textContent = META[kind];
+  it.metaEl.textContent = META[kind]; it.metaEl.classList.add('desc');
   if (kind === 'weather' && it.place) it.metaEl.textContent = `Weather for ${it.place} (needs internet)`;
   const ed = document.createElement('div'); ed.className = 'edit';
   const colors = `<label>Color <input type="color" data-k="fg"> <input type="checkbox" data-k="rainbow"> Rainbow
       &nbsp; Background <input type="color" data-k="bg"></label>`;
   const sizes = kind === 'weather'
-    ? '<option value="3">Medium</option><option value="4">Big</option><option value="6">Jumbo medium</option><option value="7">Jumbo big</option>'
-    : '<optgroup label="Classic"><option value="1">Pixel</option><option value="2">Small</option><option value="3">Medium</option><option value="4">Big</option></optgroup>'
-      + '<optgroup label="Jumbo (slanted)"><option value="5">Jumbo small</option><option value="6">Jumbo medium</option><option value="7">Jumbo big</option></optgroup>';
+    ? '<option value="3">Medium</option><option value="4">Big</option>'
+    : '<option value="1">Pixel</option><option value="2">Small</option><option value="3">Medium</option><option value="4">Big</option>';
   ed.innerHTML = kind === 'fx'
     ? `<label>Effect <select data-k="effect">${fxOptions().replace('<option value="none">None</option>', '')}</select>
        &nbsp; Background <input type="color" data-k="bg"></label>`
@@ -974,6 +995,8 @@ async function loadInfo() {
     showTime();
     showCode();
     checkUpdate();
+    // Start from what the screen is playing, so adding one reminder doesn't wipe the others on Send.
+    if (!items.length && (card.items ?? card.files)) $('loadShow').click();
   } catch { $('cardInfo').textContent = 'Can\'t reach the screen. Are you on the same WiFi?'; }
   updateSpace();
 }
@@ -986,6 +1009,7 @@ $('loadShow').onclick = async () => {
     const lines = (await api('/api/show')).split('\n').filter(Boolean);
     if (!lines.length) { st.textContent = 'The screen has nothing to load (or older software).'; return; }
     items.slice().forEach(remove);
+    loadingShow = true;
     for (const ln of lines) {
       const f = ln.split('\t'), secs = +f[1] || 0;
       const op = f.length > 3 && f[f.length - 1].startsWith('@') ? parseOpts(f.pop()) : parseOpts('@');
@@ -994,7 +1018,7 @@ $('loadShow').onclick = async () => {
         const r = await fetch('/api/file?name=' + encodeURIComponent(f[2]));
         if (r.ok) await addFile(new File([await r.blob()], f[2]), secs, true);
       } else {
-        const o = { lead: op.lead, fc: op.fc, secs, fg: f[2] === 'rainbow' ? '#ffffff' : '#' + f[2], rainbow: f[2] === 'rainbow', bg: '#' + f[3], font: +f[4], effect: FX[f[5]] ? f[5] : 'none' };
+        const o = { lead: op.lead, fc: op.fc, secs, fg: f[2] === 'rainbow' ? '#ffffff' : '#' + f[2], rainbow: f[2] === 'rainbow', bg: '#' + f[3], font: +f[4] >= 5 && +f[4] <= 7 ? +f[4] - 3 : Math.max(1, Math.min(4, +f[4] || 3)), effect: FX[f[5]] ? f[5] : 'none' };
         if (f[0] === 'text') addDrawn('text', { ...o, text: f[6] });
         if (f[0] === 'clock') addDrawn('clock', { ...o, h24: f[6] === '24' });
         if (f[0] === 'countdown') addDrawn('countdown', { ...o, date: f[6], text: f[7] || '' });
@@ -1007,6 +1031,7 @@ $('loadShow').onclick = async () => {
     st.className = 'status ok'; st.textContent = `Loaded ${lines.length} item${lines.length > 1 ? 's' : ''} from the screen.`;
     items.forEach(i => { const s = i.el.querySelector('.secs'); s.value = i.secs || ''; });
   } catch (err) { st.className = 'status err'; st.textContent = 'Couldn\'t read the screen: ' + err.message; }
+  loadingShow = false;
 };
 
 const hex6 = (c) => c.replace('#', '').toUpperCase();
