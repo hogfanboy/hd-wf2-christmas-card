@@ -1,7 +1,8 @@
 # PROGRESS
 
-## Working state (fw 0.9.7 built, not pushed; card 1 on 0.9.5 (user: all good), card 2 still 0.6.2)
-- **0.9.7 (compiles; page checked on the fake card; NOT run on a card yet, not pushed):** HTTPS from the card
+## Working state (fw 0.9.7 pushed; card 1 on 0.9.7 (WiFi update), card 2 still 0.6.2, offline 2026-11-20)
+- **0.9.7 (card 1, serial: HTTPS news 542 B / markets 1877 B, 200 in ~800 ms, heap ~78 KB steady; Location:
+  Naperville found; panel look not yet judged by the user):** HTTPS from the card
   (`online.ino`: `siteGet`, trusts ISRG Root X1/X2 in `site_ca.h`, frees the player buffers during the TLS fetch).
   CI `tools/build-feeds.mjs` writes `docs/feeds/` hourly: `news-<topic>.txt` (NPR/BBC/ESPN/Ars RSS) and
   `markets.txt` (Yahoo chart API, 21 symbols, day sparkline). New show items `news <topic>` (headlines scroll
@@ -50,9 +51,9 @@
 - Test uploads with curl: `-H "Content-Type: text/plain"` for /api/show (form type = empty show), then POST /api/play.
 
 ## Next (1.0 plan)
-00. **0.9.7 on card 1 (WiFi update), serial log:** `HTTPS ...: 200` line with heap numbers, `Location:` + `Time
-   zone (automatic)` lines, news/stocks items readable on the panel (scroll speed ~55 px/s, stock fonts). Feeds
-   only exist on the website after the next push, so push (CI) first, then test. Then retest a fresh install image.
+00. **User judges news + stocks on card 1** (test show: clock, news top, stocks ^GSPC/^DJI/^IXIC/AAPL, news sports,
+   weather auto; the old show was one weather item): readable? scroll speed (~55 px/s)? stock fonts? Then retest a
+   fresh install image (automatic time zone path: card 1 already had a tz, so `tzAuto` stayed false).
 0. Beta testers 2026-11-21 evening: user puts 0.9.6 on card 1, checks the tab icon on the card's page, checks the clock (12h + 24h), the page with a
    long reminder list, QR screen, a + Reminder item, overnight soak; then flash card 2 and the testers' cards (USB installer or WiFi update).
 2. Optional: colorful pixel-art weather icons (IDEAS.md); user is fine with the current ones.
