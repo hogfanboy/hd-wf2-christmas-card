@@ -75,6 +75,9 @@ void markAppValid() {
 // ---------- Panel screens ----------
 static void text(int y, const char *s, uint16_t color) { panel->setTextColor(color); panel->setCursor(1, y); panel->print(s); }
 static uint16_t C(uint8_t r, uint8_t g, uint8_t b) { return panel->color565(r, g, b); }
+// Pure color for fast scan (2-bit): 224 is a value whose 565-truncated table entry has both low bits set on
+// every channel (255 becomes 248 for red/blue = only 1/3 lit). See the QR notes below.
+static uint16_t CF(bool r, bool g, bool b) { return C(r ? 224 : 0, g ? 224 : 0, b ? 224 : 0); }
 
 static void showHotspotScreen(const char *status) {
   panel->clearScreen();
@@ -88,30 +91,25 @@ static void showHotspotScreen(const char *status) {
   if (doubleBuffered) panel->flipDMABuffer();
 }
 
-// QR code at the left of the panel, drawn in one of several styles while we find what phone cameras
-// read best on an LED panel (S1 presses while the address is up step through them; the number shows
-// bottom right). Uses the QR encoder that ships with the ESP32 core.
-struct QrStyle { bool upper; uint8_t quiet, light; bool invert, fullPwm, web; };
+// QR code at the left of the panel, drawn while the panel is in fast scan (2-bit). S1 presses while the
+// address is up step through the styles; the number shows bottom right. Uses the ESP32 core's QR encoder.
+// Fast scan colors: the library's color table is built for 8-bit, and at 2-bit it reads only the table's two
+// lowest bits, so most values come out wrong (white looked green). Use CF() pure colors only.
+// 0.8.3 test: only the website-link styles scanned with the Pixel camera (they happened to show green).
+struct QrStyle { bool web, r, g, b; };
 static const QrStyle QR_STYLES[] = {
-  {false, 2, 200, false, false},   // 1: 0.7.1 look: version 2, thin quiet zone
-  {true,  4, 200, false, false},   // 2: "HTTP://..." in capitals = smaller version 1 code, proper 4-module quiet zone
-  {true,  4, 200, true,  false},   // 3: like 2, inverted (lit modules on black)
-  {true,  4,  90, false, true},    // 4: like 2, dim white but panel at full PWM (less flicker for cameras)
-  {true,  4, 255, false, true},    // 5: like 2, bright white, full PWM
-  {false, 3, 200, false, true},    // 6: lower-case version 2, 3-module quiet zone, full PWM
-  // 7-8: an https link to the website's forwarding page (go.html), which opens http://<ip> on the phone.
-  // Camera apps may not offer plain http links to a local address. Longer = version 4 = 1 LED per module.
-  {false, 4, 200, false, false, true},   // 7: website link
-  {false, 4,  70, false, true,  true},   // 8: website link, dim white at full PWM (less camera glare)
+  {true,  0, 1, 0},       // 1: https link to go.html (forwards to http://<ip>), green: scanned in the 0.8.3 test
+  {true,  1, 1, 1},       // 2: same link, white
+  {false, 0, 1, 0},       // 3: plain http://<ip> (smaller code, 2 LEDs per module), green
+  {false, 1, 1, 1},       // 4: plain http://<ip>, white
 };
 static const int QR_COUNT = sizeof(QR_STYLES) / sizeof(QR_STYLES[0]);
 int qrVariant = 1;
 static const QrStyle *qrs = &QR_STYLES[0];
 static void qrDraw(const uint8_t *q) {        // q is an esp_qrcode_handle_t
-  int n = esp_qrcode_get_size(q), qz = qrs->quiet, px = (n + 2 * qz) * 2 <= 64 ? 2 : 1;
+  int n = esp_qrcode_get_size(q), qz = 4, px = (n + 2 * qz) * 2 <= 64 ? 2 : 1;
   int sz = (n + 2 * qz) * px, x0 = 1, y0 = (64 - sz) / 2;
-  uint16_t light = C(qrs->light, qrs->light, qrs->light), dark = 0;
-  if (qrs->invert) { uint16_t t = light; light = dark; dark = t; }
+  uint16_t light = CF(qrs->r, qrs->g, qrs->b), dark = 0;
   panel->fillRect(x0, y0, sz, sz, light);
   for (int y = 0; y < n; y++)
     for (int x = 0; x < n; x++)
@@ -121,8 +119,6 @@ void qrNext() { qrVariant = qrVariant % QR_COUNT + 1; }
 static bool drawQr(String ip) {
   qrs = &QR_STYLES[(qrVariant - 1) % QR_COUNT];
   String url = qrs->web ? "https://hogfanboy.github.io/hd-wf2-christmas-card/go#" + ip : "http://" + ip;
-  if (qrs->upper) url.toUpperCase();
-  if (qrs->fullPwm) panel->setBrightness8(MAX_BRIGHTNESS); else applyBrightness();
   esp_qrcode_config_t cfg = {qrDraw, 5, ESP_QRCODE_ECC_LOW};   // max version 5: the website link needs 4
   return esp_qrcode_generate(&cfg, url.c_str()) == ESP_OK;
 }
@@ -145,16 +141,17 @@ void showAddress(uint32_t ms) {
       text(12, "On your phone, open:", C(150, 150, 170));
       text(30, ip.c_str(), C(255, 255, 255));
     } else {
-      panel->setTextColor(C(255, 190, 60));
+      // Pure colors only (fast scan, see above).
+      panel->setTextColor(CF(1, 1, 0));
       panel->setCursor(64, 2);  panel->print("Scan with");
       panel->setCursor(64, 11); panel->print("your phone");
-      panel->setTextColor(C(150, 150, 170));
+      panel->setTextColor(CF(0, 1, 1));
       panel->setCursor(64, 28); panel->print("or type:");
-      panel->setTextColor(C(255, 255, 255));
+      panel->setTextColor(CF(1, 1, 1));
       int dot = ip.lastIndexOf('.', ip.lastIndexOf('.') - 1);   // split 192.168. / 50.16
       panel->setCursor(64, 38); panel->print(ip.substring(0, dot + 1));
       panel->setCursor(64, 47); panel->print(ip.substring(dot + 1));
-      panel->setTextColor(C(90, 90, 110));
+      panel->setTextColor(CF(0, 0, 1));
       panel->setCursor(64, 56); panel->print(panel->calculated_refresh_rate); panel->print("Hz");
       panel->setCursor(110, 56); panel->print(qrVariant); panel->print("/"); panel->print(QR_COUNT);
     }
