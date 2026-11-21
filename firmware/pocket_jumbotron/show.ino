@@ -441,10 +441,12 @@ static int daysUntil(const String &mmdd) {
   return (int)((tb - ta + 43200) / 86400);
 }
 
-static void playCountdown(const ShowItem &it) {
-  if (!timeValid() || it.extra.length() < 5) return;
+static void playCountdown(const ShowItem &item) {
+  if (!timeValid() || item.extra.length() < 5) return;
+  int days = daysUntil(item.extra);
+  ShowItem it = item;
+  if (days == 0 && it.lead >= 0) it.effect = FX_FIREWORKS;       // a reminder's big day
   effectInit(it); FxGuard fxg;
-  int days = daysUntil(it.extra);
   String big = days == 0 ? "TODAY!" : String(days);
   String l1 = days == 0 ? "" : days == 1 ? "DAY UNTIL" : "DAYS UNTIL";
   String l2 = upcase(it.text);

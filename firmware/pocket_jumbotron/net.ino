@@ -128,6 +128,10 @@ void showAddress(uint32_t ms) {
       text(12, "On your phone, open:", C(150, 150, 170));
       text(30, ip.c_str(), C(255, 255, 255));
     } else {
+      // Full panel brightness here: at the normal cap the light pulses are so short at 651 Hz that green
+      // drops off first (white looked purple and dull). The QR screen lights ~40% of the LEDs, so 255 draws
+      // less than a full white screen at the cap. The loop restores the normal brightness after.
+      panel->setBrightness8(255);
       // Pure colors only (fast scan, see above).
       panel->setTextColor(CF(1, 1, 1));
       panel->setCursor(64, 2);  panel->print("Scan with");
