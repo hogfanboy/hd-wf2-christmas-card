@@ -158,13 +158,7 @@ static void playForecast(const ShowItem &it, uint32_t frame) {
   while (millis() - start < total) {
     uint32_t t0 = millis();
     paintBackground(it, frame);
-    // fcStyle (being tried out with tools/forecast-probe.ps1): 0 plain, 1 every other column shaded,
-    // 2 every column a shaded tile with a 1 px gap, 3 four days (32 px columns), every other one shaded.
-    int n = fcStyle == 3 ? std::min(wx.fcN, 4) : wx.fcN, cw = fcStyle == 3 ? 32 : 25, x0 = fcStyle == 3 ? 0 : 2;
-    for (int i = 0; i < n; i++) {
-      if ((fcStyle == 1 || fcStyle == 3) && i % 2) { cg.rgb(FC_SHADE); cg.fillRect(x0 + i * cw, 0, cw, H, 0); }
-      if (fcStyle == 2) { cg.rgb(FC_SHADE); cg.fillRect(x0 + i * cw, 0, cw - 1, H, 0); }
-    }
+    int n = wx.fcN, cw = 25, x0 = 2;
     for (int i = 0; i < n; i++) {
       int cx = x0 + i * cw + cw / 2;
       String d = DOW[(today + i) % 7];
@@ -177,7 +171,6 @@ static void playForecast(const ShowItem &it, uint32_t frame) {
       else labelC(hi, cx, 36, hc);
       labelC(lo, cx, 49, WX_LO);                // lows in the same cool blue as the "L"
     }
-    if (fcProbeUntil) label(String(fcStyle), W - 6, 57, 0xFF0000);   // probe tag
     pushCanvas();
     frame++;
     int32_t wait = 40 - (int32_t)(millis() - t0);
@@ -198,8 +191,6 @@ static void playWeather(const ShowItem &item) {
     it.effect = k == WX_SNOW ? FX_SNOW : (k == WX_RAIN || k == WX_STORM) ? FX_RAIN : FX_NONE;
   }
   effectInit(it); FxGuard fxg;
-  if (fcProbeUntil && (int32_t)(millis() - fcProbeUntil) >= 0) fcProbeUntil = 0;
-  if (fcProbeUntil) { it.sec = (fcProbeUntil - millis()) / 1000 + 1; if (wx.fcN) playForecast(it, 0); return; }
   String temp = String((int)lroundf(wx.temp));
   String line2 = "H" + String((int)lroundf(wx.hi)) + " L" + String((int)lroundf(wx.lo)) + " " + upcase(it.text);
   if (line2.length() > 21) line2 = line2.substring(0, 21);

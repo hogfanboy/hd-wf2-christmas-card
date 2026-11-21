@@ -11,7 +11,7 @@ At the end of a session: promote what was built and verified to PROJECT-NOTES.md
 5. **Night schedule**: done in 0.7.0.
 6. **Updates from GitHub**: one-tap button on the card page done in 0.7.0. Next: card checks by itself.
 7. **Short videos**: done in 1.0 (page reads MP4/MOV/WEBM, start + length, up to 30 s). Next: crop/zoom per clip.
-8. **Built-in effects library**: done in 0.8.0 (9 effects); 1.0 added sleigh, balloons, aquarium, rain, "match the weather". Next: Christmas lights border, bigger full-screen sleigh scene.
+8. **Built-in effects library**: done in 0.8.0 (9 effects); 1.0 added sleigh, balloons, aquarium, rain, "match the weather"; 1.0.0-beta7 Christmas lights. Next: bigger full-screen sleigh scene.
 
 ## Easier setup (no typing 192.168...)
 - QR code on the address screen: done (0.7.1, styles in 0.7.3). Pixel camera app ignores it; try a QR to an https forwarding page on the website.
@@ -22,7 +22,6 @@ At the end of a session: promote what was built and verified to PROJECT-NOTES.md
 - The 3 GIFs once in public `content/` are still in public git history (would need a history rewrite + force push).
 
 ## Smaller improvements
-- Storage meter on the card page before Send ("2.1 of 4.3 MB").
 - Explain the Android "Nearby devices" permission in the website help and on the setup screens.
 - **VBUS check**: does the board back-feed the PC port? Mostly moot with the new unplug-the-panel install steps.
 - Dark grays weak at the very dark end at 60 Hz. Color depth A/B (8 vs 10/12-bit). Text-heavy GIF cleanup. People with no home WiFi.
@@ -34,6 +33,8 @@ Phone OTG install dropped (no iPhone path). Options: borrow any Chrome/Edge comp
 3 boards ordered (N32R16, microSD, ES8311 audio, USB-C; no speaker included, so a 4–8 Ω speaker is needed). Idea: MJPEG video + audio from SD. Confirm it drives a 128x64 panel (2x 64x64 chained). Don't mix assumptions with the WF2 (it has no PSRAM). Distribute only your own family video, not commercial specials.
 
 ## Parking Lot
+- Installer: choose the panel (128x64 P2.5, P3, P4, P5, 64x32, 64x64...: size and resolution) and several panels joined into one display (chain length, rows x columns, which way each panel faces). Firmware would read W/H/layout from NVS instead of constants.
+- 2nd HUB75 port on the WF2: find its pins and whether the DMA library can drive two outputs (or chain through it). Long-term goal: a 2x2 panel display (256x128).
 - Bring soft font edges back for the huge font only, if it looks better there (`SOFT = { 34: 1 }` in web/pjfont.js).
 - Weather icon animation frames beyond the breathing sun (cloud puff wobble, raindrop splash) if the crisp set is liked.
 - Research: scan GitHub for projects built on the ESP32-HUB75-MatrixPanel-DMA library, and Huidu's HDPlayer feature list, for things worth adding.

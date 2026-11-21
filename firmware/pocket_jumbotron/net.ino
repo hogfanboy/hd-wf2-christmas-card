@@ -164,10 +164,6 @@ void showAddress(uint32_t ms) {
     pjPanel(l2, 8, cx - pjPanel(l2, 8, 0, 0, 0, 0, 0, false) / 2, 36, 0, 255, 255, true);
     int iw = digits47(ip, 0, 0, 0, 0, 0, false) - 1;
     digits47(ip, cx - iw / 2, 44, 255, 255, 255, true);
-    if (ms > 10000) {                         // QR probe (/api/qr): say which bit depth this is
-      digits47(String(fastBits), W - 22, 56, 255, 0, 0, true);
-      pjPanel("BIT", 8, W - 16, 63, 255, 0, 0, true);
-    }
     Serial.printf("Address screen: %d-bit fast scan, QR %d px\n", fastBits, qrSize);
   } else {
     text(0, "POCKET JUMBOTRON", C(255, 190, 60));

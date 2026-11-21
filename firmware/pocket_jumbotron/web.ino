@@ -250,21 +250,6 @@ static void startHomeWeb() {
   web->on("/api/play", HTTP_POST, handlePlay);
   web->on("/api/brightness", HTTP_POST, handleBrightness);
   web->on("/api/update", HTTP_POST, handleUpdateDone, handleUpdateData);
-  // QR probe: show the address screen for 60 s in fast scan with this many color bits (2-6), to test phone cameras.
-  web->on("/api/qr", HTTP_POST, []() {
-    if (!touch()) return;
-    uint8_t b = constrain((int)web->arg("bits").toInt(), 2, 6);
-    if (panelFast && b != fastBits) panelSetFast(false);
-    fastBits = b; addrHoldMs = 60000; addrUntil = 0; buttonAction = BTN_SHORT;
-    sendJson("{\"ok\":true}");
-  });
-  // Forecast probe: jump to the first weather item and show only its forecast in layout s (0-3) for 60 s.
-  web->on("/api/fcprobe", HTTP_POST, []() {
-    if (!touch()) return;
-    fcStyle = constrain((int)web->arg("s").toInt(), 0, 3); fcProbeUntil = millis() + 60000;
-    for (size_t i = 0; i < playOrder.size(); i++) if (playlist[playOrder[i]].type == 'w') { playIdx = i; skipItem = true; break; }
-    sendJson("{\"ok\":true}");
-  });
   web->on("/api/update-site", HTTP_POST, []() { if (!touch()) return; updateNow = true; sendJson("{\"ok\":true}"); });   // card fetches it itself
   web->on("/api/forget-wifi", HTTP_POST, handleForgetWifi);
   web->on("/api/show", HTTP_GET, handleShowGet);

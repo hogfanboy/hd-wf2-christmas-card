@@ -46,7 +46,6 @@ struct ChanTag { typedef gdma_channel_handle_t Bus_Parallel16::*type; friend typ
 template struct Reach<BusTag, &MatrixPanel_I2S_DMA::dma_bus>;
 template struct Reach<ChanTag, &Bus_Parallel16::dma_chan>;
 bool panelFast = false;
-uint8_t fastBits = 2;                             // color bits in fast scan (2 = ~650 Hz); /api/qr?bits= tries others
 static void panelStop() {
   panel->stopDMAoutput();
   gdma_channel_handle_t ch = (panel->*get(BusTag())).*get(ChanTag());

@@ -29,7 +29,11 @@ const vendor = `<script>/* omggif (MIT) */${omggif}</script>\n<script>/* gifenc 
 // Build stamp shown on the page ("app 2026-11-20 abc1234"); the website copy is what cards normally run.
 let rev = ''; try { rev = (await import('node:child_process')).execSync('git rev-parse --short HEAD', { cwd: root }).toString().trim(); } catch (e) {}
 const stamp = new Date().toISOString().slice(0, 10) + (rev ? ' ' + rev : '');
-const html = fs.readFileSync(path.join(root, 'web/index.html'), 'utf8').replace('<!--VENDOR-->', () => vendor).replace('/*APP_BUILD*/', stamp);
+// The app's own code: web/app/*.js joined in name order into one script (one shared scope, as if one file).
+const appDir = path.join(root, 'web/app');
+const app = fs.readdirSync(appDir).filter(f => f.endsWith('.js')).sort().map(f => fs.readFileSync(path.join(appDir, f), 'utf8')).join('\n');
+const html = fs.readFileSync(path.join(root, 'web/index.html'), 'utf8').replace('<!--VENDOR-->', () => vendor)
+  .replace('<!--APP-->', () => `<script>\n${app}</script>`).replace('/*APP_BUILD*/', stamp);
 const outDir = path.join(root, 'firmware/build/web');
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(path.join(outDir, 'index.html'), html);

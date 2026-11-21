@@ -1,18 +1,15 @@
 # PROGRESS
 
-## Working state (fw 1.0.0-beta6 on card 1, beta5 on card 2, 2026-11-21)
-- **beta6 (review fixes):** other websites can no longer POST to the card (Origin/Host check, 403; tested with curl
-  and the real page in a browser on card 1). Failed uploads delete their half file. The web page and button stay
-  responsive during GIFs whose frames draw slower than their delay. Tab icon on install.html + pack builder.
+## Working state (fw 1.0.0-beta7 on both cards via WiFi, 2026-11-21)
+- **beta7:** Christmas lights effect (`lights`; preview on the page). Probe endpoints /api/qr and /api/fcprobe and
+  their scripts removed. App code split into web/app/*.js (build output identical). CI runs tools/test.mjs.
+  Lights demo on card 1 played fine (heap 74 KB after). `tools/effects-probe.ps1` = the lights demo (~40 s).
+- **beta6:** other websites can't POST to the card (Origin/Host check, 403). Failed uploads delete their half
+  file. Web page/button stay responsive during GIFs that draw slower than their delay. Tab icons on installer + builder.
 - **beta5:** aquarium = fish + bubbles on black (no water/seaweed). Improv WiFi over USB fixed (the page dropped
   all but the first network of the scan burst) + "Set up WiFi only" on install.html for switched cards. Card side
   tested over COM10; the page with a real card (Chrome) not yet. Effects judged good by the user.
-- **Crisp fonts:** Jumbo font pixels are fully on or off (no soft edge shading). `SOFT` in `web/pjfont.js` can bring
-  soft edges back per size (e.g. the huge font). Page preview uses the same pixels.
-- **Weather icons (beta4):** back to the shaded beta2 drawings (gradient sun with turning tapered rays, shaded moon
-  with craters, lit clouds) but with hard outer edges: each pixel fully on or off, no bolt glow. The beta3 flat
-  icons were too plain. Rain drops/snowflakes stay solid. Preview: `node tools/make-wxicons.mjs <out.png>`.
-  Alternative offered: shaded disc + beta3's straight breathing rays (not built in).
+- **Fonts/icons:** crisp Jumbo font and shaded weather icons with hard edges (details in PROJECT-NOTES).
 - **Shuffle:** page "Play order: In order / 🔀 Shuffle" writes `order<TAB>shuffle` into show.txt; card plays a new
   random order each round, never the same item twice in a row. Tested on the fake card (Send + reload keeps it).
 - **Border trim (beta4 page):** every picture's plain-color border (all 4 corners the same color) is cut off before
@@ -51,6 +48,8 @@
 - Test uploads with curl: `-H "Content-Type: text/plain"` for /api/show, then POST /api/play.
 
 ## Next (the user can answer with one of these commands)
+0. **"Lights look good" / "change X"** - run `tools/effects-probe.ps1` and watch the panel (bulb size 2x2, spacing 8,
+   pattern speed).
 1. **"Fonts/icons look good" / "change X"** - look at a weather item (with forecast) and a Jumbo text item.
    "Use the straight rays" switches the sun to the alternative.
 2. **"Re-add the Christmas pack"** - on the phone page, ★ Get the latest pictures, add Christmas 2026, Send; they

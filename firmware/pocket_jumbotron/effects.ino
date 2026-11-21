@@ -231,6 +231,39 @@ static void fxRain(uint32_t frame, bool behind) {
   }
 }
 
+// A string of Christmas lights around the edge: a dim green wire on the outer pixels, 44 bulbs (2x2) in red, gold,
+// green, blue. Full screen it changes pattern every ~6 s (twinkle, chase, alternate blink) over gentle snow; behind
+// a message it only twinkles. Bulb i goes clockwise from the top left (page preview: the same order and colors).
+static const uint32_t BULB[4] = {0xFF1020, 0xFFB020, 0x20E040, 0x2050FF};
+static void bulbPos(int i, int &x, int &y) {
+  if (i < 16) { x = 3 + i * 8; y = 1; }                          // top, left to right
+  else if (i < 22) { x = W - 3; y = 9 + (i - 16) * 8; }          // right, down
+  else if (i < 38) { x = 3 + (37 - i) * 8; y = H - 3; }          // bottom, right to left
+  else { x = 1; y = 9 + (43 - i) * 8; }                          // left, up
+}
+static void fxLights(uint32_t frame, bool behind) {
+  if (!behind)
+    for (int i = 0; i < 24; i++) {                               // snow inside the frame
+      Flake &f = flakes[i];
+      f.y += f.spd / 2 + 1;
+      if (f.y >= (H - 4) * 16) { f.y = 4 * 16; f.x = (4 + rnd(W - 8)) * 16; }
+      if (f.y < 4 * 16) f.y = 4 * 16;
+      int x = f.x / 16; if (x < 4 || x >= W - 4) { f.x = (4 + rnd(W - 8)) * 16; continue; }
+      pxAdd(x, f.y / 16, 0xFFFFFF, f.bri * 2 / 3);
+    }
+  for (int x = 0; x < W; x++) { px(x, 0, 0x0C3812); px(x, H - 1, 0x0C3812); }
+  for (int y = 0; y < H; y++) { px(0, y, 0x0C3812); px(W - 1, y, 0x0C3812); }
+  int mode = behind ? 0 : (frame / 200) % 3;
+  for (int i = 0; i < 44; i++) {
+    int v = mode == 0 ? 70 + (sin8(frame * 3 + i * 53) * 185 >> 8)
+          : mode == 1 ? (((i + frame / 5) % 4) == 0 ? 255 : 45)
+          : ((int)(i & 1) == (int)((frame / 20) & 1) ? 255 : 45);
+    uint32_t c = mixC(BULB[i % 4], 0, 255 - v, 255);
+    int x, y; bulbPos(i, x, y);
+    px(x, y, c); px(x + 1, y, c); px(x, y + 1, c); px(x + 1, y + 1, c);
+  }
+}
+
 static void paintBackground(const ShowItem &it, uint32_t frame) {
   uint8_t br = it.bg >> 16, bgg = it.bg >> 8, bb = it.bg;
   bool behind = it.type != 'f';                  // something is drawn on top: keep busy effects calmer
@@ -301,6 +334,7 @@ static void paintBackground(const ShowItem &it, uint32_t frame) {
     case FX_BALLOONS: fxBalloons(frame, behind); break;
     case FX_FISH: fxFish(frame, behind); break;
     case FX_RAIN: fxRain(frame, behind); break;
+    case FX_LIGHTS: fxLights(frame, behind); break;
   }
 }
 

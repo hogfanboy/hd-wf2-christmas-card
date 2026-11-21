@@ -37,16 +37,15 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "1.0.0-beta6";
+static const char *FW_VERSION = "1.0.0-beta7";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
+static const uint8_t fastBits = 2;             // color bits in fast scan for the QR screen (~650 Hz; 2-6 tried, 2 reads best)
 uint8_t brightnessPct = 100;                   // user setting, saved in NVS
 uint8_t themeIx = 2;                           // color theme (canvas.ino THEMES), saved in NVS
 bool autoUpdate = true;                        // daily update check from the website (online.ino), saved in NVS
 extern bool updateNow;
-extern uint8_t fastBits;
-uint32_t addrHoldMs = 10000;                   // how long the next address screen stays up (QR probe: 60 s)
 // The HUB75 library already applies CIE1931 brightness correction (lumConvTab), so no extra gamma here.
 static const float GAMMA = 1.0f;
 static const uint32_t MIN_SHOW_MS = 8000;     // short GIFs loop until this long
@@ -93,14 +92,11 @@ bool shuffleShow = false;                      // show.txt "order shuffle" line 
 struct Flake { int16_t x, y; uint8_t spd, bri; };   // effect particles (show.ino)
 // Effect names in show lines (show.ino); index = ShowItem.effect.
 const char *const FX_NAMES[] = {"none", "snow", "sparkle", "hearts", "confetti", "fireworks", "stars", "fire", "matrix",
-                               "sleigh", "balloons", "fish", "rain", "auto"};   // auto: weather items, snow or rain to match
+                               "sleigh", "balloons", "fish", "rain", "auto", "lights"};   // auto: weather items, snow or rain to match
 enum { FX_NONE, FX_SNOW, FX_SPARKLE, FX_HEARTS, FX_CONFETTI, FX_FIREWORKS, FX_STARS, FX_FIRE, FX_MATRIX,
-       FX_SLEIGH, FX_BALLOONS, FX_FISH, FX_RAIN, FX_AUTO, FX_COUNT };
+       FX_SLEIGH, FX_BALLOONS, FX_FISH, FX_RAIN, FX_AUTO, FX_LIGHTS, FX_COUNT };
 // ---------- Settings: time zone + night mode (NVS, see net.ino settingsLoad) ----------
 String tzString = "UTC0";
-uint8_t fcStyle = 0;                           // forecast layout being tried (weather.ino); not saved
-uint32_t fcProbeUntil = 0;                     // forecast probe: show only the forecast until this millis()
-bool skipItem = false;                         // end the current item now (probes)
 String geoTz;                                  // the time zone that goes with the card's location (online.ino)
 bool tzAuto = true;                           // no time zone from the page yet: guessed from the location (online.ino)
 int8_t nightFrom = -1, nightTo = -1;          // hours 0-23; -1 = night mode off
@@ -163,7 +159,7 @@ bool waitMs(uint32_t ms) {
     pollButton();
     netService();
     checkNight();
-    if (buttonAction != BTN_NONE || holdPlayback || addrUntil || skipItem) return true;
+    if (buttonAction != BTN_NONE || holdPlayback || addrUntil) return true;
     if ((int32_t)(end - millis()) > 0) delay(3);
   } while ((int32_t)(end - millis()) > 0);
   return false;
@@ -177,7 +173,7 @@ void loop() {
   if (buttonAction == BTN_SHORT) {                   // press: show the address; press again: back to the show
     buttonAction = BTN_NONE;
     if (addrUntil) addrUntil = 1;                    // already up: let it expire now
-    else { showAddress(addrHoldMs); addrHoldMs = 10000; }
+    else showAddress(10000);
   }
   if (addrUntil) {                                   // address screen is up
     if ((int32_t)(millis() - addrUntil) < 0) { delay(5); return; }
@@ -196,7 +192,6 @@ void loop() {
     return;
   }
   skipped = 0;
-  skipItem = false;
   geoService();                                      // once per start: where am I (online.ino)
   playItem(it);
 }

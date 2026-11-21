@@ -55,6 +55,10 @@ jobs:
       - name: Web app (docs/app, loaded by the card's front page)
         run: node tools/build-web.mjs
 
+      # Fails the run before anything is published: pages that don't parse, page/firmware mismatches, bad version.
+      - name: Checks
+        run: node tools/test.mjs
+
       # The pictures live in a private repo, so they aren't browsable on GitHub; the packs on the website and the
       # install image's first show are built from it (the website itself is public).
       - name: Picture source (private repo, read-only deploy key)
