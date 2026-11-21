@@ -27,8 +27,6 @@ docs/firmware/
 # Built by tools/build-packs.mjs from content/ (published by GitHub Actions)
 docs/packs/
 
-# Encrypted family packs (built by tools/build-vault.mjs from the private content repo)
-docs/vault/
 private-content/
 
 # The card app, built by tools/build-web.mjs (published by GitHub Actions)

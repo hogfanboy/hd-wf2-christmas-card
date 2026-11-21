@@ -1,17 +1,22 @@
 // Builds the picture packs the card's web page offers under "Get the latest Pocket Jumbotron pictures".
-//   content/<pack-id>/            pictures (gif, png, jpg, webp; animated is fine) + optional pack.json
-//   content/<pack-id>/pack.json   { "title": "...", "about": "...", "cards": ["PocketJumbo-EED0"], "order": 10 }
-//                                 "cards" = only those screens see it (per-family messages). Lower "order" first.
+// Usage: node tools/build-packs.mjs [more source folders...]
+//   Sources: content/ in this repo (normally empty) plus each folder given, e.g. CI's checkout of the private
+//   repo hogfanboy/pocket-jumbotron-content, so the pictures aren't on public GitHub.
+//   <source>/<pack-id>/            pictures (gif, png, jpg, webp; animated is fine) + optional pack.json
+//   <source>/<pack-id>/pack.json   { "title": "...", "about": "...", "cards": ["PocketJumbo-EED0"], "order": 10 }
+//                                  "cards" = only those screens see it (per-family messages). Lower "order" first.
+//   <source>/<picture>             loose pictures = the "New pictures" pack
 // Output: docs/packs/<pack-id>/<files> + docs/packs/manifest.json (published by GitHub Actions, not committed).
+// The website is public: anyone with a picture's address can download it. Private here = not on GitHub.
 // Also adds the generated "holiday-starter" pack (our own animations from docs/panel.js).
-// Everything here is PUBLIC on the website: only your own or royalty-free pictures.
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const src = path.join(root, 'content'), out = path.join(root, 'docs/packs');
+const out = path.join(root, 'docs/packs');
+const sources = [path.join(root, 'content'), ...process.argv.slice(2).map(p => path.resolve(p))].filter(p => fs.existsSync(p));
 const PIC = /\.(gif|png|jpe?g|webp)$/i;
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(out, { recursive: true });
@@ -21,18 +26,22 @@ execFileSync(process.execPath, [path.join(root, 'tools/make-starter.mjs'), path.
 packs.push({ id: 'holiday-starter', title: 'Holiday starter animations', about: 'Snow, greetings and color tests.', order: 90,
   files: fs.readdirSync(path.join(out, 'holiday-starter')).filter(f => PIC.test(f)).sort() });
 
-// Pictures dropped straight into content/ (e.g. uploaded on github.com) become the "new-pictures" pack.
-const loose = fs.existsSync(src) ? fs.readdirSync(src).filter(f => PIC.test(f) && fs.statSync(path.join(src, f)).isFile()).sort() : [];
+const isFile = (p) => fs.statSync(p).isFile();
+// Pictures dropped straight into a source folder become the "new-pictures" pack.
+const loose = [];
+for (const src of sources) for (const f of fs.readdirSync(src).sort()) if (PIC.test(f) && isFile(path.join(src, f))) loose.push(path.join(src, f));
 if (loose.length) {
   fs.mkdirSync(path.join(out, 'new-pictures'));
-  for (const f of loose) fs.copyFileSync(path.join(src, f), path.join(out, 'new-pictures', f));
-  packs.push({ id: 'new-pictures', title: 'New pictures', about: 'The latest additions.', order: 10, files: loose });
+  for (const f of loose) fs.copyFileSync(f, path.join(out, 'new-pictures', path.basename(f)));
+  packs.push({ id: 'new-pictures', title: 'New pictures', about: 'The latest additions.', order: 10,
+    files: [...new Set(loose.map(f => path.basename(f)))].sort() });
 }
 
-if (fs.existsSync(src)) for (const id of fs.readdirSync(src).sort()) {
+for (const src of sources) for (const id of fs.readdirSync(src).sort()) {
   const dir = path.join(src, id);
-  if (!fs.statSync(dir).isDirectory() || id.startsWith('_')) continue;
+  if (!fs.statSync(dir).isDirectory() || id.startsWith('_') || id.startsWith('.')) continue;
   if (!/^[a-z0-9-]+$/.test(id)) throw new Error(`pack folder "${id}": use lowercase letters, digits and dashes`);
+  if (id === 'new-pictures' || packs.some(p => p.id === id)) throw new Error(`pack "${id}" exists twice`);
   const meta = fs.existsSync(path.join(dir, 'pack.json')) ? JSON.parse(fs.readFileSync(path.join(dir, 'pack.json'), 'utf8')) : {};
   const files = fs.readdirSync(dir).filter(f => PIC.test(f)).sort();
   if (!files.length) continue;

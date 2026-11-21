@@ -21,7 +21,7 @@ static const uint32_t HOLD_IDLE_MS = 2UL * 60 * 1000;      // resume playing if 
 static WebServer *web = nullptr;
 static DNSServer dns;
 static Preferences prefs;
-static String apSsid, apPass, hostName, staSsid, staPass, familyCode;
+static String apSsid, apPass, hostName, staSsid, staPass;
 static String scanJson = "[]";
 static uint32_t lastActivity = 0, staBeganAt = 0;
 static bool webStarted = false, restartRequested = false, staFailShown = false;
@@ -38,7 +38,7 @@ void settingsLoad() {
   staPass = prefs.getString("pass", "");
   apPass = prefs.getString("appass", "");
   tzString = prefs.getString("tz", "UTC0");
-  familyCode = prefs.getString("fc", "");
+  if (prefs.isKey("fc")) prefs.remove("fc");   // old family code (0.9.5 and older), no longer used
   nightFrom = prefs.getChar("nfrom", -1);
   nightTo = prefs.getChar("nto", -1);
   nightLevel = prefs.getUChar("nlevel", 0);

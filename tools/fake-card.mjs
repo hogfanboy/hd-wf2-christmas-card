@@ -53,9 +53,9 @@ http.createServer((req, res) => {
     return;
   }
   // Picture packs: serves docs/packs/ (run node tools/build-packs.mjs first).
-  if (url.pathname.startsWith('/packs/') || url.pathname.startsWith('/vault/')) {
+  if (url.pathname.startsWith('/packs/')) {
     const f = path.join(root, 'docs', path.normalize(decodeURIComponent(url.pathname)));
-    if ((f.startsWith(path.join(root, 'docs', 'packs')) || f.startsWith(path.join(root, 'docs', 'vault'))) && fs.existsSync(f) && fs.statSync(f).isFile()) {
+    if (f.startsWith(path.join(root, 'docs', 'packs')) && fs.existsSync(f) && fs.statSync(f).isFile()) {
       res.writeHead(200, { 'Content-Type': f.endsWith('.json') ? 'application/json' : f.endsWith('.gif') ? 'image/gif' : f.endsWith('.webp') ? 'image/webp' : 'application/octet-stream' }); return res.end(fs.readFileSync(f)); }
   }
   // Test helper: /test/<file> serves sample media from media/ so the page can be fed files in tests.

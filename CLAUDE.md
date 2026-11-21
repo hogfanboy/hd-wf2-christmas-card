@@ -24,8 +24,8 @@ build the firmware and publish `docs/` (website + online installer) to GitHub Pa
 ## Layout
 - `firmware/pocket_jumbotron/`: one file per job (map at the top of `pocket_jumbotron.ino`): `pocket_jumbotron.ino` (config, shared types/globals/includes, setup, loop, button), `panel` (chip registers, fast scan), `player` (GIF/.pjm, canvas push), `canvas` (drawing helpers), `effects`, `screens` (text/clock/countdown), `weather`, `show` (show list format, schedule, time, night mode), `net` (WiFi, NVS, hotspot, QR screen), `web` (API, starter page), `rollback.cpp`, `partitions.csv`. Arduino joins the .ino files in name order, so shared types and globals go in the main file; functions with default arguments need a declaration there. `web_index.h` is generated.
 - The card's `/` is a starter page that loads the app from `docs/app/` (built by `tools/build-web.mjs` in CI); `/local` is the built-in copy.
-- `web/` pages served by the card (`index.html`, `wifi.html`, `vault.js`); `node tools/build-web.mjs` regenerates `web_index.h` (run after editing `web/`, then recompile).
-- `content/` public packs (`tools/build-packs.mjs`). Private pictures + family codes: repo hogfanboy/pocket-jumbotron-content, cloned at `../pocket-jumbotron-content`, encrypted by `tools/build-vault.mjs` in CI. Never put a family code in this repo.
+- `web/` pages served by the card (`index.html`, `wifi.html`); `node tools/build-web.mjs` regenerates `web_index.h` (run after editing `web/`, then recompile).
+- Picture packs: the pictures live in the private repo hogfanboy/pocket-jumbotron-content (cloned at `../pocket-jumbotron-content`); CI runs `tools/build-packs.mjs private-content` to publish them to `docs/packs/`. Keep `content/` here empty: never commit pictures to this public repo.
 - `docs/` website + `install.html` (browser USB installer); `docs/firmware/` is built by `node tools/build-install.mjs` (CI does this).
 - Other `firmware/*` folders are one-off panel probes/tests.
 

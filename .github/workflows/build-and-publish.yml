@@ -58,11 +58,9 @@ jobs:
       - name: Build install image
         run: node tools/build-install.mjs
 
-      - name: Build picture packs
-        run: node tools/build-packs.mjs
-
-      # Private pictures live in a private repo; only encrypted copies reach the public website.
-      - name: Private content (read-only deploy key)
+      # The pictures live in a private repo, so they aren't browsable on GitHub; the packs on the website are
+      # built from it (the website itself is public).
+      - name: Picture source (private repo, read-only deploy key)
         if: env.HAS_PRIVATE == 'true'
         uses: actions/checkout@v4
         with:
@@ -70,9 +68,8 @@ jobs:
           ssh-key: ${{ secrets.CONTENT_DEPLOY_KEY }}
           path: private-content
 
-      - name: Encrypted family packs
-        if: env.HAS_PRIVATE == 'true'
-        run: node tools/build-vault.mjs private-content
+      - name: Build picture packs
+        run: node tools/build-packs.mjs private-content
 
       - uses: actions/upload-pages-artifact@v3
         with:

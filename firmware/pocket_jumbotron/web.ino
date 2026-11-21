@@ -25,10 +25,10 @@ static void handleInfo() {
   touch();
   char buf[480];
   snprintf(buf, sizeof(buf), "{\"api\":1,\"fw\":\"%s\",\"name\":\"%s\",\"total\":%u,\"used\":%u,\"files\":%d,\"items\":%u,\"brightness\":%u,\"heap\":%u,"
-           "\"tz\":\"%s\",\"nightFrom\":%d,\"nightTo\":%d,\"nightLevel\":%u,\"night\":%s,\"time\":%lu,\"fc\":\"%s\"}",
+           "\"tz\":\"%s\",\"nightFrom\":%d,\"nightTo\":%d,\"nightLevel\":%u,\"night\":%s,\"time\":%lu}",
            FW_VERSION, hostName.c_str(), (unsigned)LittleFS.totalBytes(), (unsigned)LittleFS.usedBytes(), countPictures(),
            (unsigned)playlist.size(), brightnessPct, (unsigned)ESP.getFreeHeap(), tzString.c_str(), nightFrom, nightTo, nightLevel,
-           nightNow ? "true" : "false", timeValid() ? (unsigned long)time(nullptr) : 0UL, familyCode.c_str());
+           nightNow ? "true" : "false", timeValid() ? (unsigned long)time(nullptr) : 0UL);
   sendJson(buf);
 }
 
@@ -133,11 +133,6 @@ static void handleShowPost() {
 static void handleSettings() {
   touch();
   if (web->hasArg("tz") && web->arg("tz").length() < 60) { tzString = web->arg("tz"); prefs.putString("tz", tzString); timeBegin(); }
-  if (web->hasArg("fc")) {                         // family code for encrypted packs: A-Z 0-9 only
-    String c = web->arg("fc"), k;
-    for (char ch : c) if (isalnum((unsigned char)ch) && k.length() < 32) k += (char)toupper(ch);
-    familyCode = k; prefs.putString("fc", familyCode);
-  }
   if (web->hasArg("nf")) { nightFrom = constrain((int)web->arg("nf").toInt(), -1, 23); prefs.putChar("nfrom", nightFrom); }
   if (web->hasArg("nt")) { nightTo = constrain((int)web->arg("nt").toInt(), -1, 23); prefs.putChar("nto", nightTo); }
   if (web->hasArg("nl")) { nightLevel = constrain((int)web->arg("nl").toInt(), 0, 100); prefs.putUChar("nlevel", nightLevel); }
@@ -191,7 +186,7 @@ static void handleForgetWifi() {
 // then runs on the card's own address, so its /api calls go straight to the card (an https page can't call
 // http devices; an http page may load https code). No app at all: the built-in copy at /local.
 static const char SHELL_HTML[] PROGMEM = R"HTML(<!doctype html><html><head><meta charset=utf-8>
-<meta name=viewport content="width=device-width,initial-scale=1"><title>Pocket Jumbotron</title></head>
+<meta name=viewport content="width=device-width,initial-scale=1"><title>Pocket Jumbotron</title><link rel=icon href=/favicon.ico></head>
 <body style="background:#0b0d12;color:#9aa;font:16px system-ui,sans-serif;padding:20px"><p>Loading...</p><script>
 (async()=>{
  const APP='https://hogfanboy.github.io/hd-wf2-christmas-card/app/index.html';
@@ -204,12 +199,16 @@ static const char SHELL_HTML[] PROGMEM = R"HTML(<!doctype html><html><head><meta
  document.open();document.write(h);document.close();
 })();
 </script></body></html>)HTML";
+// Browser tab icon (same as docs/favicon.svg). Chrome asks every site for /favicon.ico; a 404 = the gray globe.
+static const char FAVICON_SVG[] PROGMEM = R"SVG(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect x="1" y="2" width="30" height="28" rx="5" fill="#0d0d14" stroke="#c8202f" stroke-width="2.5"/><path fill="#ffbe3c" d="M4 7.25h3.5v3.5h-3.5zM7.5 7.25h3.5v3.5h-3.5zM11 7.25h3.5v3.5h-3.5zM4 10.75h3.5v3.5h-3.5zM11 10.75h3.5v3.5h-3.5zM4 14.25h3.5v3.5h-3.5zM7.5 14.25h3.5v3.5h-3.5zM11 14.25h3.5v3.5h-3.5zM4 17.75h3.5v3.5h-3.5zM4 21.25h3.5v3.5h-3.5z"/><path fill="#4cc3ff" d="M17.5 7.25h3.5v3.5h-3.5zM21 7.25h3.5v3.5h-3.5zM24.5 7.25h3.5v3.5h-3.5zM24.5 10.75h3.5v3.5h-3.5zM24.5 14.25h3.5v3.5h-3.5zM17.5 17.75h3.5v3.5h-3.5zM24.5 17.75h3.5v3.5h-3.5zM21 21.25h3.5v3.5h-3.5z"/></svg>)SVG";
+static void handleFavicon() { web->sendHeader("Cache-Control", "max-age=604800"); web->send_P(200, "image/svg+xml", FAVICON_SVG); }
 static void handleShell() { touch(); web->sendHeader("Cache-Control", "no-store"); web->send_P(200, "text/html", SHELL_HTML); }
 
 static void startHomeWeb() {
   web = new WebServer(80);
   web->on("/", HTTP_GET, handleShell);
-  web->on("/local", HTTP_GET, handleIndex);       // built-in copy of the app (no internet)
+  web->on("/local", HTTP_GET, handleIndex);
+  web->on("/favicon.ico", HTTP_GET, handleFavicon);       // built-in copy of the app (no internet)
   web->on("/api/info", HTTP_GET, handleInfo);
   web->on("/api/clear", HTTP_POST, handleClear);
   web->on("/api/upload", HTTP_POST, handleUploadDone, handleUploadData);

@@ -83,6 +83,7 @@
 
   <div class="box stack">
     <h2>1. Build your show</h2>
+    <div class="flex showline"><span id="showStatus" class="status" style="margin:0;flex:1">Reading what's on the screen…</span><button class="chip" id="loadShow">↻ Reload</button></div>
     <div class="muted">Items play top to bottom, then start over. Photos, GIFs and WEBPs are resized on this phone. Tap an item to change it.</div>
     <label class="btn secondary" for="files">+ Pictures</label>
     <input id="files" type="file" accept="image/*" multiple>
@@ -95,13 +96,8 @@
       <button class="secondary" id="addWx">+ Weather</button>
     </div>
     <button class="secondary" id="packBtn">★ Get the latest Pocket Jumbotron pictures</button>
-    <details id="codeBox"><summary id="codeSum">🔒 Have a family code? It unlocks your family's pictures.</summary>
-      <div class="flex" style="margin-top:8px"><input class="s" id="fcode" placeholder="e.g. SNOW-4821" autocomplete="off" style="flex:1;min-width:0">
-      <button class="secondary" id="fcodeSave" style="width:auto">Save</button></div>
-    </details>
     <div class="items" id="packs" hidden></div>
     <div class="status" id="packStatus"></div>
-    <button class="secondary" id="loadShow">↻ Load what's on the screen now</button>
     <div class="items" id="items"></div>
     <div>
       <div class="bar" id="bar"><i></i></div>
@@ -988,27 +984,34 @@ const newer = (a, b) => { const p = s => String(s).split('.').map(Number); const
 async function loadInfo() {
   try {
     card = await api('/api/info');
-    $('diag').textContent = JSON.stringify(Object.assign({}, card, { fc: undefined })) + '\napp ' + (location.pathname === '/local' ? 'built-in' : APP_BUILD) + ' · ' + navigator.userAgent + ' · ' + new Date().toString();
+    $('diag').textContent = JSON.stringify(card) + '\napp ' + (location.pathname === '/local' ? 'built-in' : APP_BUILD) + ' · ' + navigator.userAgent + ' · ' + new Date().toString();
     $('cardInfo').textContent = `Connected to ${card.name || 'your screen'} · ${card.items ?? card.files} item${(card.items ?? card.files) === 1 ? '' : 's'} playing · version ${card.fw} · app ${location.pathname === '/local' ? 'built-in' : APP_BUILD}`;
     $('bright').value = card.brightness;
     $('brightLabel').textContent = card.brightness + '%';
     showTime();
-    showCode();
     checkUpdate();
-    // Start from what the screen is playing, so adding one reminder doesn't wipe the others on Send.
-    if (!items.length && (card.items ?? card.files)) $('loadShow').click();
+    // Every time the page opens, start from what the screen is playing, so adding one reminder can't wipe the rest.
+    if (showState === 'start') loadShow(true);
   } catch { $('cardInfo').textContent = 'Can\'t reach the screen. Are you on the same WiFi?'; }
   updateSpace();
 }
 loadInfo();
 
 // Load the current show back from the screen, so it can be changed instead of rebuilt.
-$('loadShow').onclick = async () => {
-  const st = $('packStatus'); st.className = 'status'; st.textContent = 'Reading the screen…';
+// showState: start, loading, ok (loaded or the screen is empty), failed. Send warns unless it's ok.
+let showState = 'start';
+$('loadShow').onclick = () => {
+  if (items.length && !confirm('Throw away the changes on this page and load what the screen is playing?')) return;
+  loadShow(false);
+};
+async function loadShow(auto) {
+  const st = $('showStatus'); st.className = 'status'; st.style.margin = '0'; st.textContent = 'Reading what\'s on the screen…';
+  showState = 'loading';
+  const mine = auto ? items.slice() : [];          // added before the screen answered: keep them, after its items
   try {
     const lines = (await api('/api/show')).split('\n').filter(Boolean);
-    if (!lines.length) { st.textContent = 'The screen has nothing to load (or older software).'; return; }
-    items.slice().forEach(remove);
+    if (!auto) items.slice().forEach(remove);
+    if (!lines.length) { showState = 'ok'; st.textContent = 'The screen is empty. Add something below, then Send.'; return; }
     loadingShow = true;
     for (const ln of lines) {
       const f = ln.split('\t'), secs = +f[1] || 0;
@@ -1028,11 +1031,14 @@ $('loadShow').onclick = async () => {
       const added = items[before];
       if (added) { Object.assign(added.when, op.when); added.whenRefresh(); }
     }
-    st.className = 'status ok'; st.textContent = `Loaded ${lines.length} item${lines.length > 1 ? 's' : ''} from the screen.`;
+    loadingShow = false;
+    mine.forEach(it => { items.splice(items.indexOf(it), 1); items.push(it); $('items').appendChild(it.el); });
+    showState = 'ok';
+    st.className = 'status ok'; st.textContent = `✓ Your screen's ${lines.length} item${lines.length > 1 ? 's are' : ' is'} below. Add or change things, then Send.`;
     items.forEach(i => { const s = i.el.querySelector('.secs'); s.value = i.secs || ''; });
-  } catch (err) { st.className = 'status err'; st.textContent = 'Couldn\'t read the screen: ' + err.message; }
+  } catch (err) { showState = 'failed'; st.className = 'status err'; st.textContent = 'Couldn\'t read what\'s on the screen (' + err.message + '). Tap Reload.'; }
   loadingShow = false;
-};
+}
 
 const hex6 = (c) => c.replace('#', '').toUpperCase();
 const clean = (s) => String(s).replace(/[\t\r\n]/g, ' ').trim();
@@ -1050,6 +1056,8 @@ function showLineBase(it, fileName) {
 
 $('send').onclick = async () => {
   const list = ready();
+  if (showState === 'loading') { alert('Still reading what\'s on the screen. Try again in a moment.'); return; }
+  if (showState === 'failed' && !confirm('This page couldn\'t read what the screen is playing, so Send will erase it. Send anyway?')) return;
   if (!confirm(`Replace everything on the screen with these ${list.length} item${list.length > 1 ? 's' : ''}?`)) return;
   const st = $('sendStatus'); st.className = 'status';
   $('send').disabled = true;
@@ -1085,10 +1093,10 @@ $('send').onclick = async () => {
 };
 
 // ---------- Picture packs from the Pocket Jumbotron website ----------
-function packBox(p, locked, getFile) {
+function packBox(p, getFile) {
   const el = document.createElement('div'); el.className = 'box'; el.style.marginTop = '0';
   el.innerHTML = `<b></b><div class="muted"></div><button class="secondary" style="margin-top:8px">Add these ${p.files.length}</button>`;
-  el.querySelector('b').textContent = (locked ? '🔒 ' : p.cards ? '🎁 ' : '') + p.title;
+  el.querySelector('b').textContent = (p.cards ? '🎁 ' : '') + p.title;
   el.querySelector('.muted').textContent = p.about || '';
   const b = el.querySelector('button');
   b.onclick = async () => {
@@ -1102,56 +1110,25 @@ function packBox(p, locked, getFile) {
   $('packs').appendChild(el);
 }
 const forThisCard = (p) => !p.cards || p.cards.some(c => c.toLowerCase() === (card.name || '').toLowerCase());
-let vaultKeys = null, vaultCode = '';
 $('packBtn').onclick = async () => {
   const st = $('packStatus'), box = $('packs');
   st.className = 'status'; st.textContent = 'Checking for new pictures…';
   box.innerHTML = ''; box.hidden = false;
   let shown = 0, problem = '';
-  try {                                          // family packs first (encrypted, need the code)
-    const code = card.fc || $('fcode').value;
-    if (code) {
-      if (!vaultKeys || vaultCode !== code) { vaultKeys = vault.fromCode(code); vaultCode = code; }
-      const r = await fetch(SITE + 'vault/' + vaultKeys.id + '.bin', { cache: 'no-store' });
-      if (r.status === 404) problem = "That family code isn't known. Check it under 🔒.";
-      else {
-        const man = JSON.parse(new TextDecoder().decode(vault.open(await r.arrayBuffer(), vaultKeys)));
-        for (const p of man.packs.filter(forThisCard)) {
-          shown++;
-          packBox(p, true, async (f) => {
-            const d = vault.open(await (await fetch(SITE + 'vault/' + f.url)).arrayBuffer(), vault.fromKey(f.key));
-            return new File([d], f.name);
-          });
-        }
-      }
-    }
-  } catch (err) { problem = "Couldn't open the family pictures (" + err.message + ').'; }
   try {
     const r = await fetch(SITE + 'packs/manifest.json', { cache: 'no-store' });
     if (!r.ok) throw new Error(r.status);
     for (const p of (await r.json()).packs.filter(forThisCard)) {
       shown++;
-      packBox(p, false, async (name) => {
+      packBox(p, async (name) => {
         const f = await fetch(SITE + 'packs/' + p.id + '/' + encodeURIComponent(name));
         return new File([await f.blob()], name, { type: f.headers.get('content-type') || '' });
       });
     }
-  } catch (err) { problem = problem || "Couldn't reach the Pocket Jumbotron website. Is your WiFi connected to the internet?"; }
+  } catch (err) { problem = "Couldn't reach the Pocket Jumbotron website. Is your WiFi connected to the internet?"; }
   st.className = problem ? 'status err' : 'status';
   st.textContent = problem || (shown ? '' : 'Nothing new right now.');
 };
-$('fcodeSave').onclick = async () => {
-  const code = vault.normCode($('fcode').value);
-  try {
-    await api('/api/settings?fc=' + encodeURIComponent(code), { method: 'POST' });
-    card.fc = code; vaultKeys = null; showCode();
-    $('packBtn').click();
-  } catch (err) { $('packStatus').className = 'status err'; $('packStatus').textContent = "Couldn't save the code: " + err.message; }
-};
-function showCode() {
-  $('codeSum').textContent = card.fc ? '🔒 Family code saved on this screen (tap to change)' : "🔒 Have a family code? It unlocks your family's pictures.";
-  if (card.fc) $('fcode').value = card.fc;
-}
 
 // ---------- Software updates from the website ----------
 let latest = null;

@@ -4,10 +4,11 @@ Raw, untested ideas parked so they don't derail the current task. Not settled tr
 At the end of a session: promote what was built and verified to PROJECT-NOTES.md, move a new direction to PROGRESS.md, delete the rest.
 
 ## Big features (ambitious, roughly in order)
-1. **Content packs**: public + encrypted family packs done (0.6.3-0.7.2). Next: the card fetches new packs daily by itself (HTTPS on the card; tight on RAM, pause the player while downloading).
+1. **Content packs**: done (0.6.3; source moved to the private repo in 0.9.6, family codes dropped). Next: the card fetches new packs daily by itself (HTTPS on the card; tight on RAM, pause the player while downloading).
 2. **Per-family messages**: done in 0.6.3 via `cards` in pack.json. Next: card shows a "new pack for you" hint on the panel.
 3. **Show builder**: done in 0.7.0 (messages, clock, countdown, seconds per item). Effects + weather in 0.8.0. Next: two-line messages, drag to reorder.
-4. **News + weather items**: weather done in 0.8.0 (Open-Meteo over http). Next: headlines from RSS digested by a GitHub Actions cron into a small text file on Pages (the card would need HTTPS: ~40 KB RAM for TLS, or serve it over http from elsewhere).
+4. **News headline scroll** (user wants it, not yet): weather done in 0.8.0 (Open-Meteo over http). Headlines from RSS digested by a GitHub Actions cron into a small text file on Pages (the card would need HTTPS: ~40 KB RAM for TLS, or serve it over http from elsewhere); scroll them as a ticker.
+9. **Finance / market item**: follow the market on the screen: a few tickers (S&P 500, Dow, a stock or two picked on the page), price + day change in green/red, maybe a tiny day chart. Same data path as news (Actions cron writes a small JSON on Pages, or the card fetches a free quote API); quotes can be delayed 15 min, say so on the page.
 5. **Night schedule**: done in 0.7.0.
 6. **Updates from GitHub**: one-tap button on the card page done in 0.7.0. Next: card checks by itself.
 7. **Short videos**: the .pjm full-color format exists now; add video input (decode frames from an MP4 in the browser with a <video> element) and trim to fit.
@@ -20,7 +21,7 @@ At the end of a session: promote what was built and verified to PROJECT-NOTES.md
 - Bluetooth: Web Bluetooth works on Android Chrome only (not iPhone). BLE stack costs ~30-50 KB RAM (we have ~75 KB free with WiFi); flash for it is fine (content has its own 4.3 MB partition). Only worth it for setup, then BLE off.
 
 ## Private content
-- Encrypted family packs done (0.7.2). Later: show "new family pictures" on the panel. The 3 GIFs once in public `content/` are still in public git history.
+- The 3 GIFs once in public `content/` are still in public git history (would need a history rewrite + force push).
 
 ## Smaller improvements
 - **First-install**: installer backs up Huidu first (esptool-js read-flash → download). Panel-chip check no longer needed (one firmware for both).

@@ -1,7 +1,13 @@
 # PROGRESS
 
-## Working state (fw 0.9.5, 2026-11-20; card 1 on 0.9.4, card 2 still 0.6.2)
-- **0.9.5 (tested on the fake card, not on a panel yet):** slanted Jumbo font dropped (user: looked bad);
+## Working state (fw 0.9.6, 2026-11-20; card 1 on 0.9.5 (user: all good), card 2 still 0.6.2)
+- **0.9.6 (fake card only):** card serves the tab icon at `/favicon.ico` + starter page links it (Chrome showed the
+  globe on the card's page: 404). Family code + encrypted vault removed (page, firmware `fc`, build-vault, aes-js,
+  js-sha256; page 192 -> 109 KB). Pictures now live only in the private repo; CI runs
+  `build-packs.mjs private-content` (plain packs on Pages). Page always loads the screen's show on open/refresh;
+  green line under "1. Build your show" says so, ↻ Reload beside it; Send refuses while loading and warns if the
+  load failed; items added before the screen answers are kept after its items.
+- **0.9.5 (user checked on card 1):** slanted Jumbo font dropped (user: looked bad);
   `font_jumbo.h` deleted, show font 5-7 loads as 2-4 (card + page). Page: opens by loading the screen's show
   automatically (Send replaces all, so a sister adding 1 of 20 birthdays no longer wipes the other 19); only one
   item open at a time, the rest are compact tap-to-open rows (name · date + schedule), ✓ Done closes, ✕ top right
@@ -10,12 +16,9 @@
 - **0.9.4:** 12-hour clock: small AM/PM beside the time, top level with the digits. Clock/countdown/weather pick
   the biggest font that fits (`fitBig`). "Something wrong?" box shows /api/info (family code removed) + app build.
   `tools/make-font.mjs` (TTF -> GFX bitmap header) kept for a future upright scoreboard font.
-- **0.9.3 restructure:** firmware split into one file per job (map at the top of pocket_jumbotron.ino), moved
-  line for line by a script, no behavior change. Shared types/globals/includes in the main file.
-- **0.9.2:** QR screen at full panel brightness (user saw purple/dull white at the 55% cap: green drops first at
-  651 Hz short pulses). + Reminder button (countdown preset, lead 14) with fireworks on the day. Page previews the
-  forecast (second half of each cycle).
-- One firmware for both panel chips. CI (push to main + hourly) builds firmware, installer, web app, packs, vault.
+- **0.9.3:** firmware split into one file per job (map at the top of pocket_jumbotron.ino), no behavior change.
+- **0.9.2:** QR screen at full panel brightness. + Reminder button (countdown, lead 14), fireworks on the day.
+- One firmware for both panel chips. CI (push to main + hourly) builds firmware, installer, web app, packs.
 - Card 1 (FM6124C): 192.168.50.16 / pocketjumbo-eed0 (also on the PC's USB, COM10). Card 2 (RUL6024): 192.168.50.199.
 - **App on the website (0.9.0, verified):** the card's `/` is a ~1 KB starter (`SHELL_HTML`, web.ino) that fetches
   `docs/app/index.html` from Pages, saves it in the phone's localStorage, and document.write()s it, so it runs on
@@ -30,12 +33,7 @@
   was down for a while on 2026-11-20 and each try stalled the show 4 s).
 - **QR screen (0.9.0/0.9.2):** white `http://<ip>` code, panel in fast scan (2-bit, 651 Hz) while it's up. All 4 test styles
   scanned with the Pixel camera on 0.8.4. S1 press = show address, press again = back to the show.
-- 0.8.2: animated WEBP from the card page (own frame splitter; `ImageDecoder` is https-only).
-- Effects, weather, clock, countdown, full-color `.pjm`, night mode, packs, family vault: see PROJECT-NOTES.md.
-
-## Card 1 test show
-- User ran through the 0.9.1 tests: all good. Test show still on card 1 (weather + forecast, Christmas
-  reminder, hidden lead=10 test); replace via the page when done.
+- Effects, weather, clock, countdown, full-color `.pjm`, night mode, packs: see PROJECT-NOTES.md.
 
 ## Verified pins (HD-WF2)
 - HUB75: R1 2, G1 6, B1 10, R2 3, G2 7, B2 11, A 39, B 38, C 37, D 36, E 21, LAT 33, OE 35, CLK 34. S1: GPIO17.
@@ -45,15 +43,15 @@
   failed in Chrome), no direct https→card calls (blocked).
 - Fast-scan screens must use `CF()` colors only (library LUT is 8-bit; at runtime 2-bit only its low 2 bits count).
 - One firmware and one panel setup for every card. Card stores GIF/JPEG frames, never WEBP.
-- Private content = encrypted packs, unlocked by a family code. Never write a family code into this repo.
+- Pictures live in the private repo (off public GitHub); the website is public, so they're unlisted, not secret.
 - No 10/12-bit color: HUB75 lib 3.1.0 #errors above 8 bits at compile time; 12-bit would also need ~+50% DMA RAM.
 - Build with `--build-property upload.maximum_size=1835008` (app is 1.37 MB).
 - Test uploads with curl: `-H "Content-Type: text/plain"` for /api/show (form type = empty show), then POST /api/play.
 
 ## Next (1.0 plan)
-0. Beta testers 2026-11-21 evening: user puts 0.9.5 on card 1, checks the clock (12h + 24h), the page with a
+0. Beta testers 2026-11-21 evening: user puts 0.9.6 on card 1, checks the tab icon on the card's page, checks the clock (12h + 24h), the page with a
    long reminder list, overnight soak; then flash card 2 and the testers' cards (USB installer or WiFi update).
 1. User checks the QR screen is now white and bright (0.9.2+), and a reminder made with + Reminder.
 2. Optional: colorful pixel-art weather icons (IDEAS.md); user is fine with the current ones. Five cloudy days
    = five identical icons is correct (one icon per WMO code group).
-3. Improv WiFi in the installer, news headlines item, update card 2 (and the other 13 cards) to 1.0.
+3. Improv WiFi in the installer, update card 2 (and the other 13 cards) to 1.0. News ticker + finance: IDEAS.md.
