@@ -13,8 +13,10 @@
   - **Self-update:** daily at 3:xx (minute from MAC) the card reads `firmware/info.json`, downloads a newer app over
     HTTPS into the other slot, checks SHA-256, restarts (rollback protects). NVS `aupd`, /api/info `autoUpdate`,
     `/api/settings?au=0|1`, `POST /api/update-site` = install now. Page: "Software updates" box with the switch.
+    **Verified on card 1:** a build labelled 0.9.0 + update-site -> fetched 0.9.8 from Pages, 16 s, confirmed, show resumed.
   - **Improv WiFi:** `improvPoll()` in net.ino (Improv Serial over USB). install.html: after flashing, a "Connect it
     to your home WiFi" step (scan list, password) -> card joins, saves, restarts; done steps show its address.
+    **Verified on card 1 (PowerShell over COM10):** state/URL, device info, scan list. Not yet: the WiFi-set step and the page.
   - Version 0.9.8; app 1.53 MB of 1.75 MB.
 - **0.9.7 (card 1, serial):** HTTPS news/markets feeds from the website (200 in ~800 ms, heap ~78 KB steady),
   automatic location (Naperville) + time zone, news/stocks items. User: news text was too big and pure white too harsh.
@@ -38,6 +40,5 @@
 00. **User judges card 1's test show** (`%TEMP%\pj-test2.txt`): 7 text colors (0 pure white ... 6 lavender, each a
    label then the clock), news Jumbo thin vs small, stocks, alphabet scroll, weather + forecast with new icons.
    Then set the page's default text color to their pick and promote 0.9.8 to PROJECT-NOTES.md.
-0. Test self-update end to end: a build labelled older (e.g. 0.9.0) on card 1, then `POST /api/update-site`.
-1. Test Improv: install.html on a card over USB (card 2 or a tester card), WiFi step.
+1. Test install.html end to end on a card over USB (card 2 or a tester card), including the WiFi step.
 2. Beta testers: flash card 2 and the testers' cards. Card fetching new packs by itself (IDEAS.md).
