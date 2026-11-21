@@ -16,7 +16,10 @@
     "N BIT" tag (probe: `tools/qr-probe.ps1`). **Probe result (card 1, by eye):** 2, 3 and 5 bits scan and look
     good, but only from 3-4 ft; 4 bits didn't scan; none scan close up (the old 33 px code did). Maybe the full
     brightness (setBrightness8(255)) or the bigger code. Kept 2 bits. Not fixing unless the user asks.
-  - **Weather line 2:** 1 px extra after the "H" and the "L" (they ran into the numbers). On card 1, not judged yet.
+  - **Readability colors (card 1, not judged yet):** weather line 2 = "H" warm `WX_HI` 0xFF8250 and "L" cool
+    `WX_LO` 0x78B4FF (1 px after each), numbers theme main, town dim; forecast lows `WX_LO`; clock date = accent
+    (dims looked muddy); news bar time = dim (was a darker dim). Countdown/stocks unchanged. Page preview matches.
+  - **Moon:** halo removed (read as a gray disc). New reminders default to "5 days before" (was 14).
 - **0.9.8 (verified):** Jumbo font, sprite weather icons, self-update (tested: 0.9.0 -> 0.9.8 by itself in 16 s),
   Improv WiFi (card side tested over COM10: state, info, scan; install page's WiFi step not tried on a card yet).
   User liked the font; asked for soft gold, themes, better QR screen, nicer degree sign, roomier forecast.

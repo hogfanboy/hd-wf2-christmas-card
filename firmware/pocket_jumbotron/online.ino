@@ -151,7 +151,7 @@ static void newsBar(const char *title, const String &src) {
     char hm[8]; snprintf(hm, sizeof(hm), "%d:%02d", lt.tm_hour % 12 ? lt.tm_hour % 12 : 12, lt.tm_min);
     right = src + " " + hm;
   }
-  label(right, W - 1 - labelW(right), 1, thDim2());
+  label(right, W - 1 - labelW(right), 1, th().dim);
 }
 // it.extra = topic (top, world, business, sports, tech, science). sec 0 = three headlines, else that long.
 static void playNews(const ShowItem &it) {

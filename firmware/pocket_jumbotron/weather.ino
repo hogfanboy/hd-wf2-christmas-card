@@ -170,7 +170,7 @@ static void playForecast(const ShowItem &it, uint32_t frame) {
       uint32_t hc = it.rainbow ? hsv((millis() / 8 + i * 300) % 1536) : it.fg;
       if (pjLabels) { setFont(9); printAt(hi, cx - textWidth(hi) / 2, 33 + 11, hc); }
       else labelC(hi, cx, 36, hc);
-      labelC(lo, cx, 49, thDim2());
+      labelC(lo, cx, 49, WX_LO);                // lows in the same cool blue as the "L"
     }
     pushCanvas();
     frame++;
@@ -192,6 +192,7 @@ static void playWeather(const ShowItem &item) {
   String line2 = "H" + String((int)lroundf(wx.hi)) + " L" + String((int)lroundf(wx.lo)) + " " + upcase(it.text);
   if (line2.length() > 21) line2 = line2.substring(0, 21);
   int lPos = line2.indexOf(" L") + 1;              // the "L" (the "H" is at 0)
+  int townPos = line2.indexOf(' ', lPos); if (townPos < 0) townPos = line2.length();
   String word = wxWord(wx.code);
   int kind = wxKind(wx.code);
   pjLabels = isPJ(it.font);
@@ -209,11 +210,12 @@ static void playWeather(const ShowItem &item) {
     drawText(temp, x, base, it, millis());
     if (!pjLabels) { cg.rgb(it.rainbow ? 0xFFFFFF : it.fg); cg.drawCircle(x + tw + 4, y1 + 3, 2, 0); cg.drawCircle(x + tw + 4, y1 + 3, 1, 0); }
     labelC(word, 48 + 40, 44, th().acc);
-    {   // like labelC, plus 1 px after the "H" and the "L" so they don't run into the numbers
+    {   // "H" warm and "L" cool with 1 px after each, the numbers in the theme's main color, the town dim
       labelFont();
       int x = W / 2 - (textWidth(line2) + 2) / 2, y = pjLabels ? 55 + pjf->cap : 55;
       for (unsigned k = 0; k < line2.length(); k++) {
-        x = printAt(String(line2[k]), x, y, th().dim);
+        uint32_t c = k == 0 ? WX_HI : (int)k == lPos ? WX_LO : (int)k < townPos ? th().main : th().dim;
+        x = printAt(String(line2[k]), x, y, c);
         if (k == 0 || (int)k == lPos) x++;
       }
     }

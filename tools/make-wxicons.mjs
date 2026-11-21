@@ -58,11 +58,10 @@ function sun(S, cx, cy, r, rot) {
     return [...mix(core, edge, t), 1];
   });
 }
-// Moon: a shaded crescent (cut out with alpha, so effects show through) with two craters and a cool halo.
+// Moon: a shaded crescent (cut out with alpha, so effects show through) with two craters (no halo: it read as a gray disc on the panel).
 function moon(S, cx, cy, r) {
-  const lit = hex(0xF4EED4), dark = hex(0xC8C0A0), halo = hex(0xB4C8FF);
+  const lit = hex(0xF4EED4), dark = hex(0xC8C0A0);
   const cut = (x, y) => Math.hypot(x - (cx + r * 0.62), y - (cy - r * 0.45)) < r * 0.9;
-  S.paint((x, y) => { const d = Math.hypot(x - cx, y - cy); return d < r * 1.7 ? [...halo, 0.22 * (1 - clamp01((d - r) / (r * 0.7))) ** 2] : null; });
   S.paint((x, y) => {
     const d = Math.hypot(x - cx, y - cy); if (d > r || cut(x, y)) return null;
     let c = mix(lit, dark, clamp01((Math.hypot(x - (cx - r * 0.4), y - (cy - r * 0.3)) / r) - 0.2));

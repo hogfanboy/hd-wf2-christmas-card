@@ -44,7 +44,7 @@ static void playClock(const ShowItem &it) {
     int top = digitTop(base);
     drawText(hm, x, base, it, millis());
     if (h12) label(lt.tm_hour < 12 ? "AM" : "PM", x + tw + 2, top, it.rainbow ? 0xFFFFFF : it.fg);
-    labelC(upcase(date), W / 2, 50, th().dim);
+    labelC(upcase(date), W / 2, 50, th().acc);     // accent, not dim: the brown-ish dims read muddy on LEDs
     pushCanvas();
     frame++;
     int32_t wait = 40 - (int32_t)(millis() - t0);

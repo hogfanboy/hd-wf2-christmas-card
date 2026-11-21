@@ -44,3 +44,5 @@ Phone OTG install dropped (no iPhone path). Options: borrow any Chrome/Edge comp
   frame). Draw them in a tool that also renders the page preview from the same data; judge on the panel with an
   "icon test" item that shows them all. Our own art only (no copied icon sets). 
 - Research: scan GitHub for projects built on the ESP32-HUB75-MatrixPanel-DMA library, and Huidu's HDPlayer feature list, for things worth adding.
+- News: works as designed but adds little (headlines too vague). Explore: a slow bottom-row crawl with longer, more
+  detailed lines (like CNN's), under another item; or drop news from this card (may not be a good fit).
