@@ -37,7 +37,9 @@ void settingsLoad() {
   staSsid = prefs.getString("ssid", "");
   staPass = prefs.getString("pass", "");
   apPass = prefs.getString("appass", "");
-  tzString = prefs.getString("tz", "UTC0");
+  tzString = prefs.getString("tz", "");
+  tzAuto = tzString.isEmpty();
+  if (tzAuto) tzString = "UTC0";
   if (prefs.isKey("fc")) prefs.remove("fc");   // old family code (0.9.5 and older), no longer used
   nightFrom = prefs.getChar("nfrom", -1);
   nightTo = prefs.getChar("nto", -1);

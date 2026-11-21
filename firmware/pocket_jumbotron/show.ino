@@ -5,7 +5,10 @@
 //     clock     <sec> <fg> <bg> <font> <effect> <12|24>
 //     countdown <sec> <fg> <bg> <font> <effect> <MM-DD> <label>
 //     fx        <sec> <fg> <bg> <font> <effect>                      (an effect on its own, full screen)
-//     weather   <sec> <fg> <bg> <font> <effect> <F|C> <lat> <lon> <place>
+//     weather   <sec> <fg> <bg> <font> <effect> <F|C|A> <lat> <lon> <place>   lat/lon "auto" = where the card is
+//               (found by its internet address, online.ino), A = F in the US, else C; empty place = that town
+//     news      <sec> <fg> <bg> <font> <effect> <topic>     top, world, business, sports, tech, science (fw 0.9.7)
+//     stocks    <sec> <fg> <bg> <font> <effect> <symbols>   e.g. ^GSPC,^DJI,AAPL (see tools/build-feeds.mjs)
 //   sec 0 = automatic (pictures: 8-20 s by their own length; scrolling text: one pass; others: 8-10 s).
 //   fg/bg are RRGGBB hex, fg may be "rainbow". effect: one of FX_NAMES (none, snow, sparkle, hearts, confetti,
 //   fireworks, stars, fire, matrix). Unknown names (e.g. the removed "plasma") play as none.
@@ -101,7 +104,8 @@ void loadPlaylist() {
       if (f[0] == "pic") { it.type = 'p'; it.file = "/gifs/" + f[2]; if (!LittleFS.exists(it.file)) continue; }
       else {
         if (f.size() < 6) continue;
-        it.type = f[0] == "text" ? 't' : f[0] == "clock" ? 'c' : f[0] == "countdown" ? 'd' : f[0] == "fx" ? 'f' : f[0] == "weather" ? 'w' : 0;
+        it.type = f[0] == "text" ? 't' : f[0] == "clock" ? 'c' : f[0] == "countdown" ? 'd' : f[0] == "fx" ? 'f' : f[0] == "weather" ? 'w' :
+                  f[0] == "news" ? 'n' : f[0] == "stocks" ? 's' : 0;
         if (!it.type) continue;
         it.rainbow = f[2] == "rainbow";
         it.fg = it.rainbow ? 0xFFFFFF : hex(f[2]);
@@ -115,6 +119,7 @@ void loadPlaylist() {
         if (it.type == 'c') it.extra = f[6];
         if (it.type == 'd') { it.extra = f[6]; it.text = f[7]; }
         if (it.type == 'f' && it.effect == FX_NONE) continue;          // removed effect
+        if (it.type == 'n' || it.type == 's') { it.extra = f[6]; if (it.type == 's' && it.extra.isEmpty()) continue; }
         if (it.type == 'w') { it.extra = f[6] + "," + f[7] + "," + f[8]; it.text = f[9]; if (f[7].isEmpty()) continue; }
       }
       playlist.push_back(it);
@@ -135,6 +140,8 @@ void playItem(const ShowItem &it) {
   switch (it.type) {
     case 'f': playFx(it); break;
     case 'w': playWeather(it); break;
+    case 'n': playNews(it); break;
+    case 's': playStocks(it); break;
     case 't': playText(it); break;
     case 'c': playClock(it); break;
     case 'd': playCountdown(it); break;

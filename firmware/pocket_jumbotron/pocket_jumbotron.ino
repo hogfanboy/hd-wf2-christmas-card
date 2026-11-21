@@ -5,6 +5,7 @@
 //   canvas.ino    drawing helpers (canvas text, fonts, pixels, panel text colors)
 //   effects.ino   effects library (snow, fireworks, fire...) and effect-only items
 //   net.ino       WiFi, settings (NVS), hotspot setup mode, address/QR screen
+//   online.ino    HTTPS from the website, news ticker, stocks, automatic location + time zone
 //   panel.ino     panel driver setup: chip registers, fast scan (QR), restart
 //   player.ino    GIF and full-color .pjm players, canvas push
 //   screens.ino   text, clock and countdown items
@@ -34,7 +35,7 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "0.9.6";
+static const char *FW_VERSION = "0.9.7";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
@@ -84,6 +85,7 @@ const char *const FX_NAMES[] = {"none", "snow", "sparkle", "hearts", "confetti",
 enum { FX_NONE, FX_SNOW, FX_SPARKLE, FX_HEARTS, FX_CONFETTI, FX_FIREWORKS, FX_STARS, FX_FIRE, FX_MATRIX, FX_COUNT };
 // ---------- Settings: time zone + night mode (NVS, see net.ino settingsLoad) ----------
 String tzString = "UTC0";
+bool tzAuto = true;                           // no time zone from the page yet: guessed from the location (online.ino)
 int8_t nightFrom = -1, nightTo = -1;          // hours 0-23; -1 = night mode off
 uint8_t nightLevel = 0;                        // % of normal brightness at night (0 = dark)
 bool nightNow = false;
@@ -174,5 +176,6 @@ void loop() {
     return;
   }
   skipped = 0;
+  geoService();                                      // once per start: where am I (online.ino)
   playItem(it);
 }

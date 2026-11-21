@@ -25,7 +25,7 @@ http.createServer((req, res) => {
   if (url.pathname === '/api/wifi' || url.pathname === '/api/forget-wifi') { let b = ''; req.on('data', c => b += c); req.on('end', () => { log(b); json(res, { ok: true }); }); return; }
   if (url.pathname === '/api/info') {
     const used = files().reduce((s, f) => s + fs.statSync(path.join(store, f)).size, 0);
-    return json(res, { fw: '0.0.1', name: 'pocketjumbo-fake', total: TOTAL, used, files: files().length, items: fs.existsSync(showFile) ? fs.readFileSync(showFile, 'utf8').split(String.fromCharCode(10)).filter(Boolean).length : files().length, brightness, ...settings, night: false, time: Math.floor(Date.now() / 1000) });
+    return json(res, { fw: '0.0.1', name: 'pocketjumbo-fake', place: 'Springfield', tzAuto: true, total: TOTAL, used, files: files().length, items: fs.existsSync(showFile) ? fs.readFileSync(showFile, 'utf8').split(String.fromCharCode(10)).filter(Boolean).length : files().length, brightness, ...settings, night: false, time: Math.floor(Date.now() / 1000) });
   }
   if (url.pathname === '/api/clear' && (globalThis.busy = !globalThis.busy)) { log('503 busy'); res.writeHead(503); return res.end('busy'); }
   if (url.pathname === '/api/clear') { files().forEach(f => fs.unlinkSync(path.join(store, f))); fs.rmSync(showFile, { force: true }); log(); return json(res, { ok: true }); }
@@ -52,10 +52,10 @@ http.createServer((req, res) => {
     });
     return;
   }
-  // Picture packs: serves docs/packs/ (run node tools/build-packs.mjs first).
-  if (url.pathname.startsWith('/packs/')) {
+  // Picture packs and news/market feeds: serves docs/packs/ and docs/feeds/ (run build-packs / build-feeds first).
+  if (url.pathname.startsWith('/packs/') || url.pathname.startsWith('/feeds/')) {
     const f = path.join(root, 'docs', path.normalize(decodeURIComponent(url.pathname)));
-    if (f.startsWith(path.join(root, 'docs', 'packs')) && fs.existsSync(f) && fs.statSync(f).isFile()) {
+    if ((f.startsWith(path.join(root, 'docs', 'packs')) || f.startsWith(path.join(root, 'docs', 'feeds'))) &&fs.existsSync(f) && fs.statSync(f).isFile()) {
       res.writeHead(200, { 'Content-Type': f.endsWith('.json') ? 'application/json' : f.endsWith('.gif') ? 'image/gif' : f.endsWith('.webp') ? 'image/webp' : 'application/octet-stream' }); return res.end(fs.readFileSync(f)); }
   }
   // Test helper: /test/<file> serves sample media from media/ so the page can be fed files in tests.

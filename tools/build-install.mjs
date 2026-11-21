@@ -1,8 +1,9 @@
 // Builds everything a fresh card needs and puts it where the website's install page can fetch it:
 //   docs/firmware/pocket-jumbotron-install.bin  one image for address 0x0 (bootloader, partitions, blank NVS,
-//                                               OTA data, app, LittleFS with the starter pack)
+//                                               OTA data, app, LittleFS with the first show, see step 2)
 //   docs/firmware/pocket-jumbotron-app.bin      app only (for wireless updates)
 //   docs/firmware/info.json                     version, sizes, sha256
+// Usage: node tools/build-install.mjs [content folders...]   (CI passes its checkout of the private picture repo)
 // Runs on Windows (this PC) and Linux (GitHub Actions). Needs arduino-cli + the ESP32 core installed.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -42,10 +43,40 @@ run(process.execPath, [path.join(root, 'tools/build-web.mjs')]);
 run(arduinoCli, ['compile', '-b', FQBN, '--build-property', 'upload.maximum_size=1835008', '--output-dir', appOut, sketch]);   // our app slot is 1.75 MB (partitions.csv)
 const version = /FW_VERSION = "([^"]+)"/.exec(fs.readFileSync(path.join(sketch, 'pocket_jumbotron.ino'), 'utf8'))[1];
 
-// 2. Starter pack -> LittleFS image (must match partitions.csv: spiffs @0x390000, 0x460000).
-const fsDir = path.join(build, 'install-fs');
+// 2. The first show -> LittleFS image (must match partitions.csv: spiffs @0x390000, 0x460000):
+//    clock, weather where the screen is (found by its internet address) + 5-day forecast, the pictures from the
+//    content folders (loose pictures, plus packs whose pack.json has "install": true), our holiday greetings
+//    (mid-November to early January) and the Pocket Jumbotron title.
+const fsDir = path.join(build, 'install-fs'), gifs = path.join(fsDir, 'gifs');
 fs.rmSync(fsDir, { recursive: true, force: true });
-run(process.execPath, [path.join(root, 'tools/make-starter.mjs'), path.join(fsDir, 'gifs')]);
+run(process.execPath, [path.join(root, 'tools/make-starter.mjs'), gifs]);
+fs.rmSync(path.join(gifs, '04-full-color.gif'), { force: true });     // color test: website pack only
+const PIC = /\.(gif|png|jpe?g|webp)$/i, own = [];
+for (const src of process.argv.slice(2).map(p => path.resolve(p)).filter(p => fs.existsSync(p))) {
+  for (const f of fs.readdirSync(src).sort()) {
+    const p = path.join(src, f);
+    if (PIC.test(f) && fs.statSync(p).isFile()) own.push(p);
+    const meta = path.join(p, 'pack.json');
+    if (fs.statSync(p).isDirectory() && fs.existsSync(meta) && JSON.parse(fs.readFileSync(meta, 'utf8')).install)
+      own.push(...fs.readdirSync(p).filter(x => PIC.test(x)).sort().map(x => path.join(p, x)));
+  }
+}
+const before = new Set(fs.readdirSync(gifs));
+if (own.length) run(process.execPath, [path.join(root, 'tools/make-gifs.mjs'), gifs, ...own]);   // any picture -> 128x64 GIF
+const ownGifs = fs.readdirSync(gifs).filter(f => !before.has(f)).sort();
+const L = (...f) => f.join('\t');
+const show = [
+  L('clock', 0, '5AC8FF', '000000', 4, 'none', 12),
+  L('weather', 0, 'FFFFFF', '000000', 4, 'none', 'A', 'auto', 'auto', '', '@forecast'),
+  ...ownGifs.map(f => L('pic', 0, f)),
+  L('pic', 0, '01-merry-christmas.gif', '@dates=1115-0106'),
+  L('pic', 0, '03-happy-holidays.gif', '@dates=1115-0106'),
+  L('pic', 0, '02-pocket-jumbotron.gif'),
+];
+fs.writeFileSync(path.join(fsDir, 'show.txt'), show.join('\n') + '\n');
+const fsBytes = fs.readdirSync(gifs).reduce((s, f) => s + fs.statSync(path.join(gifs, f)).size, 0);
+console.log(`First show: ${show.length} items, ${ownGifs.length} own pictures, ${(fsBytes / 1048576).toFixed(2)} MB`);
+if (fsBytes > 0x460000 - 0x40000) throw new Error('first show is too big for the picture storage (4.1 MB)');
 const littlefs = path.join(build, 'install-littlefs.bin');
 run(findTool('mklittlefs', 'mklittlefs'), ['-c', fsDir, '-b', '4096', '-p', '256', '-s', String(0x460000), littlefs], { stdio: ['ignore', 'ignore', 'inherit'] });
 

@@ -43,3 +43,4 @@ Phone OTG install dropped (no iPhone path). Options: borrow any Chrome/Edge comp
   clouds, colored drops/flakes, lightning), 2-4 animation frames each, stored as RGB565 arrays in flash (~1 KB per
   frame). Draw them in a tool that also renders the page preview from the same data; judge on the panel with an
   "icon test" item that shows them all. Our own art only (no copied icon sets). 
+- Research: scan GitHub for projects built on the ESP32-HUB75-MatrixPanel-DMA library, and Huidu's HDPlayer feature list, for things worth adding.

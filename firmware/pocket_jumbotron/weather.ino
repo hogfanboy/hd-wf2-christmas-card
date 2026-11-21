@@ -174,7 +174,14 @@ static void playForecast(const ShowItem &it, uint32_t frame) {
     if (waitMs(wait > 0 ? wait : 1)) return;
   }
 }
-static void playWeather(const ShowItem &it) {
+static void playWeather(const ShowItem &item) {
+  ShowItem it = item;
+  if (it.extra.indexOf("auto") > 0) {            // "weather here": the card's own location (online.ino)
+    if (!geoOk) return;
+    it.extra = String(it.extra[0]) + "," + String(geoLat, 3) + "," + String(geoLon, 3);
+    if (it.text.isEmpty()) it.text = geoCity;
+  }
+  if (it.extra[0] == 'A') it.extra[0] = geoUsesF() ? 'F' : 'C';
   if (!weatherFetch(it)) return;
   effectInit(it); FxGuard fxg;
   String temp = String((int)lroundf(wx.temp));

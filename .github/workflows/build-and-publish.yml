@@ -55,11 +55,8 @@ jobs:
       - name: Web app (docs/app, loaded by the card's front page)
         run: node tools/build-web.mjs
 
-      - name: Build install image
-        run: node tools/build-install.mjs
-
-      # The pictures live in a private repo, so they aren't browsable on GitHub; the packs on the website are
-      # built from it (the website itself is public).
+      # The pictures live in a private repo, so they aren't browsable on GitHub; the packs on the website and the
+      # install image's first show are built from it (the website itself is public).
       - name: Picture source (private repo, read-only deploy key)
         if: env.HAS_PRIVATE == 'true'
         uses: actions/checkout@v4
@@ -67,6 +64,12 @@ jobs:
           repository: hogfanboy/pocket-jumbotron-content
           ssh-key: ${{ secrets.CONTENT_DEPLOY_KEY }}
           path: private-content
+
+      - name: Build install image
+        run: node tools/build-install.mjs private-content
+
+      - name: News + market feeds (the cards read these over HTTPS)
+        run: node tools/build-feeds.mjs
 
       - name: Build picture packs
         run: node tools/build-packs.mjs private-content

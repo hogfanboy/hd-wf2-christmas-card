@@ -23,12 +23,13 @@ static int countPictures() {
 }
 static void handleInfo() {
   touch();
-  char buf[480];
+  char buf[600];
   snprintf(buf, sizeof(buf), "{\"api\":1,\"fw\":\"%s\",\"name\":\"%s\",\"total\":%u,\"used\":%u,\"files\":%d,\"items\":%u,\"brightness\":%u,\"heap\":%u,"
-           "\"tz\":\"%s\",\"nightFrom\":%d,\"nightTo\":%d,\"nightLevel\":%u,\"night\":%s,\"time\":%lu}",
+           "\"tz\":\"%s\",\"nightFrom\":%d,\"nightTo\":%d,\"nightLevel\":%u,\"night\":%s,\"time\":%lu,\"place\":\"%s\",\"tzAuto\":%s}",
            FW_VERSION, hostName.c_str(), (unsigned)LittleFS.totalBytes(), (unsigned)LittleFS.usedBytes(), countPictures(),
            (unsigned)playlist.size(), brightnessPct, (unsigned)ESP.getFreeHeap(), tzString.c_str(), nightFrom, nightTo, nightLevel,
-           nightNow ? "true" : "false", timeValid() ? (unsigned long)time(nullptr) : 0UL);
+           nightNow ? "true" : "false", timeValid() ? (unsigned long)time(nullptr) : 0UL,
+           geoOk ? geoCity.substring(0, 40).c_str() : "", tzAuto ? "true" : "false");
   sendJson(buf);
 }
 
@@ -132,7 +133,7 @@ static void handleShowPost() {
 // Time zone (POSIX TZ string from the page) and night mode hours.
 static void handleSettings() {
   touch();
-  if (web->hasArg("tz") && web->arg("tz").length() < 60) { tzString = web->arg("tz"); prefs.putString("tz", tzString); timeBegin(); }
+  if (web->hasArg("tz") && web->arg("tz").length() < 60) { tzString = web->arg("tz"); tzAuto = false; prefs.putString("tz", tzString); timeBegin(); }
   if (web->hasArg("nf")) { nightFrom = constrain((int)web->arg("nf").toInt(), -1, 23); prefs.putChar("nfrom", nightFrom); }
   if (web->hasArg("nt")) { nightTo = constrain((int)web->arg("nt").toInt(), -1, 23); prefs.putChar("nto", nightTo); }
   if (web->hasArg("nl")) { nightLevel = constrain((int)web->arg("nl").toInt(), 0, 100); prefs.putUChar("nlevel", nightLevel); }

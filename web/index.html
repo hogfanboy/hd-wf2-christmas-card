@@ -94,6 +94,8 @@
       <button class="secondary" id="addRem">+ Reminder</button>
       <button class="secondary" id="addFx">+ Effect</button>
       <button class="secondary" id="addWx">+ Weather</button>
+      <button class="secondary" id="addNews">+ News</button>
+      <button class="secondary" id="addStocks">+ Stocks</button>
     </div>
     <button class="secondary" id="packBtn">★ Get the latest Pocket Jumbotron pictures</button>
     <div class="items" id="packs" hidden></div>
@@ -433,11 +435,65 @@ function drawForecast(it, w, t) {
     tctx.fillStyle = it.rainbow ? hue(t / 8 + i * 300) : it.fg; tctx.fillText(h, cx - tctx.measureText(h).width / 2, 35);
     tctx.fillStyle = '#8c8ca0'; tctx.fillText(l, cx - tctx.measureText(l).width / 2, 45);
   });
-  const pl = (it.place || '').toUpperCase().slice(0, 21);
+  const pl = wxPlace(it).toUpperCase().slice(0, 21);
   tctx.fillStyle = '#b4b4c8'; tctx.fillText(pl, (W - tctx.measureText(pl).width) / 2, 56);
 }
+// ---------- News + stocks: the screen reads the same small files from the website (made hourly, tools/build-feeds.mjs) ----------
+const FEEDS = SITE + 'feeds/';
+const NEWS_TOPICS = { top: 'Top stories (NPR)', world: 'World (BBC)', business: 'Business (NPR)', sports: 'Sports (ESPN)', tech: 'Tech (Ars Technica)', science: 'Science (NPR)' };
+const NEWS_TITLE = { top: 'NEWS', world: 'WORLD NEWS', business: 'BUSINESS', sports: 'SPORTS', tech: 'TECH NEWS', science: 'SCIENCE' };
+const feedCache = {};
+const feedText = (name) => feedCache[name] ??= fetch(FEEDS + name, { cache: 'no-cache' }).then(r => r.ok ? r.text() : '').catch(() => '');
+const tsv = (txt) => txt.split('\n').filter(l => l && l[0] !== '#').map(l => l.split('\t'));
+const SAMPLE_NEWS = [['NPR', 'The latest headlines scroll by here, one after another']];
+const SAMPLE_MKT = [['^GSPC', 'S&P 500', '6910', '-265', '-3.70', '13,15,13,11,10,10,9,7,8,6,6,5,3,2,0']];
+const MKT_LABEL = { '^GSPC': 'S&P 500', '^DJI': 'DOW', '^IXIC': 'NASDAQ' };
+let MARKETS = null;
+const loadMarkets = () => MARKETS ??= fetch(FEEDS + 'index.json', { cache: 'no-cache' }).then(r => r.json()).then(j => j.markets)
+  .catch(() => Object.entries(MKT_LABEL).map(([sym, label]) => ({ sym, label })))
+  .then(l => { l.forEach(m => MKT_LABEL[m.sym] = m.label); return l; });
+async function newsFetch(it) { const l = tsv(await feedText(`news-${it.topic}.txt`)); it.news = l.length ? l : null; }
+async function stocksFetch(it) { const l = tsv(await feedText('markets.txt')); it.quotes = l.length ? l : null; }
+const commas = (n) => { const [a, b] = String(n).replace('-', '').split('.'); return a.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (b ? '.' + b : ''); };
+function drawNews(it, t) {          // same as the card's playNews: ~55 px a second under a title bar
+  const lines = it.news || SAMPLE_NEWS;
+  setF(it.font);
+  let tt = t, i = 0;
+  for (; i < 500; i++) { const d = (W + tctx.measureText(lines[i % lines.length][1]).width) * 18; if (tt < d) break; tt -= d; }
+  const [src, head] = lines[i % lines.length];
+  drawStr(it, head, W - Math.floor(tt / 18), Math.round(10 + (H - 10 + capOf()) / 2), t);
+  tctx.fillStyle = '#1e1e32'; tctx.fillRect(0, 0, W, 10);
+  smallF(); tctx.textBaseline = 'top';
+  tctx.fillStyle = '#ffbe3c'; tctx.fillText(NEWS_TITLE[it.topic] || 'NEWS', 2, 1);
+  const d = new Date(), right = src + ' ' + (d.getHours() % 12 || 12) + ':' + String(d.getMinutes()).padStart(2, '0');
+  tctx.fillStyle = '#8c8ca0'; tctx.fillText(right, W - 1 - tctx.measureText(right).width, 1);
+}
+function drawStocks(it, t) {        // same as the card's playStocks: one symbol at a time
+  const all = it.quotes || SAMPLE_MKT;
+  const pick = it.syms.split(',').filter(Boolean).map(s => all.find(q => q[0] === s)).filter(Boolean);
+  const list = pick.length ? pick : SAMPLE_MKT;
+  const per = it.secs ? Math.max(3000, it.secs * 1000 / list.length) : 5000;
+  const q = list[Math.floor(t / per) % list.length];
+  const up = q[3][0] !== '-', col = up ? '#30dc6e' : '#ff4650';
+  const price = commas(q[2]), pct = (up ? '+' : '-') + q[4].replace('-', '') + '%', chg = commas(q[3]);
+  smallF(); tctx.textBaseline = 'top';
+  tctx.fillStyle = '#ffbe3c'; tctx.fillText(q[1], 2, 1);
+  tctx.fillStyle = col; tctx.fillText(pct, W - 1 - tctx.measureText(pct).width, 1);
+  tctx.textBaseline = 'alphabetic';
+  fitBig(Math.min(it.font, 3), price, W - 2);
+  drawStr(it, price, (W - tctx.measureText(price).width) / 2, Math.round(9 + (30 + capOf()) / 2), t);
+  smallF(); tctx.textBaseline = 'top';
+  const cx = (W - tctx.measureText(chg).width - 9) / 2;
+  tctx.fillStyle = col; tctx.beginPath();
+  if (up) { tctx.moveTo(cx, 47); tctx.lineTo(cx + 6, 47); tctx.lineTo(cx + 3, 41); } else { tctx.moveTo(cx, 41); tctx.lineTo(cx + 6, 41); tctx.lineTo(cx + 3, 47); }
+  tctx.fill(); tctx.fillText(chg, cx + 9, 41);
+  const v = (q[5] || '').split(',').map(Number);
+  tctx.strokeStyle = col; tctx.lineWidth = 1; tctx.beginPath();
+  v.forEach((y, i) => { const x = 2 + i * (W - 4) / Math.max(1, v.length - 1) + 0.5, yy = 63 - Math.trunc(y * 14 / 15) + 0.5; i ? tctx.lineTo(x, yy) : tctx.moveTo(x, yy); });
+  tctx.stroke();
+}
 async function wxFetch(it) {
-  if (!it.lat) return;
+  if (!it.lat || it.lat === 'auto') { it.wx = null; return; }
   try {
     const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${it.lat}&longitude=${it.lon}&current=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5${it.unit === 'F' ? '&temperature_unit=fahrenheit' : ''}`);
     const j = await r.json();
@@ -456,10 +512,13 @@ function daysUntil(mmdd) {
   if (tgt < today) tgt = new Date(now.getFullYear() + 1, m - 1, d, 12);
   return Math.round((tgt - today) / 86400000);
 }
+const wxPlace = (it) => it.place || (it.lat === 'auto' ? card.place || '' : '');
 function renderItem(it, t) {      // t = ms since the item started
   paintBg(it, t);
   tctx.textBaseline = 'alphabetic';
   if (it.kind === 'fx') return tctx.getImageData(0, 0, W, H);
+  if (it.kind === 'news') { drawNews(it, t); return tctx.getImageData(0, 0, W, H); }
+  if (it.kind === 'stocks') { drawStocks(it, t); return tctx.getImageData(0, 0, W, H); }
   if (it.kind === 'weather') {
     const w = it.wx || SAMPLE_WX, f = Math.floor(t / 40), per = (it.secs || 10) * 1000;
     if (it.fc && w.fc && Math.floor(t / per) % 2 === 1) { drawForecast(it, w, t); return tctx.getImageData(0, 0, W, H); }
@@ -471,7 +530,7 @@ function renderItem(it, t) {      // t = ms since the item started
     tctx.strokeStyle = it.rainbow ? hue(t / 4) : it.fg; tctx.lineWidth = 1.5;
     tctx.beginPath(); tctx.arc(x + tw + 4.5, base - capOf() + 3.5, 2, 0, 6.2832); tctx.stroke();
     smallF(); tctx.textBaseline = 'top';
-    const word = wxWord(w.code), l2 = `H${Math.round(w.hi)} L${Math.round(w.lo)} ${(it.place || '').toUpperCase()}`.slice(0, 21);
+    const word = wxWord(w.code), l2 = `H${Math.round(w.hi)} L${Math.round(w.lo)} ${wxPlace(it).toUpperCase()}`.slice(0, 21);
     tctx.fillStyle = '#ffbe3c'; tctx.fillText(word, 48 + (80 - tctx.measureText(word).width) / 2, 44);
     tctx.fillStyle = '#b4b4c8'; tctx.fillText(l2, (W - tctx.measureText(l2).width) / 2, 55);
     return tctx.getImageData(0, 0, W, H);
@@ -730,7 +789,8 @@ function select(it) {
   if (it && it.kind !== 'pic') it.t0 = performance.now();
 }
 const label = (it) => it.kind === 'pic' ? it.name : it.kind === 'text' ? '“' + it.text + '”' : it.kind === 'clock' ? 'Clock'
-  : it.kind === 'fx' ? (FX[it.effect] || 'Effect') : it.kind === 'weather' ? 'Weather' + (it.place ? ' in ' + it.place : '') : (it.lead !== '' && it.lead != null ? '🔔 ' : 'Countdown to ') + (it.text || '…') + (/^\d\d-\d\d$/.test(it.date) ? ' · ' + md(it.date.replace('-', '')) : '');
+  : it.kind === 'fx' ? (FX[it.effect] || 'Effect') : it.kind === 'weather' ? (it.lat === 'auto' ? 'Weather here' + (card.place ? ' (' + card.place + ')' : '') : 'Weather' + (it.place ? ' in ' + it.place : ''))
+  : it.kind === 'news' ? 'News: ' + (NEWS_TOPICS[it.topic] || it.topic) : it.kind === 'stocks' ? 'Stocks: ' + (it.syms.split(',').filter(Boolean).map(s => MKT_LABEL[s] || s).join(', ') || 'pick some') : (it.lead !== '' && it.lead != null ? '🔔 ' : 'Countdown to ') + (it.text || '…') + (/^\d\d-\d\d$/.test(it.date) ? ' · ' + md(it.date.replace('-', '')) : '');
 function move(it, d) {
   const i = items.indexOf(it), j = i + d;
   if (j < 0 || j >= items.length) return;
@@ -873,22 +933,26 @@ function marks(it) {
 // Message / clock / countdown items with their own little editor.
 const COLORS = { fg: '#ffbe3c', bg: '#000000' };
 const META = { text: 'Message', clock: 'Shows the time (needs internet)', countdown: 'Counts the days (needs internet). With "days before" it is a reminder: fireworks on the day',
-  fx: 'Drawn by the screen itself: takes no space', weather: 'Pick your town below' };
+  fx: 'Drawn by the screen itself: takes no space', weather: 'Pick your town below, or where the screen is',
+  news: 'Scrolls the latest headlines (needs internet, updated every hour)', stocks: 'Market prices and today\'s change (needs internet, updated every hour, may be delayed)' };
 const usesF = () => /^en-(US|LR|MM)$/i.test(navigator.language) || /-(US)$/i.test(navigator.language);
 function addDrawn(kind, o = {}) {
-  const it = Object.assign({ kind, secs: 0, fg: kind === 'clock' ? '#5ac8ff' : kind === 'weather' ? '#ffffff' : COLORS.fg, bg: COLORS.bg, rainbow: false,
-    font: kind === 'text' ? 3 : 4, effect: kind === 'countdown' ? 'snow' : kind === 'fx' ? 'fireworks' : 'none',
+  const it = Object.assign({ kind, secs: 0, fg: kind === 'clock' ? '#5ac8ff' : ['weather', 'news', 'stocks'].includes(kind) ? '#ffffff' : COLORS.fg, bg: COLORS.bg, rainbow: false,
+    font: kind === 'text' || kind === 'stocks' ? 3 : kind === 'news' ? 2 : 4, topic: 'top', syms: '^GSPC,^DJI,^IXIC', effect: kind === 'countdown' ? 'snow' : kind === 'fx' ? 'fireworks' : 'none',
     text: kind === 'text' ? 'Happy Birthday!' : kind === 'countdown' ? 'Christmas' : '', date: '12-25',
     unit: usesF() ? 'F' : 'C', lat: '', lon: '', place: '', lead: '', fc: kind === 'weather',
     h24: !new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12 }, o);
   const el = baseEl(it);
   it.metaEl.textContent = META[kind]; it.metaEl.classList.add('desc');
-  if (kind === 'weather' && it.place) it.metaEl.textContent = `Weather for ${it.place} (needs internet)`;
+  const wxMeta = () => it.lat === 'auto' ? `Weather where the screen is${card.place ? ': ' + card.place : ''} (found automatically)` : `Weather for ${it.place} (needs internet)`;
+  if (kind === 'weather' && (it.place || it.lat === 'auto')) it.metaEl.textContent = wxMeta();
   const ed = document.createElement('div'); ed.className = 'edit';
   const colors = `<label>Color <input type="color" data-k="fg"> <input type="checkbox" data-k="rainbow"> Rainbow
       &nbsp; Background <input type="color" data-k="bg"></label>`;
   const sizes = kind === 'weather'
     ? '<option value="3">Medium</option><option value="4">Big</option>'
+    : kind === 'stocks' ? '<option value="2">Small</option><option value="3">Medium</option>'
+    : kind === 'news' ? '<option value="1">Pixel</option><option value="2">Small</option><option value="3">Medium</option>'
     : '<option value="1">Pixel</option><option value="2">Small</option><option value="3">Medium</option><option value="4">Big</option>';
   ed.innerHTML = kind === 'fx'
     ? `<label>Effect <select data-k="effect">${fxOptions().replace('<option value="none">None</option>', '')}</select>
@@ -898,9 +962,12 @@ function addDrawn(kind, o = {}) {
     ${kind === 'countdown' ? `<label>Date <input type="date" data-k="date"></label>
       <label>Start showing <input class="s" type="number" min="0" max="365" data-k="lead" placeholder="any" style="width:70px"> days before (blank = all year)</label>` : ''}
     ${kind === 'clock' ? `<label><input type="checkbox" data-k="h24"> 24-hour clock</label>` : ''}
+    ${kind === 'news' ? `<label>Headlines <select data-k="topic">${Object.entries(NEWS_TOPICS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>` : ''}
+    ${kind === 'stocks' ? '<div class="row syms">Loading…</div>' : ''}
     ${kind === 'weather' ? `<div class="flex"><input type="text" class="wq" placeholder="Your town" style="flex:1;min-width:0"><button class="chip wfind">Find</button></div>
+      <button class="chip wauto">📍 Where the screen is</button>
       <div class="row wres"></div>
-      <label>Units <select data-k="unit"><option value="F">°F</option><option value="C">°C</option></select>
+      <label>Units <select data-k="unit"><option value="F">°F</option><option value="C">°C</option><option value="A">Auto</option></select>
         &nbsp; <input type="checkbox" data-k="fc"> Then a 5-day forecast</label>` : ''}
     ${colors}
     <label>Size <select data-k="font">${sizes}</select>
@@ -916,6 +983,7 @@ function addDrawn(kind, o = {}) {
       if (k === 'lead') it.whenRefresh();
       el.querySelector('.name').textContent = label(it);
       if (k === 'unit') wxFetch(it);
+      if (k === 'topic') newsFetch(it);
       it.t0 = performance.now(); updateSpace();
     };
   });
@@ -933,7 +1001,7 @@ function addDrawn(kind, o = {}) {
           b.onclick = async () => {
             Object.assign(it, { lat: p.latitude.toFixed(3), lon: p.longitude.toFixed(3), place: p.name });
             q.value = p.name; res.textContent = '';
-            it.metaEl.textContent = `Weather for ${p.name} (needs internet)`;
+            it.metaEl.textContent = wxMeta();
             el.querySelector('.name').textContent = label(it);
             await wxFetch(it); it.t0 = performance.now(); updateSpace();
           };
@@ -942,8 +1010,36 @@ function addDrawn(kind, o = {}) {
       } catch { res.textContent = 'Couldn\'t look that up. Is this phone online?'; }
     };
     ed.querySelector('.wfind').onclick = find;
+    ed.querySelector('.wauto').onclick = () => {
+      Object.assign(it, { lat: 'auto', lon: 'auto', place: '' });
+      q.value = ''; res.textContent = '';
+      it.metaEl.textContent = wxMeta();
+      el.querySelector('.name').textContent = label(it);
+      wxFetch(it); it.t0 = performance.now(); updateSpace();
+    };
     q.onkeydown = (e) => { if (e.key === 'Enter') find(); };
     wxFetch(it);
+  }
+  if (kind === 'news') newsFetch(it);
+  if (kind === 'stocks') {
+    const box = ed.querySelector('.syms');
+    loadMarkets().then(list => {
+      box.textContent = '';
+      for (const m of list) {
+        const b = document.createElement('button'); b.className = 'chip'; b.textContent = m.label;
+        const on = () => it.syms.split(',').includes(m.sym);
+        b.classList.toggle('on', on());
+        b.onclick = () => {
+          const l = it.syms.split(',').filter(Boolean), i = l.indexOf(m.sym);
+          if (i < 0) l.push(m.sym); else l.splice(i, 1);
+          it.syms = l.join(','); b.classList.toggle('on', on());
+          el.querySelector('.name').textContent = label(it); it.t0 = performance.now(); updateSpace();
+        };
+        box.appendChild(b);
+      }
+      el.querySelector('.name').textContent = label(it);
+    });
+    stocksFetch(it);
   }
   select(it);
   updateSpace();
@@ -961,8 +1057,10 @@ $('addRem').onclick = () => {
 };
 $('addFx').onclick = () => addDrawn('fx');
 $('addWx').onclick = () => addDrawn('weather');
+$('addNews').onclick = () => addDrawn('news');
+$('addStocks').onclick = () => addDrawn('stocks');
 
-const ready = () => items.filter(i => i.kind === 'pic' ? i.blob && !i.failed : i.kind !== 'weather' || i.lat);
+const ready = () => items.filter(i => i.kind === 'pic' ? i.blob && !i.failed : i.kind === 'weather' ? i.lat : i.kind === 'stocks' ? i.syms : true);
 function updateSpace() {
   const pics = ready().filter(i => i.kind === 'pic');
   const need = pics.reduce((s, i) => s + i.blob.size + 4096, 0);
@@ -1027,6 +1125,8 @@ async function loadShow(auto) {
         if (f[0] === 'countdown') addDrawn('countdown', { ...o, date: f[6], text: f[7] || '' });
         if (f[0] === 'fx' && o.effect !== 'none') addDrawn('fx', o);
         if (f[0] === 'weather') addDrawn('weather', { ...o, unit: f[6] || 'F', lat: f[7] || '', lon: f[8] || '', place: f[9] || '' });
+        if (f[0] === 'news') addDrawn('news', { ...o, topic: NEWS_TOPICS[f[6]] ? f[6] : 'top' });
+        if (f[0] === 'stocks') addDrawn('stocks', { ...o, syms: f[6] || '' });
       }
       const added = items[before];
       if (added) { Object.assign(added.when, op.when); added.whenRefresh(); }
@@ -1051,6 +1151,8 @@ function showLineBase(it, fileName) {
   if (it.kind === 'clock') return ['clock', ...common, it.h24 ? '24' : '12'].join('\t');
   if (it.kind === 'fx') return ['fx', ...common, ''].join('\t');
   if (it.kind === 'weather') return ['weather', ...common, it.unit, it.lat, it.lon, clean(it.place)].join('\t');
+  if (it.kind === 'news') return ['news', ...common, it.topic].join('\t');
+  if (it.kind === 'stocks') return ['stocks', ...common, it.syms].join('\t');
   return ['countdown', ...common, it.date, clean(it.text)].join('\t');
 }
 
