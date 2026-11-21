@@ -10,6 +10,7 @@ static Rocket rockets[3];
 static uint8_t *heat = nullptr;                  // fire heat map W*H, values 0..36
 static uint8_t mHead[22], mLen[22], mSpd[22];    // matrix rain: head row in 1/4 rows, trail length, speed
 static char mGlyph[22][8];
+static int16_t sleighX; static uint8_t sleighWait;  // sleigh position in 1/16 px, frames to wait off screen
 static const char MGLYPHS[] = "0123456789ABCDEFXZ$#@%&*+=<>";
 
 static void starReset(Flake &f) { f.x = (int16_t)rnd(1024) - 512; f.y = (int16_t)rnd(512) - 256; f.bri = 200 + rnd(56); f.spd = 1 + rnd(3); }
@@ -22,6 +23,7 @@ static void effectInit(const ShowItem &it) {
   for (auto &r : rockets) r.on = false;
   for (int c = 0; c < 22; c++) { mHead[c] = rnd(40); mLen[c] = 3 + rnd(5); mSpd[c] = 1 + rnd(3); for (int r = 0; r < 8; r++) mGlyph[c][r] = MGLYPHS[rnd(sizeof(MGLYPHS) - 1)]; }
   if (it.effect == FX_FIRE && !heat) heat = (uint8_t *)calloc(W, H);
+  sleighX = -46 * 16; sleighWait = 0;
 }
 static void effectEnd() { free(heat); heat = nullptr; }
 struct FxGuard { ~FxGuard() { effectEnd(); } };    // frees the fire heat map however the item ends
@@ -107,6 +109,134 @@ static void fxMatrix(uint32_t frame) {
   cg.setFont(keep); cg.setTextSize(ks);
 }
 
+
+// ---------- Sprite effects (1.0): sleigh, balloons, fish, rain ----------
+// Sprites are rows of letters, one per pixel; the page's preview (web/index.html SPR) has the same rows.
+// X main color, D darker main, T main a bit dimmer, L main toward white, H/W/E white, R red, S skin, G gold,
+// B brown, b dark brown, N nose (red on the lead reindeer, brown on the others).
+static const char *const SLEIGH[] = {
+  "...WRR.........", "....RRR........", "....WWWW.......", "....SSSS.......", "R...WWWW......R", "RR..RWWR.....RR",
+  "RRRRRRRRRRRRRR.", "RGGGGGGGGGGGGR.", ".RRRRRRRRRRRR..", "..G.......G...G", "GGGGGGGGGGGGGG."};
+static const char *const DEER_A[] = {
+  ".......b.b.", "........bb.", ".......BBBN", ".BBBBBBBB..", "BBBBBBBB...", ".b.b..b.b..", "b...b.b...b"};
+static const char *const DEER_B[] = {
+  ".......b.b.", "........bb.", ".......BBBN", ".BBBBBBBB..", "BBBBBBBB...", "..bb..bb...", "..bb..bb..."};
+static const char *const BALLOON[] = {"..XXX..", ".XXXXX.", "XHXXXXX", "XXXXXXX", "XXXXXXD", ".XXXXD.", "..XXD..", "...X..."};
+static const char *const FISH[] = {"...XXX..", "T.XXLXX.", "TTXXLXEX", "T.XXLXX.", "...XXX.."};
+static const uint32_t PARTY[7] = {0xFF2030, 0xFFC020, 0x3070FF, 0x30D060, 0xFF50B0, 0xA050FF, 0xFF8020};
+static uint32_t mixC(uint32_t a, uint32_t b, int num, int den) {     // a toward b by num/den
+  uint32_t o = 0;
+  for (int s = 0; s <= 16; s += 8) { int ca = (a >> s) & 255, cb = (b >> s) & 255; o |= (uint32_t)(ca + (cb - ca) * num / den) << s; }
+  return o;
+}
+static void sprite(const char *const *rows, int n, int x, int y, uint32_t main, bool flip, bool nose) {
+  for (int r = 0; r < n; r++) {
+    int w = strlen(rows[r]);
+    for (int i = 0; i < w; i++) {
+      uint32_t c;
+      switch (rows[r][flip ? w - 1 - i : i]) {
+        case 'X': c = main; break;
+        case 'D': c = mixC(main, 0, 2, 5); break;
+        case 'T': c = mixC(main, 0, 1, 4); break;
+        case 'L': c = mixC(main, 0xFFFFFF, 1, 2); break;
+        case 'H': case 'W': case 'E': c = 0xFFFFFF; break;
+        case 'R': c = 0xE01020; break;
+        case 'S': c = 0xFFB48C; break;
+        case 'G': c = 0xFFC830; break;
+        case 'B': c = 0xA0602C; break;
+        case 'b': c = 0x6A3A18; break;
+        case 'N': c = nose ? 0xFF1010 : 0xA0602C; break;
+        default: continue;
+      }
+      px(x + i, y + r, c);
+    }
+  }
+}
+
+// Santa's sleigh and two reindeer crossing with a glitter trail (full screen: under a twinkling sky).
+
+static void fxSleigh(uint32_t frame, bool behind) {
+  if (!behind)
+    for (int i = 0; i < 24; i++) {
+      Flake &f = flakes[i];
+      pxAdd(f.x / 16, f.y / 16, 0xDCE6FF, (sin8(frame * (f.spd / 4 + 1) + i * 41) * f.bri) >> 9);
+    }
+  if (sleighWait) sleighWait--;
+  else if ((sleighX += behind ? 9 : 11) > (W + 4) * 16) { sleighX = -46 * 16; sleighWait = 20 + rnd(60); }
+  int x = sleighX / 16, y = (behind ? 2 : 24) + ((int)sin8(frame * 2) - 128) / 40;
+  for (int k = 0; !sleighWait && k < 3; k++)                     // glitter from the back of the sleigh
+    for (auto &s : sparks)
+      if (!s.life) {
+        s = {(int16_t)((x + 1) * 16 + rnd(32)), (int16_t)((y + 6 + rnd(5)) * 16), (int16_t)-(2 + rnd(8)), (int16_t)((int)rnd(5) - 2), (uint8_t)(14 + rnd(18)), 0, 0};
+        s.max = s.life; break;
+      }
+  for (auto &s : sparks) {
+    if (!s.life) continue;
+    s.x += s.vx; s.y += s.vy; s.life--;
+    pxAdd(s.x / 16, s.y / 16, s.life > s.max - 3 ? 0xFFFFFF : 0xFFD060, 255 * s.life / s.max);
+  }
+  if (sleighWait) return;
+  for (int i = x + 8; i < x + 37; i++) px(i, y + 4 + (i > x + 22), 0xB08020);   // reins
+  bool step = (frame / 4) & 1;
+  sprite(step ? DEER_A : DEER_B, 7, x + 17, y + step, 0, false, false);
+  sprite(step ? DEER_B : DEER_A, 7, x + 30, y - 1 + !step, 0, false, true);
+  sprite(SLEIGH, 11, x, y, 0, false, false);
+}
+
+static void fxBalloons(uint32_t frame, bool behind) {
+  for (int i = 0; i < (behind ? 6 : 10); i++) {
+    Flake &f = flakes[i];
+    f.y -= f.spd / 3 + 2;
+    if (f.y < -15 * 16) { f.y = H * 16 + rnd(320); f.x = rnd(W - 8) * 16; f.bri = rnd(7); }
+    int x = f.x / 16 + ((int)sin8(frame * 2 + i * 50) - 128) / 48, y = f.y / 16;
+    for (int r = 0; r < 6; r++) px(x + 3 + (((frame / 6 + r + i) & 2) ? 1 : 0), y + 8 + r, 0x8C8C8C);   // string
+    sprite(BALLOON, 8, x, y, PARTY[f.bri % 7], false, false);
+  }
+}
+
+// Fish swimming both ways, bubbles, and (full screen) seaweed over deep blue water.
+static void fxFish(uint32_t frame, bool behind, bool dark) {
+  if (!behind && dark) for (int y = 0; y < H; y++) for (int x = 0; x < W; x++) { canvas[y][x][1] = y / 5; canvas[y][x][2] = 10 + y * 3 / 4; }
+  if (!behind)
+    for (int s = 0; s < 7; s++) {                                // seaweed
+      int bx = 8 + s * 18 + (s * 7) % 5, hgt = 9 + (s * 5) % 9;
+      for (int k = 0; k < hgt; k++) px(bx + ((int)sin8(frame * 3 + k * 18 + s * 60) - 128) * k / (hgt * 50), H - 1 - k, k % 3 ? 0x20A040 : 0x40D060);
+    }
+  for (int i = 16; i < (behind ? 26 : 36); i++) {                // bubbles
+    Flake &f = flakes[i];
+    f.y -= f.spd / 3 + 3;
+    if (f.y < 0) { f.y = H * 16 + rnd(400); f.x = rnd(W) * 16; }
+    int x = f.x / 16 + (((frame / 8 + i) & 1) ? 1 : 0), y = f.y / 16;
+    if (f.spd > 10) { pxAdd(x, y, 0x80B0FF, 150); pxAdd(x + 1, y, 0x80B0FF, 150); pxAdd(x, y + 1, 0x80B0FF, 90); pxAdd(x + 1, y + 1, 0x80B0FF, 90); }
+    else pxAdd(x, y, 0xA0C8FF, 170);
+  }
+  for (int i = 0; i < (behind ? 4 : 7); i++) {                   // fish (bri: bit 7 = swims left, low bits = color)
+    Flake &f = flakes[i];
+    bool left = f.bri & 128;
+    f.x += left ? -(f.spd / 3 + 2) : f.spd / 3 + 2;
+    if (f.x < -12 * 16 || f.x > (W + 4) * 16) {
+      f.bri = (rnd(2) ? 128 : 0) | rnd(7); f.spd = 4 + rnd(10);
+      f.x = (f.bri & 128) ? (W + 2) * 16 : -10 * 16; f.y = (4 + rnd(H - 22)) * 16;
+    }
+    int y = f.y / 16 + ((int)sin8(frame * 3 + i * 70) - 128) / 64;
+    sprite(FISH, 5, f.x / 16, y, PARTY[(f.bri & 7) % 7], left, false);
+  }
+}
+
+static void fxRain(uint32_t frame, bool behind) {
+  for (int i = 0; i < (behind ? 28 : 48); i++) {
+    Flake &f = flakes[i];
+    f.y += f.spd * 2 + 14; f.x -= 3;
+    if (f.y >= H * 16) {
+      if (!behind) { pxAdd(f.x / 16 - 1, H - 1, 0x8CAAFF, 140); pxAdd(f.x / 16 + 1, H - 1, 0x8CAAFF, 140); }   // splash
+      f.y = -(int)rnd(64); f.x = rnd(W + 16) * 16;
+    }
+    int x = f.x / 16, y = f.y / 16;
+    uint8_t v = behind ? f.bri * 3 / 4 : f.bri;
+    pxAdd(x, y, 0x8CAAFF, v); pxAdd(x, y - 1, 0x8CAAFF, v / 2); pxAdd(x, y - 2, 0x8CAAFF, v / 4);
+  }
+}
+
 static void paintBackground(const ShowItem &it, uint32_t frame) {
   uint8_t br = it.bg >> 16, bgg = it.bg >> 8, bb = it.bg;
   bool behind = it.type != 'f';                  // something is drawn on top: keep busy effects calmer
@@ -173,6 +303,10 @@ static void paintBackground(const ShowItem &it, uint32_t frame) {
       break;
     case FX_FIRE: fxFire(behind); break;
     case FX_MATRIX: fxMatrix(frame); break;
+    case FX_SLEIGH: fxSleigh(frame, behind); break;
+    case FX_BALLOONS: fxBalloons(frame, behind); break;
+    case FX_FISH: fxFish(frame, behind, it.bg == 0); break;
+    case FX_RAIN: fxRain(frame, behind); break;
   }
 }
 

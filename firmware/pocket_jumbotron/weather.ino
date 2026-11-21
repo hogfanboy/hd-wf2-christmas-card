@@ -195,6 +195,10 @@ static void playWeather(const ShowItem &item) {
   }
   if (it.extra[0] == 'A') it.extra[0] = geoUsesF() ? 'F' : 'C';
   if (!weatherFetch(it)) return;
+  if (it.effect == FX_AUTO) {                     // "match the weather": snow or rain when it does, else nothing
+    int k = wxKind(wx.code);
+    it.effect = k == WX_SNOW ? FX_SNOW : (k == WX_RAIN || k == WX_STORM) ? FX_RAIN : FX_NONE;
+  }
   effectInit(it); FxGuard fxg;
   if (fcProbeUntil && (int32_t)(millis() - fcProbeUntil) >= 0) fcProbeUntil = 0;
   if (fcProbeUntil) { it.sec = (fcProbeUntil - millis()) / 1000 + 1; if (wx.fcN) playForecast(it, 0); return; }

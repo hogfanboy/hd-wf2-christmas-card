@@ -257,7 +257,14 @@ static String jsonStr(const String &s, const char *key) {      // "key" : "value
   int c = s.indexOf(':', k), q = c < 0 ? -1 : s.indexOf('"', c + 1), e = q < 0 ? -1 : s.indexOf('"', q + 1);
   return e < 0 ? "" : s.substring(q + 1, e);
 }
-static int verNum(const String &v) { int a = 0, b = 0, c = 0; sscanf(v.c_str(), "%d.%d.%d", &a, &b, &c); return a * 10000 + b * 100 + c; }
+// "1.0.0-beta2" -> 1.0.0 beta 2; a release counts as 99 so it beats its betas (same rule as the page's verKey).
+static long verNum(const String &v) {
+  int a = 0, b = 0, c = 0, pre = 99;
+  sscanf(v.c_str(), "%d.%d.%d", &a, &b, &c);
+  int dash = v.indexOf('-');
+  if (dash >= 0) { pre = 0; for (int i = dash; i < (int)v.length(); i++) if (isdigit(v[i])) { pre = v.substring(i).toInt(); break; } }
+  return ((long)a * 10000 + b * 100 + c) * 100 + pre;
+}
 static void updateScreen(const String &ver, int pct) {
   panel->fillScreen(0);
   panel->setFont(nullptr); panel->setTextSize(1);

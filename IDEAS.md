@@ -11,8 +11,8 @@ At the end of a session: promote what was built and verified to PROJECT-NOTES.md
 9. **Finance / market item**: follow the market on the screen: a few tickers (S&P 500, Dow, a stock or two picked on the page), price + day change in green/red, maybe a tiny day chart. Same data path as news (Actions cron writes a small JSON on Pages, or the card fetches a free quote API); quotes can be delayed 15 min, say so on the page.
 5. **Night schedule**: done in 0.7.0.
 6. **Updates from GitHub**: one-tap button on the card page done in 0.7.0. Next: card checks by itself.
-7. **Short videos**: the .pjm full-color format exists now; add video input (decode frames from an MP4 in the browser with a <video> element) and trim to fit.
-8. **Built-in effects library**: done in 0.8.0 (9 effects). Next: more (balloons, Santa sleigh, aquarium), effects reacting to the weather (snow when it snows).
+7. **Short videos**: done in 1.0 (page reads MP4/MOV/WEBM, start + length, up to 30 s). Next: crop/zoom per clip.
+8. **Built-in effects library**: done in 0.8.0 (9 effects); 1.0 added sleigh, balloons, aquarium, rain, "match the weather". Next: Christmas lights border, bigger full-screen sleigh scene.
 
 ## Easier setup (no typing 192.168...)
 - QR code on the address screen: done (0.7.1, styles in 0.7.3). Pixel camera app ignores it; try a QR to an https forwarding page on the website.
@@ -24,9 +24,7 @@ At the end of a session: promote what was built and verified to PROJECT-NOTES.md
 - The 3 GIFs once in public `content/` are still in public git history (would need a history rewrite + force push).
 
 ## Smaller improvements
-- **First-install**: installer backs up Huidu first (esptool-js read-flash → download). Panel-chip check no longer needed (one firmware for both).
 - Storage meter on the card page before Send ("2.1 of 4.3 MB").
-- Optional PIN for the card page (anyone on the home WiFi can wipe it today).
 - Explain the Android "Nearby devices" permission in the website help and on the setup screens.
 - **VBUS check**: does the board back-feed the PC port? Mostly moot with the new unplug-the-panel install steps.
 - Dark grays weak at the very dark end at 60 Hz. Color depth A/B (8 vs 10/12-bit). Text-heavy GIF cleanup. People with no home WiFi.

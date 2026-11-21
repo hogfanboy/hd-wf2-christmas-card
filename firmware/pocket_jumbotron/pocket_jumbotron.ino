@@ -37,7 +37,7 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "0.9.9";
+static const char *FW_VERSION = "1.0.0-beta1";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
@@ -90,8 +90,10 @@ struct Theme { uint32_t main, acc, dim; };   // color theme: main text, accent, 
 std::vector<ShowItem> playlist;
 struct Flake { int16_t x, y; uint8_t spd, bri; };   // effect particles (show.ino)
 // Effect names in show lines (show.ino); index = ShowItem.effect.
-const char *const FX_NAMES[] = {"none", "snow", "sparkle", "hearts", "confetti", "fireworks", "stars", "fire", "matrix"};
-enum { FX_NONE, FX_SNOW, FX_SPARKLE, FX_HEARTS, FX_CONFETTI, FX_FIREWORKS, FX_STARS, FX_FIRE, FX_MATRIX, FX_COUNT };
+const char *const FX_NAMES[] = {"none", "snow", "sparkle", "hearts", "confetti", "fireworks", "stars", "fire", "matrix",
+                               "sleigh", "balloons", "fish", "rain", "auto"};   // auto: weather items, snow or rain to match
+enum { FX_NONE, FX_SNOW, FX_SPARKLE, FX_HEARTS, FX_CONFETTI, FX_FIREWORKS, FX_STARS, FX_FIRE, FX_MATRIX,
+       FX_SLEIGH, FX_BALLOONS, FX_FISH, FX_RAIN, FX_AUTO, FX_COUNT };
 // ---------- Settings: time zone + night mode (NVS, see net.ino settingsLoad) ----------
 String tzString = "UTC0";
 uint8_t fcStyle = 0;                           // forecast layout being tried (weather.ino); not saved
