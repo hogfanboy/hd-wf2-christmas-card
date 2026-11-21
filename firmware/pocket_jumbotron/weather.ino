@@ -191,6 +191,7 @@ static void playWeather(const ShowItem &item) {
   String temp = String((int)lroundf(wx.temp));
   String line2 = "H" + String((int)lroundf(wx.hi)) + " L" + String((int)lroundf(wx.lo)) + " " + upcase(it.text);
   if (line2.length() > 21) line2 = line2.substring(0, 21);
+  int lPos = line2.indexOf(" L") + 1;              // the "L" (the "H" is at 0)
   String word = wxWord(wx.code);
   int kind = wxKind(wx.code);
   pjLabels = isPJ(it.font);
@@ -208,7 +209,14 @@ static void playWeather(const ShowItem &item) {
     drawText(temp, x, base, it, millis());
     if (!pjLabels) { cg.rgb(it.rainbow ? 0xFFFFFF : it.fg); cg.drawCircle(x + tw + 4, y1 + 3, 2, 0); cg.drawCircle(x + tw + 4, y1 + 3, 1, 0); }
     labelC(word, 48 + 40, 44, th().acc);
-    labelC(line2, W / 2, 55, th().dim);
+    {   // like labelC, plus 1 px after the "H" and the "L" so they don't run into the numbers
+      labelFont();
+      int x = W / 2 - (textWidth(line2) + 2) / 2, y = pjLabels ? 55 + pjf->cap : 55;
+      for (unsigned k = 0; k < line2.length(); k++) {
+        x = printAt(String(line2[k]), x, y, th().dim);
+        if (k == 0 || (int)k == lPos) x++;
+      }
+    }
     pushCanvas();
     frame++;
     int32_t wait = 40 - (int32_t)(millis() - t0);

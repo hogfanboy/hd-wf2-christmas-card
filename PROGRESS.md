@@ -13,7 +13,10 @@
   - **QR screen redesign:** `HTTP://<IP>` upper case -> alphanumeric QR version 1 -> 2 LEDs per module (58 px, was
     33 px); all drawn with drawPixelRGB888 0/255 colors (right at any bit depth); "SCAN ME" in Jumbo, address on
     one line in a 4x7 digit font. `fastBits` (default 2); `POST /api/qr?bits=N` shows it 60 s at N bits with a red
-    "N BIT" tag (probe: `tools/qr-probe.ps1`).
+    "N BIT" tag (probe: `tools/qr-probe.ps1`). **Probe result (card 1, by eye):** 2, 3 and 5 bits scan and look
+    good, but only from 3-4 ft; 4 bits didn't scan; none scan close up (the old 33 px code did). Maybe the full
+    brightness (setBrightness8(255)) or the bigger code. Kept 2 bits. Not fixing unless the user asks.
+  - **Weather line 2:** 1 px extra after the "H" and the "L" (they ran into the numbers). On card 1, not judged yet.
 - **0.9.8 (verified):** Jumbo font, sprite weather icons, self-update (tested: 0.9.0 -> 0.9.8 by itself in 16 s),
   Improv WiFi (card side tested over COM10: state, info, scan; install page's WiFi step not tried on a card yet).
   User liked the font; asked for soft gold, themes, better QR screen, nicer degree sign, roomier forecast.
@@ -34,10 +37,8 @@
 - Test uploads with curl: `-H "Content-Type: text/plain"` for /api/show, then POST /api/play.
 
 ## Next (the user can answer with one of these commands)
-1. **"QR: N bits worked, M looked best"** - user runs `powershell -ExecutionPolicy Bypass -File tools\qr-probe.ps1`
-   (card 1; add `-Ip 192.168.50.199` for card 2), points the phone camera at each depth (2, 3, 4, 5 bits, red tag
-   bottom right). Then set `fastBits` default to the best depth that scans, drop the probe tag, and add theme colors
-   to the QR screen if the depth allows.
+1. **"QR close up"** (optional) - try a dimmer white (e.g. setBrightness8 ~120) so it scans close up; re-run
+   `tools\qr-probe.ps1 -Bits 2`. Theme colors on the QR screen would need 3+ bits.
 2. **"Themes look good" / "change theme X"** - user picks themes on the page (swatches) and judges card 1's show.
    Then promote themes + QR + forecast to PROJECT-NOTES.md.
 3. **"Test the installer on card 2"** - card 2 on USB: run install.html (online installer) end to end, including
