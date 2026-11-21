@@ -108,7 +108,8 @@ void loadPlaylist() {
                   f[0] == "news" ? 'n' : f[0] == "stocks" ? 's' : 0;
         if (!it.type) continue;
         it.rainbow = f[2] == "rainbow";
-        it.fg = it.rainbow ? 0xFFFFFF : hex(f[2]);
+        it.themed = f[2] == "theme";
+        it.fg = it.rainbow || it.themed ? 0xFFFFFF : hex(f[2]);
         it.bg = hex(f[3]);
         int fn = f[4].toInt();
         if (fn >= 5 && fn <= 7) fn -= 3;                                // 0.9.4 jumbo S/M/B -> classic S/M/B
@@ -135,7 +136,9 @@ void loadPlaylist() {
   for (auto &n : names) { ShowItem it; it.file = n; playlist.push_back(it); }
 }
 
-void playItem(const ShowItem &it) {
+void playItem(const ShowItem &item) {
+  ShowItem it = item;
+  if (it.themed) it.fg = th().main;
   if (it.type != 'p') Serial.printf("  %c %-10s free %u, largest block %u\n", it.type, FX_NAMES[it.effect], (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
   switch (it.type) {
     case 'f': playFx(it); break;

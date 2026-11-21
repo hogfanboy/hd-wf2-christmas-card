@@ -103,8 +103,9 @@
     '|': [0, [[0, -8], [0, D]]],
     '}': [24, [[0, -8], [14, -8], [14, 40], [24, 50, 0], [14, 60], [14, 108], [0, 108]]],
     '~': [48, [[0, 64], [14, 52, 0], [34, 72, 0], [48, 60]]],
-    '\x7f': [26, box(0, 0, 26, 28, 10)],          // degree sign (sent as char 127)
+    '\x7f': [30, box(0, -7, 30, 23, 15)],          // degree sign (sent as char 127): a ring, drawn thinner (K)
   };
+  const K = { '\x7f': 0.55 };                     // stroke weight factor for single glyphs
 
   // One stroke in pixels: snapped corners, rounded with quadratic curves, as a list of segments.
   function strokeSegs(st, s, w, ox) {
@@ -140,13 +141,14 @@
     const g = GL[ch] || GL['?'];
     const s = (cap - w) / 100;
     const segs = [];
-    for (const st of g.slice(1)) segs.push(...strokeSegs(st, s, w, w / 2));
+    const wk = K[ch] ? Math.max(1, Math.round(w * K[ch])) : w;
+    for (const st of g.slice(1)) segs.push(...strokeSegs(st, s, wk, w / 2));
     const gap = Math.max(1, Math.round(w * 0.6 + cap * 0.05));
     const adv = ch === ' ' ? Math.max(2, Math.round(cap * 0.32)) + gap : Math.ceil(g[0] * s + w) + gap;
     if (!segs.length) return { w: 0, h: 0, dx: 0, dy: 0, adv, a: new Uint8Array(0) };
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
     for (const [ax, ay, bx, by] of segs) { x0 = Math.min(x0, ax, bx); x1 = Math.max(x1, ax, bx); y0 = Math.min(y0, ay, by); y1 = Math.max(y1, ay, by); }
-    const r = w / 2;
+    const r = wk / 2;
     x0 = Math.floor(x0 - r); y0 = Math.floor(y0 - r); x1 = Math.ceil(x1 + r); y1 = Math.ceil(y1 + r);
     const bw = x1 - x0, bh = y1 - y0, a = new Uint8Array(bw * bh), SS = 6, r2 = r * r;
     for (let py = 0; py < bh; py++) for (let px = 0; px < bw; px++) {

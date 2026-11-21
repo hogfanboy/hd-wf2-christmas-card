@@ -144,14 +144,14 @@ static const char *newsTitle(const String &topic) {
 }
 static void newsBar(const char *title, const String &src) {
   cg.rgb(0x1E1E32); cg.fillRect(0, 0, W, 10, 0);
-  label(title, 2, 1, 0xFFBE3C);
+  label(title, 2, 1, th().acc);
   String right = src;
   if (timeValid()) {
     time_t t = time(nullptr); struct tm lt; localtime_r(&t, &lt);
     char hm[8]; snprintf(hm, sizeof(hm), "%d:%02d", lt.tm_hour % 12 ? lt.tm_hour % 12 : 12, lt.tm_min);
     right = src + " " + hm;
   }
-  label(right, W - 1 - labelW(right), 1, 0x8C8CA0);
+  label(right, W - 1 - labelW(right), 1, thDim2());
 }
 // it.extra = topic (top, world, business, sports, tech, science). sec 0 = three headlines, else that long.
 static void playNews(const ShowItem &it) {
@@ -225,7 +225,7 @@ static void playStocks(const ShowItem &it) {
     while (millis() - start < per) {
       uint32_t t0 = millis();
       paintBackground(it, frame);
-      ::label(name, 2, 1, 0xFFBE3C);
+      ::label(name, 2, 1, th().acc);
       ::label(pctS, W - 1 - labelW(pctS), 1, col);
       uint8_t f = fitBig(std::min<uint8_t>(it.font, isPJ(it.font) ? 11 : 3), price, W - 2, 0);   // big would overflow the 64 rows
       drawText(price, (W - textWidth(price)) / 2, textBaseline(f, 9, 30), it, t0);

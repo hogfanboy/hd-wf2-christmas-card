@@ -57,6 +57,8 @@
   .frame { padding:8px; border-radius:12px; background:linear-gradient(160deg,#b31d2c,#7d1220); }
   input[type=range] { width:100%; accent-color:var(--gold); }
   details summary { cursor:pointer; color:var(--muted); }
+  .sw { width:30px; height:30px; border-radius:50%; border:2px solid transparent; padding:0; cursor:pointer; box-shadow:inset 0 0 0 2px #0b0b12; }
+  .sw.on { border-color:#fff; }
   .status { margin-top:10px; font-size:14px; min-height:21px; }
   .ok { color:var(--green); } .err { color:var(--red); }
   .stack > * + * { margin-top:10px; }
@@ -83,6 +85,8 @@
 
   <div class="box stack">
     <h2>1. Build your show</h2>
+    <div class="flex themes"><span class="muted">Theme</span><span id="themeRow" style="display:flex;gap:6px;flex-wrap:wrap"></span></div>
+    <div class="muted" id="themeName" style="font-size:12px;margin-top:-6px"></div>
     <div class="flex showline"><span id="showStatus" class="status" style="margin:0;flex:1">Reading what's on the screen…</span><button class="chip" id="loadShow">↻ Reload</button></div>
     <div class="muted">Items play top to bottom, then start over. Photos, GIFs and WEBPs are resized on this phone. Tap an item to change it.</div>
     <label class="btn secondary" for="files">+ Pictures</label>
@@ -220,6 +224,26 @@ function fitBig(f, s, maxW, extra = 0) {
   return l[l.length - 1];
 }
 const capOf = () => curPJ ? PJFont.SIZES[curPJ][0] : +tctx.font.match(/(\d+)px/)[1] * 0.72;
+// Color themes: the same table as the card (canvas.ino THEMES). Items with "Theme" color follow it.
+const THEMES = [
+  { name: 'Pure white', main: '#ffffff', acc: '#ffbe3c', dim: '#b4b4c8' },
+  { name: 'Warm white', main: '#f0e4cc', acc: '#ffbe3c', dim: '#b4aa96' },
+  { name: 'Soft gold', main: '#ffd27a', acc: '#f0e4cc', dim: '#b49c78' },
+  { name: 'Ice blue', main: '#a8d8ff', acc: '#ffd27a', dim: '#8ca0b8' },
+  { name: 'Mint', main: '#b4f0c8', acc: '#ffd27a', dim: '#8cb49c' },
+  { name: 'Peach', main: '#ffc09a', acc: '#f0e4cc', dim: '#b49682' },
+  { name: 'Lavender', main: '#c8c0ff', acc: '#ffd27a', dim: '#a09cc0' },
+];
+let themeIx = 2;
+const TH = () => { const t = THEMES[themeIx] || THEMES[2]; t.dim2 ??= '#' + [1, 3, 5].map(i => Math.trunc(parseInt(t.dim.substr(i, 2), 16) * 3 / 4).toString(16).padStart(2, '0')).join(''); return t; };
+function drawThemes() {
+  $('themeRow').innerHTML = THEMES.map((t, i) => `<button class="sw${i === themeIx ? ' on' : ''}" data-i="${i}" title="${t.name}" style="background:${t.main}"></button>`).join('');
+  $('themeName').textContent = TH().name + (card.theme === undefined && card.fw !== '?' ? ' (this screen needs new software for themes; the color is sent instead)' : '');
+  $('themeRow').querySelectorAll('.sw').forEach(b => b.onclick = async () => {
+    themeIx = +b.dataset.i; drawThemes();
+    if (card.theme !== undefined) { try { await api('/api/settings?theme=' + themeIx, { method: 'POST' }); card.theme = themeIx; } catch {} }
+  });
+}
 const hue = (h) => `hsl(${(h % 1536) / 1536 * 360},100%,50%)`;
 // ---------- Effects: a JS copy of the card's effects library (show.ino), for the preview ----------
 const FX = { none: 'None', snow: 'Snow', sparkle: 'Sparkle', hearts: 'Hearts', confetti: 'Confetti', fireworks: 'Fireworks',
@@ -421,13 +445,12 @@ function drawForecast(it, w, t) {
   smallF(); tctx.textBaseline = 'top';
   w.fc.slice(0, 5).forEach(([code, hi, lo], i) => {
     const cx = 2 + i * 25 + 12, d = dow[(today + i) % 7], h = String(Math.round(hi)), l = String(Math.round(lo));
-    tctx.fillStyle = '#ffbe3c'; T(d, cx - M(d) / 2, 1);
-    wxMini(wxKind(code), cx, 19, f + i * 7);
-    tctx.fillStyle = it.rainbow ? hue(t / 8 + i * 300) : it.fg; T(h, cx - M(h) / 2, 35);
-    tctx.fillStyle = '#8c8ca0'; T(l, cx - M(l) / 2, 45);
+    tctx.fillStyle = TH().acc; T(d, cx - M(d) / 2, 1);
+    wxMini(wxKind(code), cx, 20, f + i * 7);
+    tctx.fillStyle = it.rainbow ? hue(t / 8 + i * 300) : it.fg;
+    if (curLabels) { setF(9); T(h, cx - Math.trunc(M(h) / 2), 33); smallF(); } else T(h, cx - M(h) / 2, 36);
+    tctx.fillStyle = TH().dim2; T(l, cx - M(l) / 2, 49);
   });
-  const pl = wxPlace(it).toUpperCase().slice(0, 21);
-  tctx.fillStyle = '#b4b4c8'; T(pl, (W - M(pl)) / 2, 55);
 }
 // ---------- News + stocks: the screen reads the same small files from the website (made hourly, tools/build-feeds.mjs) ----------
 const FEEDS = SITE + 'feeds/';
@@ -455,9 +478,9 @@ function drawNews(it, t) {          // same as the card's playNews: ~55 px a sec
   drawStr(it, head, W - Math.floor(tt / 18), Math.round(10 + (H - 10 + capOf()) / 2), t);
   tctx.fillStyle = '#1e1e32'; tctx.fillRect(0, 0, W, 10);
   smallF(); tctx.textBaseline = 'top';
-  tctx.fillStyle = '#ffbe3c'; T(NEWS_TITLE[it.topic] || 'NEWS', 2, 1);
+  tctx.fillStyle = TH().acc; T(NEWS_TITLE[it.topic] || 'NEWS', 2, 1);
   const d = new Date(), right = src + ' ' + (d.getHours() % 12 || 12) + ':' + String(d.getMinutes()).padStart(2, '0');
-  tctx.fillStyle = '#8c8ca0'; T(right, W - 1 - M(right), 1);
+  tctx.fillStyle = TH().dim2; T(right, W - 1 - M(right), 1);
 }
 function drawStocks(it, t) {        // same as the card's playStocks: one symbol at a time
   const all = it.quotes || SAMPLE_MKT;
@@ -468,7 +491,7 @@ function drawStocks(it, t) {        // same as the card's playStocks: one symbol
   const up = q[3][0] !== '-', col = up ? '#30dc6e' : '#ff4650';
   const price = commas(q[2]), pct = (up ? '+' : '-') + q[4].replace('-', '') + '%', chg = commas(q[3]);
   smallF(); tctx.textBaseline = 'top';
-  tctx.fillStyle = '#ffbe3c'; T(q[1], 2, 1);
+  tctx.fillStyle = TH().acc; T(q[1], 2, 1);
   tctx.fillStyle = col; T(pct, W - 1 - M(pct), 1);
   tctx.textBaseline = 'alphabetic';
   fitBig(Math.min(it.font, it.font >= 8 ? 11 : 3), price, W - 2);
@@ -507,6 +530,7 @@ function daysUntil(mmdd) {
 const wxPlace = (it) => it.place || (it.lat === 'auto' ? card.place || '' : '');
 function renderItem(it, t) {      // t = ms since the item started
   curLabels = it.font >= 8;
+  if (it.useTheme && !it.rainbow) it.fg = TH().main;
   paintBg(it, t);
   tctx.textBaseline = 'alphabetic';
   if (it.kind === 'fx') return tctx.getImageData(0, 0, W, H);
@@ -523,8 +547,8 @@ function renderItem(it, t) {      // t = ms since the item started
     if (!curLabels) { tctx.strokeStyle = it.rainbow ? hue(t / 4) : it.fg; tctx.lineWidth = 1.5; tctx.beginPath(); tctx.arc(x + tw + 4.5, base - capOf() + 3.5, 2, 0, 6.2832); tctx.stroke(); }
     smallF(); tctx.textBaseline = 'top';
     const word = wxWord(w.code), l2 = `H${Math.round(w.hi)} L${Math.round(w.lo)} ${wxPlace(it).toUpperCase()}`.slice(0, 21);
-    tctx.fillStyle = '#ffbe3c'; T(word, 48 + (80 - M(word)) / 2, 44);
-    tctx.fillStyle = '#b4b4c8'; T(l2, (W - M(l2)) / 2, 55);
+    tctx.fillStyle = TH().acc; T(word, 48 + (80 - M(word)) / 2, 44);
+    tctx.fillStyle = TH().dim; T(l2, (W - M(l2)) / 2, 55);
     return tctx.getImageData(0, 0, W, H);
   }
   if (it.kind === 'text') {
@@ -548,8 +572,8 @@ function renderItem(it, t) {      // t = ms since the item started
     drawStr(it, bigS, bx, by, t);
     if (pmW) { smallF(); tctx.textBaseline = 'top'; tctx.fillStyle = it.rainbow ? '#fff' : it.fg; T(new Date().getHours() < 12 ? 'AM' : 'PM', bx + bw + 2, top); }
     smallF(); tctx.textBaseline = 'top';
-    if (it.kind === 'clock') { tctx.fillStyle = '#b4b4c8'; T(l2, (W - M(l2)) / 2, 50); }
-    else { tctx.fillStyle = '#fff'; T(l1, (W - M(l1)) / 2, 42); tctx.fillStyle = '#ffbe3c'; T(l2, (W - M(l2)) / 2, 53); }
+    if (it.kind === 'clock') { tctx.fillStyle = TH().dim; T(l2, (W - M(l2)) / 2, 50); }
+    else { tctx.fillStyle = TH().main; T(l1, (W - M(l1)) / 2, 42); tctx.fillStyle = TH().acc; T(l2, (W - M(l2)) / 2, 53); }
   }
   return tctx.getImageData(0, 0, W, H);
 }
@@ -931,7 +955,7 @@ const usesF = () => /^en-(US|LR|MM)$/i.test(navigator.language) || /-(US)$/i.tes
 const SIZE_NAME = { 8: 'Jumbo thin', 9: 'Jumbo small', 10: 'Jumbo medium', 11: 'Jumbo big', 12: 'Jumbo huge',
   1: 'Pixel', 2: 'Classic small', 3: 'Classic medium', 4: 'Classic big' };
 function addDrawn(kind, o = {}) {
-  const it = Object.assign({ kind, secs: 0, fg: kind === 'clock' ? '#5ac8ff' : ['weather', 'news', 'stocks'].includes(kind) ? '#ffffff' : COLORS.fg, bg: COLORS.bg, rainbow: false,
+  const it = Object.assign({ kind, secs: 0, useTheme: !('fg' in o), fg: TH().main, bg: COLORS.bg, rainbow: false,
     font: kind === 'text' || kind === 'stocks' ? 11 : kind === 'news' ? 8 : 12, topic: 'top', syms: '^GSPC,^DJI,^IXIC', effect: kind === 'countdown' ? 'snow' : kind === 'fx' ? 'fireworks' : 'none',
     text: kind === 'text' ? 'Happy Birthday!' : kind === 'countdown' ? 'Christmas' : '', date: '12-25',
     unit: usesF() ? 'F' : 'C', lat: '', lon: '', place: '', lead: '', fc: kind === 'weather',
@@ -941,7 +965,7 @@ function addDrawn(kind, o = {}) {
   const wxMeta = () => it.lat === 'auto' ? `Weather where the screen is${card.place ? ': ' + card.place : ''} (found automatically)` : `Weather for ${it.place} (needs internet)`;
   if (kind === 'weather' && (it.place || it.lat === 'auto')) it.metaEl.textContent = wxMeta();
   const ed = document.createElement('div'); ed.className = 'edit';
-  const colors = `<label>Color <input type="color" data-k="fg"> <input type="checkbox" data-k="rainbow"> Rainbow
+  const colors = `<label>Color <input type="checkbox" data-k="useTheme"> Theme &nbsp; <input type="color" data-k="fg"> <input type="checkbox" data-k="rainbow"> Rainbow
       &nbsp; Background <input type="color" data-k="bg"></label>`;
   const opt = (l) => l.map(v => `<option value="${v}">${SIZE_NAME[v]}</option>`).join('');
   const sizes = opt(kind === 'weather' ? [11, 12, 3, 4] : kind === 'stocks' ? [10, 11, 2, 3] : kind === 'news' ? [8, 9, 10, 1, 2, 3]
@@ -972,6 +996,8 @@ function addDrawn(kind, o = {}) {
     else inp.value = it[k];
     inp.oninput = () => {
       it[k] = inp.type === 'checkbox' ? inp.checked : k === 'font' ? +inp.value : k === 'date' ? inp.value.slice(5) : inp.value;
+      if (k === 'fg') { it.useTheme = false; const c = ed.querySelector('[data-k=useTheme]'); if (c) c.checked = false; }
+      if (k === 'useTheme' && it.useTheme) { it.fg = TH().main; const c = ed.querySelector('[data-k=fg]'); if (c) c.value = it.fg; }
       if (k === 'lead') it.whenRefresh();
       el.querySelector('.name').textContent = label(it);
       if (k === 'unit') wxFetch(it);
@@ -1078,6 +1104,8 @@ async function loadInfo() {
     $('cardInfo').textContent = `Connected to ${card.name || 'your screen'} · ${card.items ?? card.files} item${(card.items ?? card.files) === 1 ? '' : 's'} playing · version ${card.fw} · app ${location.pathname === '/local' ? 'built-in' : APP_BUILD}`;
     $('bright').value = card.brightness;
     $('brightLabel').textContent = card.brightness + '%';
+    if (card.theme !== undefined) themeIx = card.theme;
+    drawThemes();
     showTime();
     checkUpdate();
     // Every time the page opens, start from what the screen is playing, so adding one reminder can't wipe the rest.
@@ -1111,7 +1139,7 @@ async function loadShow(auto) {
         const r = await fetch('/api/file?name=' + encodeURIComponent(f[2]));
         if (r.ok) await addFile(new File([await r.blob()], f[2]), secs, true);
       } else {
-        const o = { lead: op.lead, fc: op.fc, secs, fg: f[2] === 'rainbow' ? '#ffffff' : '#' + f[2], rainbow: f[2] === 'rainbow', bg: '#' + f[3], font: +f[4] >= 8 && +f[4] <= 12 ? +f[4] : +f[4] >= 5 && +f[4] <= 7 ? +f[4] - 3 : Math.max(1, Math.min(4, +f[4] || 3)), effect: FX[f[5]] ? f[5] : 'none' };
+        const o = { lead: op.lead, fc: op.fc, secs, fg: f[2] === 'rainbow' ? '#ffffff' : f[2] === 'theme' ? TH().main : '#' + f[2], useTheme: f[2] === 'theme', rainbow: f[2] === 'rainbow', bg: '#' + f[3], font: +f[4] >= 8 && +f[4] <= 12 ? +f[4] : +f[4] >= 5 && +f[4] <= 7 ? +f[4] - 3 : Math.max(1, Math.min(4, +f[4] || 3)), effect: FX[f[5]] ? f[5] : 'none' };
         if (f[0] === 'text') addDrawn('text', { ...o, text: f[6] });
         if (f[0] === 'clock') addDrawn('clock', { ...o, h24: f[6] === '24' });
         if (f[0] === 'countdown') addDrawn('countdown', { ...o, date: f[6], text: f[7] || '' });
@@ -1138,7 +1166,8 @@ function showLine(it, fileName) { return showLineBase(it, fileName) + '\t' + opt
 function showLineBase(it, fileName) {
   const sec = it.secs || 0;
   if (it.kind === 'pic') return ['pic', sec, fileName].join('\t');
-  const common = [sec, it.rainbow ? 'rainbow' : hex6(it.fg), hex6(it.bg), it.font, it.effect];
+  const fgOut = it.rainbow ? 'rainbow' : it.useTheme ? (card.theme !== undefined ? 'theme' : hex6(TH().main)) : hex6(it.fg);
+  const common = [sec, fgOut, hex6(it.bg), it.font, it.effect];
   if (it.kind === 'text') return ['text', ...common, clean(it.text) || ' '].join('\t');
   if (it.kind === 'clock') return ['clock', ...common, it.h24 ? '24' : '12'].join('\t');
   if (it.kind === 'fx') return ['fx', ...common, ''].join('\t');

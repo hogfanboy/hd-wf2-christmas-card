@@ -15,6 +15,19 @@ class CanvasGFX : public Adafruit_GFX {
 };
 static CanvasGFX cg;
 
+// Color themes (picked on the page): main text, accent (titles, weather word, day names), dim (dates, places).
+static const Theme THEMES[] = {
+  {0xFFFFFF, 0xFFBE3C, 0xB4B4C8},   // 0 pure white
+  {0xF0E4CC, 0xFFBE3C, 0xB4AA96},   // 1 warm white
+  {0xFFD27A, 0xF0E4CC, 0xB49C78},   // 2 soft gold (default)
+  {0xA8D8FF, 0xFFD27A, 0x8CA0B8},   // 3 ice blue
+  {0xB4F0C8, 0xFFD27A, 0x8CB49C},   // 4 mint
+  {0xFFC09A, 0xF0E4CC, 0xB49682},   // 5 peach
+  {0xC8C0FF, 0xFFD27A, 0xA09CC0},   // 6 lavender
+};
+static const uint8_t THEME_N = sizeof(THEMES) / sizeof(THEMES[0]);
+static inline const Theme &th() { return THEMES[themeIx < THEME_N ? themeIx : 2]; }
+static inline uint32_t thDim2() { uint32_t d = th().dim; return ((d >> 16 & 255) * 3 / 4) << 16 | ((d >> 8 & 255) * 3 / 4) << 8 | (d & 255) * 3 / 4; }
 static uint32_t hsv(uint16_t h) {                // h 0..1535, full saturation and value
   uint8_t x = h & 255;
   switch (h >> 8) {

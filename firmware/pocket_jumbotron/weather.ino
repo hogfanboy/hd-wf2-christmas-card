@@ -155,6 +155,7 @@ static void playForecast(const ShowItem &it, uint32_t frame) {
   int today = 0;
   if (timeValid()) { time_t t = time(nullptr); struct tm lt; localtime_r(&t, &lt); today = lt.tm_wday; }
   uint32_t total = (it.sec ? it.sec : 10) * 1000UL, start = millis();
+  pjLabels = isPJ(it.font);
   shownValid = false;
   while (millis() - start < total) {
     uint32_t t0 = millis();
@@ -163,14 +164,14 @@ static void playForecast(const ShowItem &it, uint32_t frame) {
       int cx = 2 + i * 25 + 12;
       String d = DOW[(today + i) % 7];
       String hi = String((int)lroundf(wx.fcHi[i])), lo = String((int)lroundf(wx.fcLo[i]));
-      labelC(d, cx, 1, 0xFFBE3C);
-      wxMini(wxKind(wx.fcCode[i]), cx, 19, frame + i * 7);
-      labelC(hi, cx, 35, it.rainbow ? hsv((millis() / 8 + i * 300) % 1536) : it.fg);
-      labelC(lo, cx, 45, 0x8C8CA0);
+      // day name, icon, high (bold small Jumbo when the item uses Jumbo), low; the town is on the first screen
+      labelC(d, cx, 1, th().acc);
+      wxMini(wxKind(wx.fcCode[i]), cx, 20, frame + i * 7);
+      uint32_t hc = it.rainbow ? hsv((millis() / 8 + i * 300) % 1536) : it.fg;
+      if (pjLabels) { setFont(9); printAt(hi, cx - textWidth(hi) / 2, 33 + 11, hc); }
+      else labelC(hi, cx, 36, hc);
+      labelC(lo, cx, 49, thDim2());
     }
-    String place = upcase(it.text);
-    if (place.length() > 21) place = place.substring(0, 21);
-    labelC(place, W / 2, 55, 0xB4B4C8);
     pushCanvas();
     frame++;
     int32_t wait = 40 - (int32_t)(millis() - t0);
@@ -206,8 +207,8 @@ static void playWeather(const ShowItem &item) {
     int y1 = digitTop(base);
     drawText(temp, x, base, it, millis());
     if (!pjLabels) { cg.rgb(it.rainbow ? 0xFFFFFF : it.fg); cg.drawCircle(x + tw + 4, y1 + 3, 2, 0); cg.drawCircle(x + tw + 4, y1 + 3, 1, 0); }
-    labelC(word, 48 + 40, 44, 0xFFBE3C);
-    labelC(line2, W / 2, 55, 0xB4B4C8);
+    labelC(word, 48 + 40, 44, th().acc);
+    labelC(line2, W / 2, 55, th().dim);
     pushCanvas();
     frame++;
     int32_t wait = 40 - (int32_t)(millis() - t0);

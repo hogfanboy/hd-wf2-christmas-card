@@ -37,13 +37,16 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "0.9.8";
+static const char *FW_VERSION = "0.9.9";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
 uint8_t brightnessPct = 100;                   // user setting, saved in NVS
+uint8_t themeIx = 2;                           // color theme (canvas.ino THEMES), saved in NVS
 bool autoUpdate = true;                        // daily update check from the website (online.ino), saved in NVS
 extern bool updateNow;
+extern uint8_t fastBits;
+uint32_t addrHoldMs = 10000;                   // how long the next address screen stays up (QR probe: 60 s)
 // The HUB75 library already applies CIE1931 brightness correction (lumConvTab), so no extra gamma here.
 static const float GAMMA = 1.0f;
 static const uint32_t MIN_SHOW_MS = 8000;     // short GIFs loop until this long
@@ -81,7 +84,9 @@ struct ShowItem {
   int8_t hFrom = -1, hTo = -1;
   int16_t lead = -1;
   bool forecast = false;
+  bool themed = false;            // color "theme": fg follows the card's theme
 };
+struct Theme { uint32_t main, acc, dim; };   // color theme: main text, accent, dim (canvas.ino THEMES)
 std::vector<ShowItem> playlist;
 struct Flake { int16_t x, y; uint8_t spd, bri; };   // effect particles (show.ino)
 // Effect names in show lines (show.ino); index = ShowItem.effect.
@@ -163,7 +168,7 @@ void loop() {
   if (buttonAction == BTN_SHORT) {                   // press: show the address; press again: back to the show
     buttonAction = BTN_NONE;
     if (addrUntil) addrUntil = 1;                    // already up: let it expire now
-    else showAddress(10000);
+    else { showAddress(addrHoldMs); addrHoldMs = 10000; }
   }
   if (addrUntil) {                                   // address screen is up
     if ((int32_t)(millis() - addrUntil) < 0) { delay(5); return; }

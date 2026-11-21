@@ -44,7 +44,7 @@ static void playClock(const ShowItem &it) {
     int top = digitTop(base);
     drawText(hm, x, base, it, millis());
     if (h12) label(lt.tm_hour < 12 ? "AM" : "PM", x + tw + 2, top, it.rainbow ? 0xFFFFFF : it.fg);
-    labelC(upcase(date), W / 2, 50, 0xB4B4C8);
+    labelC(upcase(date), W / 2, 50, th().dim);
     pushCanvas();
     frame++;
     int32_t wait = 40 - (int32_t)(millis() - t0);
@@ -80,8 +80,8 @@ static void playCountdown(const ShowItem &item) {
     paintBackground(it, frame);
     fitBig(it.font, big, W - 2, 0);
     drawText(big, (W - textWidth(big)) / 2, textBaseline(curFont, 0, 40), it, millis());
-    if (l1.length()) labelC(l1, W / 2, 42, 0xE6E6E6);
-    if (l2.length()) labelC(l2, W / 2, 53, 0xFFBE3C);
+    if (l1.length()) labelC(l1, W / 2, 42, th().main);
+    if (l2.length()) labelC(l2, W / 2, 53, th().acc);
     pushCanvas();
     frame++;
     int32_t wait = 40 - (int32_t)(millis() - t0);

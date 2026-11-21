@@ -46,6 +46,7 @@ struct ChanTag { typedef gdma_channel_handle_t Bus_Parallel16::*type; friend typ
 template struct Reach<BusTag, &MatrixPanel_I2S_DMA::dma_bus>;
 template struct Reach<ChanTag, &Bus_Parallel16::dma_chan>;
 bool panelFast = false;
+uint8_t fastBits = 2;                             // color bits in fast scan (2 = ~650 Hz); /api/qr?bits= tries others
 static void panelStop() {
   panel->stopDMAoutput();
   gdma_channel_handle_t ch = (panel->*get(BusTag())).*get(ChanTag());
@@ -55,7 +56,7 @@ static void panelStop() {
 
 bool startPanel(bool dbl, bool fast) {
   HUB75_I2S_CFG cfg(W, H, 1, PINS);
-  if (fast) { cfg.setPixelColorDepthBits(2); cfg.min_refresh_rate = 300; }
+  if (fast) { cfg.setPixelColorDepthBits(fastBits); cfg.min_refresh_rate = fastBits <= 2 ? 300 : 120; }
   // One setup for both panel types the cards came with (FM6124C and RUL6024), tested 2026-11-18:
   // the library's DP3246 mode gives the 3-clock latch the RUL6024 needs, but it also inverts the clock,
   // which shifts the RUL6024 image one column and misaligns the FM6124C's two halves. So after begin()

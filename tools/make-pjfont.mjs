@@ -44,7 +44,7 @@ if (out) {
   const screens = [
     [[8, 'S&P 500 sinks 3.7% and the Nasdaq', 12], [8, 'WORLD NEWS: Rising seas, 1234567890', 25], [9, 'S&P 500 sinks 3.7% and', 40], [9, 'Quinault village (ja) #1', 56]],
     [[12, '12:45', 40], [9, 'FRI NOV 20', 58]],
-    [[10, '57\x7f', 28], [9, 'Hello Mom!', 52]],
+    [[12, '57\x7f -8\x7f', 38], [11, '72\x7f', 63]],
     [[10, 'Merry Christmas', 22], [10, 'abcdefghijklm', 42], [10, 'nopqrstuvwxyz', 60]],
     [[11, 'ABCDEFGHI', 28], [11, 'JKLMNOPQR', 58]],
     [[11, 'STUVWXYZ', 28], [11, '48,147', 58]],

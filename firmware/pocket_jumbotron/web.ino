@@ -25,11 +25,11 @@ static void handleInfo() {
   touch();
   char buf[600];
   snprintf(buf, sizeof(buf), "{\"api\":1,\"fw\":\"%s\",\"name\":\"%s\",\"total\":%u,\"used\":%u,\"files\":%d,\"items\":%u,\"brightness\":%u,\"heap\":%u,"
-           "\"tz\":\"%s\",\"nightFrom\":%d,\"nightTo\":%d,\"nightLevel\":%u,\"night\":%s,\"time\":%lu,\"place\":\"%s\",\"tzAuto\":%s,\"autoUpdate\":%s}",
+           "\"tz\":\"%s\",\"nightFrom\":%d,\"nightTo\":%d,\"nightLevel\":%u,\"night\":%s,\"time\":%lu,\"place\":\"%s\",\"tzAuto\":%s,\"autoUpdate\":%s,\"theme\":%u}",
            FW_VERSION, hostName.c_str(), (unsigned)LittleFS.totalBytes(), (unsigned)LittleFS.usedBytes(), countPictures(),
            (unsigned)playlist.size(), brightnessPct, (unsigned)ESP.getFreeHeap(), tzString.c_str(), nightFrom, nightTo, nightLevel,
            nightNow ? "true" : "false", timeValid() ? (unsigned long)time(nullptr) : 0UL,
-           geoOk ? geoCity.substring(0, 40).c_str() : "", tzAuto ? "true" : "false", autoUpdate ? "true" : "false");
+           geoOk ? geoCity.substring(0, 40).c_str() : "", tzAuto ? "true" : "false", autoUpdate ? "true" : "false", themeIx);
   sendJson(buf);
 }
 
@@ -136,6 +136,7 @@ static void handleSettings() {
   if (web->hasArg("tz") && web->arg("tz").length() < 60) { tzString = web->arg("tz"); tzAuto = false; prefs.putString("tz", tzString); timeBegin(); }
   if (web->hasArg("nf")) { nightFrom = constrain((int)web->arg("nf").toInt(), -1, 23); prefs.putChar("nfrom", nightFrom); }
   if (web->hasArg("nt")) { nightTo = constrain((int)web->arg("nt").toInt(), -1, 23); prefs.putChar("nto", nightTo); }
+  if (web->hasArg("theme")) { themeIx = constrain((int)web->arg("theme").toInt(), 0, 6); prefs.putUChar("theme", themeIx); }
   if (web->hasArg("au")) { autoUpdate = web->arg("au") != "0"; prefs.putBool("aupd", autoUpdate); }
   if (web->hasArg("nl")) { nightLevel = constrain((int)web->arg("nl").toInt(), 0, 100); prefs.putUChar("nlevel", nightLevel); }
   forceNightCheck();
@@ -217,6 +218,14 @@ static void startHomeWeb() {
   web->on("/api/play", HTTP_POST, handlePlay);
   web->on("/api/brightness", HTTP_POST, handleBrightness);
   web->on("/api/update", HTTP_POST, handleUpdateDone, handleUpdateData);
+  // QR probe: show the address screen for 60 s in fast scan with this many color bits (2-6), to test phone cameras.
+  web->on("/api/qr", HTTP_POST, []() {
+    touch();
+    uint8_t b = constrain((int)web->arg("bits").toInt(), 2, 6);
+    if (panelFast && b != fastBits) panelSetFast(false);
+    fastBits = b; addrHoldMs = 60000; addrUntil = 0; buttonAction = BTN_SHORT;
+    sendJson("{\"ok\":true}");
+  });
   web->on("/api/update-site", HTTP_POST, []() { touch(); updateNow = true; sendJson("{\"ok\":true}"); });   // card fetches it itself
   web->on("/api/forget-wifi", HTTP_POST, handleForgetWifi);
   web->on("/api/show", HTTP_GET, handleShowGet);

@@ -45,6 +45,7 @@ void settingsLoad() {
   nightTo = prefs.getChar("nto", -1);
   nightLevel = prefs.getUChar("nlevel", 0);
   autoUpdate = prefs.getBool("aupd", true);
+  themeIx = prefs.getUChar("theme", 2);
   if (apPass.length() != 8) {                      // first boot: make this card's own hotspot password
     char buf[9];
     for (int i = 0; i < 8; i++) buf[i] = '0' + (esp_random() % 10);
@@ -88,59 +89,88 @@ static void showHotspotScreen(const char *status) {
   if (doubleBuffered) panel->flipDMABuffer();
 }
 
-// QR code of http://<ip> at the left of the panel: white modules, 4-module quiet zone, 2 LEDs per module,
-// drawn while the panel is in fast scan (2-bit, ~650 Hz). Fast scan is what made phone cameras read it
-// (0.8.4: all styles scanned with the Pixel camera). Uses the ESP32 core's QR encoder.
-// Fast scan colors: the library's color table is built for 8-bit, and at 2-bit it reads only the table's two
-// lowest bits, so most values come out wrong (white looked green). Use CF() pure colors only.
+// Address screen: a white QR code of HTTP://<ip> on the left, "SCAN ME" and the address on one line at the right.
+// The panel is in fast scan while it's up (fewer color bits, much higher refresh), which is what lets phone cameras
+// read it (0.8.4). Everything here is drawn with drawPixelRGB888 in 0/255 colors: the library's color table maps
+// 255 to 255, so these come out right at any bit depth (565 colors lose their low bits and went wrong at 2-bit).
+// The URL is upper case so the QR encoder uses alphanumeric mode: version 1 (21 modules) with a full 4-module
+// quiet zone fits at 2 LEDs per module (58 px), twice the size of the old lower-case code.
+static void pfill(int x, int y, int w, int h, uint8_t r, uint8_t g, uint8_t b) {
+  for (int j = y; j < y + h; j++) for (int i = x; i < x + w; i++) panel->drawPixelRGB888(i, j, r, g, b);
+}
+static int qrSize = 0;
 static void qrDraw(const uint8_t *q) {        // q is an esp_qrcode_handle_t
   int n = esp_qrcode_get_size(q), qz = 4, px = (n + 2 * qz) * 2 <= 64 ? 2 : 1;
-  int sz = (n + 2 * qz) * px, x0 = 1, y0 = (64 - sz) / 2;
-  panel->fillRect(x0, y0, sz, sz, CF(1, 1, 1));
+  int sz = (n + 2 * qz) * px, x0 = 2, y0 = (64 - sz) / 2;
+  qrSize = sz;
+  pfill(x0, y0, sz, sz, 255, 255, 255);
   for (int y = 0; y < n; y++)
     for (int x = 0; x < n; x++)
-      if (esp_qrcode_get_module(q, x, y)) panel->fillRect(x0 + (qz + x) * px, y0 + (qz + y) * px, px, px, 0);
+      if (esp_qrcode_get_module(q, x, y)) pfill(x0 + (qz + x) * px, y0 + (qz + y) * px, px, px, 0, 0, 0);
 }
 static bool drawQr(String ip) {
-  String url = "http://" + ip;
+  String url = "HTTP://" + ip;
   esp_qrcode_config_t cfg = {qrDraw, 5, ESP_QRCODE_ECC_LOW};
   return esp_qrcode_generate(&cfg, url.c_str()) == ESP_OK;
+}
+// 4x7 digits (and '.') so a whole IP address fits on one line in 60 px.
+static int digits47(const String &s, int x, int y, uint8_t r, uint8_t g, uint8_t b, bool draw) {
+  static const uint8_t D[10][7] = {{6,9,9,9,9,9,6},{2,6,2,2,2,2,7},{6,9,1,2,4,8,15},{14,1,1,6,1,1,14},{2,6,10,10,15,2,2},
+                                   {15,8,14,1,1,9,6},{6,8,8,14,9,9,6},{15,1,2,2,4,4,4},{6,9,9,6,9,9,6},{6,9,9,7,1,1,6}};
+  for (unsigned k = 0; k < s.length(); k++) {
+    char c = s[k];
+    if (c == '.') { if (draw) panel->drawPixelRGB888(x, y + 6, r, g, b); x += 2; continue; }
+    if (c < '0' || c > '9') continue;
+    if (draw) for (int j = 0; j < 7; j++) for (int i = 0; i < 4; i++) if (D[c - '0'][j] >> (3 - i) & 1) panel->drawPixelRGB888(x + i, y + j, r, g, b);
+    x += 5;
+  }
+  return x;
+}
+// Our Jumbo font straight to the panel, 1-bit (soft edges would need the in-between colors fast scan lacks).
+static int pjPanel(const String &s, uint8_t font, int x, int base, uint8_t r, uint8_t g, uint8_t b, bool draw) {
+  setFont(font);
+  for (unsigned k = 0; k < s.length(); k++) {
+    const PJGlyph &gl = pjGlyph(s[k]);
+    const uint8_t *bits = pjf->bits + gl.off;
+    if (draw) for (int i = 0, n = gl.w * gl.h; i < n; i++)
+      if (((bits[i >> 1] >> (i & 1 ? 0 : 4)) & 15) >= 7) panel->drawPixelRGB888(x + gl.dx + i % gl.w, base + gl.dy + i / gl.w, r, g, b);
+    x += gl.adv;
+  }
+  return x - pjf->gap;
 }
 
 // Shown at startup once WiFi connects, and on a short S1 press.
 void showAddress(uint32_t ms) {
   panel->clearScreen();
   panel->setTextSize(1);
-  text(0, "POCKET JUMBOTRON", C(255, 190, 60));
   if (staSsid.isEmpty()) {
+    text(0, "POCKET JUMBOTRON", C(255, 190, 60));
     text(14, "No home WiFi yet.", C(150, 150, 170));
     text(26, "Hold the button", C(90, 200, 255));
     text(35, "2 sec to set up.", C(90, 200, 255));
   } else if (WiFi.status() == WL_CONNECTED) {
-    // A QR code of the page address: point the phone camera at it, no typing.
     String ip = WiFi.localIP().toString();
     panelSetFast(true);                       // fast scan for phone cameras (back to full color after)
     panel->clearScreen();
-    if (!drawQr(ip)) {
-      text(12, "On your phone, open:", C(150, 150, 170));
-      text(30, ip.c_str(), C(255, 255, 255));
-    } else {
-      // Full panel brightness here: at the normal cap the light pulses are so short at 651 Hz that green
-      // drops off first (white looked purple and dull). The QR screen lights ~40% of the LEDs, so 255 draws
-      // less than a full white screen at the cap. The loop restores the normal brightness after.
-      panel->setBrightness8(255);
-      // Pure colors only (fast scan, see above).
-      panel->setTextColor(CF(1, 1, 1));
-      panel->setCursor(64, 2);  panel->print("Scan with");
-      panel->setCursor(64, 11); panel->print("your phone");
-      panel->setTextColor(CF(0, 1, 1));
-      panel->setCursor(64, 28); panel->print("or type:");
-      panel->setTextColor(CF(1, 1, 1));
-      int dot = ip.lastIndexOf('.', ip.lastIndexOf('.') - 1);   // split 192.168. / 50.16
-      panel->setCursor(64, 38); panel->print(ip.substring(0, dot + 1));
-      panel->setCursor(64, 47); panel->print(ip.substring(dot + 1));
+    // Full panel brightness: at the normal cap the light pulses are so short in fast scan that green drops off
+    // first (white looked purple). The QR lights ~40% of the LEDs, so this draws less than full white at the cap.
+    panel->setBrightness8(255);
+    if (!drawQr(ip)) qrSize = 0;
+    int cx = qrSize ? 2 + qrSize + (W - 2 - qrSize) / 2 : W / 2;      // center of the right-hand column
+    int colW = W - (qrSize ? qrSize + 4 : 0);
+    uint8_t tf = pjPanel("SCAN ME", 9, 0, 0, 0, 0, 0, false) <= colW - 2 ? 9 : 8;
+    pjPanel("SCAN ME", tf, cx - pjPanel("SCAN ME", tf, 0, 0, 0, 0, 0, false) / 2, 17, 255, 255, 0, true);
+    String l2 = qrSize ? "or type" : "On your phone open";
+    pjPanel(l2, 8, cx - pjPanel(l2, 8, 0, 0, 0, 0, 0, false) / 2, 36, 0, 255, 255, true);
+    int iw = digits47(ip, 0, 0, 0, 0, 0, false) - 1;
+    digits47(ip, cx - iw / 2, 44, 255, 255, 255, true);
+    if (ms > 10000) {                         // QR probe (/api/qr): say which bit depth this is
+      digits47(String(fastBits), W - 22, 56, 255, 0, 0, true);
+      pjPanel("BIT", 8, W - 16, 63, 255, 0, 0, true);
     }
+    Serial.printf("Address screen: %d-bit fast scan, QR %d px\n", fastBits, qrSize);
   } else {
+    text(0, "POCKET JUMBOTRON", C(255, 190, 60));
     text(12, "Can't join WiFi:", C(255, 90, 110));
     text(21, staSsid.c_str(), C(255, 255, 255));
     text(34, "Hold the button", C(90, 200, 255));
