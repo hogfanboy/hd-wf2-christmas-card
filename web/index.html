@@ -814,8 +814,9 @@ $('files').addEventListener('change', async (e) => {
   for (const file of e.target.files) await addFile(file);
   e.target.value = '';
 });
-async function addFile(file, secs = 0, fromCard = false) {
-  const it = { kind: 'pic', name: file.name, fit: 'auto', format: 'auto', frames: [], blob: null, secs };
+// set (picture packs): { fit, format } chosen in the pack builder, so the phone converts it the same way.
+async function addFile(file, secs = 0, fromCard = false, set = {}) {
+  const it = { kind: 'pic', name: file.name, fit: 'auto', format: set.format || 'auto', frames: [], blob: null, secs };
   const el = baseEl(it);
   it.metaEl.textContent = 'Converting…';
   const row = document.createElement('div'); row.className = 'row';
@@ -841,7 +842,7 @@ async function addFile(file, secs = 0, fromCard = false) {
       });
     }
     const r = it.src[0].canvas.width / it.src[0].canvas.height;
-    it.fit = fromCard || r >= 1.6 ? 'fill' : 'fit';
+    it.fit = set.fit || (fromCard || r >= 1.6 ? 'fill' : 'fit');
     await build(it);
     if (fromCard) { it.format = it.ext === 'pjm' ? 'full' : 'gif'; }
     marks(it);
@@ -1147,7 +1148,8 @@ function packBox(p, getFile) {
     b.disabled = true;
     for (let i = 0; i < p.files.length; i++) {
       b.textContent = `Adding ${i + 1} of ${p.files.length}…`;
-      try { await addFile(await getFile(p.files[i])); } catch (e) { console.warn(e); }
+      const s = (p.pics || {})[p.files[i]] || {};
+      try { await addFile(await getFile(p.files[i]), 0, false, { fit: s.fit, format: s.format || p.format }); } catch (e) { console.warn(e); }
     }
     b.textContent = 'Added. Press Send to put them on the screen.';
   };

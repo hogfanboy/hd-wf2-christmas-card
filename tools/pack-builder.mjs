@@ -99,14 +99,12 @@ http.createServer(async (req, res) => {
       const name = q('name').trim();
       if (!name || /[/\\:*?"<>|]/.test(name) || name.startsWith('.') || name.startsWith('_')) throw new Error('pick a folder name without / \\ : * ? " < > | (and not starting with . or _)');
       const dir = packDir(name); if (fs.existsSync(dir)) throw new Error('that folder already exists');
-      fs.mkdirSync(dir); fs.writeFileSync(path.join(dir, 'pack.json'), JSON.stringify({ title: q('title') || name }, null, 2) + '\n');
+      fs.mkdirSync(dir); fs.writeFileSync(path.join(dir, 'pack.json'), JSON.stringify({ title: q('title') || name, format: 'gif' }, null, 2) + '\n');
       return json(res, { ok: true, id: name });
     }
     if (u.pathname === '/api/meta') {
-      const m = JSON.parse((await body(req)).toString('utf8')), o = {};
-      if (m.title) o.title = String(m.title).trim(); if (m.about) o.about = String(m.about).trim();
-      const cards = String(m.cards || '').split(/[,\s]+/).filter(Boolean); if (cards.length) o.cards = cards;
-      if (m.order !== '' && m.order != null && !isNaN(+m.order)) o.order = +m.order;
+      const o = JSON.parse((await body(req)).toString('utf8'));   // the page sends finished pack.json (metaJson)
+      if (!o || typeof o !== 'object' || Array.isArray(o)) throw new Error('bad pack details');
       fs.writeFileSync(path.join(packDir(q('pack')), 'pack.json'), JSON.stringify(o, null, 2) + '\n');
       return json(res, { ok: true });
     }

@@ -48,6 +48,10 @@
   .signin { max-width:640px; margin:18px auto 0; }
   .signin ol { padding-left:20px; margin:8px 0 12px; } .signin li { margin:3px 0; }
   .signin a { color:var(--cyan); }
+  select { background:#1b1b28; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 9px; font:14px system-ui,sans-serif; width:100%; }
+  .chip { padding:4px 9px; font-size:12px; background:#1b1b28; color:var(--muted); border:1px solid var(--line); }
+  .chip.on { background:#123247; color:var(--cyan); border-color:var(--cyan); }
+  .chip.set { font-weight:800; }
   label.chk { display:flex; gap:6px; align-items:center; font-size:13px; color:var(--muted); }
 </style>
 </head>
@@ -93,6 +97,10 @@
           <label>Title (shown on the phone page)<input type="text" data-m="title"></label>
           <label>List order (lower = higher on the page, default 50)<input type="number" data-m="order" placeholder="50"></label>
           <label class="wide">About (one line under the title)<input type="text" data-m="about"></label>
+          <label class="wide">Phones convert the pictures as (a picture's own GIF / Full color button wins)<select data-m="format">
+            <option value="gif">GIF: sharp, exact colors (best for cartoons, text, stickers)</option>
+            <option value="auto">Auto: GIF, or full color when GIF loses detail</option>
+            <option value="full">Full color: photos, smooth shading, video</option></select></label>
           <label class="wide">Only for these screens (names like PocketJumbo-EED0, commas; empty = every screen)<input type="text" data-m="cards"></label>
         </div>
         <div class="row" style="margin-top:10px"><button class="secondary" id="saveMeta">Save details</button><span class="status" id="metaStatus" style="margin:0"></span></div>
@@ -146,11 +154,20 @@ function parseMeta(text) {
   }
   return meta;
 }
-function metaJson(m) {                            // the form -> pack.json text
+// pack.json: title, about, cards, order, plus how phones convert the pictures: "format" (the pack's default:
+// "gif", "full" or "auto") and "pictures": { "<file name>": { "fit": "fill"|"fit", "format": "gif"|"full" } }.
+function metaJson(m) {
   const o = {};
   if (m.title) o.title = String(m.title).trim(); if (m.about) o.about = String(m.about).trim();
-  const cards = String(m.cards || '').split(/[,\s]+/).filter(Boolean); if (cards.length) o.cards = cards;
+  const cards = [].concat(m.cards || []).join(',').split(/[,\s]+/).filter(Boolean); if (cards.length) o.cards = cards;
   if (m.order !== '' && m.order != null && !isNaN(+m.order)) o.order = +m.order;
+  if (m.format === 'gif' || m.format === 'full') o.format = m.format;
+  const pics = {};
+  for (const [n, s] of Object.entries(m.pictures || {})) {
+    const p = {}; if (s.fit === 'fill' || s.fit === 'fit') p.fit = s.fit; if (s.format === 'gif' || s.format === 'full') p.format = s.format;
+    if (Object.keys(p).length) pics[n] = p;
+  }
+  if (Object.keys(pics).length) o.pictures = pics;
   return JSON.stringify(o, null, 2) + '\n';
 }
 function badFolder(name) {
@@ -172,7 +189,7 @@ const localStore = {
   async load() { const j = await api('/api/packs'); return { label: 'Content repo: ' + j.repo, packs: j.packs, changes: j.status ? j.status.split('\n').length : 0 }; },
   async file(pack, name) { return (await fetch(`/api/file?pack=${enc(pack)}&name=${enc(name)}`)).blob(); },
   async newPack(name) { return (await api(`/api/new?name=${enc(name)}`, { method: 'POST' })).id; },
-  async saveMeta(pack, m) { await api(`/api/meta?pack=${enc(pack)}`, { method: 'POST', body: JSON.stringify(m) }); },
+  async saveMeta(pack, m) { await api(`/api/meta?pack=${enc(pack)}`, { method: 'POST', body: metaJson(m) }); },
   async upload(pack, file) { return (await api(`/api/upload?pack=${enc(pack)}&name=${enc(file.name)}`, { method: 'POST', body: file })).name; },
   async order(pack, names) { return (await api(`/api/order?pack=${enc(pack)}`, { method: 'POST', body: JSON.stringify(names) })).names; },
   async del(pack, name) { await api(`/api/delete?pack=${enc(pack)}&name=${enc(name)}`, { method: 'POST' }); },
@@ -236,7 +253,7 @@ function githubStore(token) {
     async file(pack, name) { return new Blob([await bytesOf(view().get(dirOf(pack) + name))]); },
     async newPack(name) {
       if (view().has(name + '/pack.json') || [...view().keys()].some(p => p.startsWith(name + '/'))) throw new Error('that folder already exists');
-      put(name + '/pack.json', new TextEncoder().encode(JSON.stringify({ title: name }, null, 2) + '\n'));
+      put(name + '/pack.json', new TextEncoder().encode(metaJson({ title: name, format: 'gif' })));
       return name;
     },
     async saveMeta(pack, m) { put(pack + '/pack.json', new TextEncoder().encode(metaJson(m))); },
@@ -263,15 +280,20 @@ function githubStore(token) {
       const log = [], R = `/repos/${CONTENT}`;
       if (pend.size) {
         const head = (await gh(`${R}/git/ref/heads/${BRANCH}`)).object.sha;
-        const baseTree = (await gh(`${R}/git/commits/${head}`)).tree.sha;
-        const tree = [];
+        // The whole file list as it is on GitHub right now, with our changes applied, sent as one complete tree.
+        // (Deleting a path that is no longer there makes GitHub fail with 422 BadObjectState, e.g. when the repo
+        // changed after this page loaded it; a complete tree has no deletions to go wrong.)
+        const nowTree = await gh(`${R}/git/trees/${(await gh(`${R}/git/commits/${head}`)).tree.sha}?recursive=1`);
+        if (nowTree.truncated) throw new Error('the repo is too big to list in one go');
+        const files = new Map(nowTree.tree.filter(t => t.type === 'blob').map(t => [t.path, { mode: t.mode, sha: t.sha }]));
         for (const [p, v] of pend) {
-          if (v === null) { tree.push({ path: p, mode: '100644', type: 'blob', sha: null }); continue; }
+          if (v === null) { files.delete(p); continue; }
           let sha = v.sha;
           if (!sha) { sha = (await gh(`${R}/git/blobs`, { method: 'POST', body: { content: b64(v.bytes), encoding: 'base64' } })).sha; log.push('uploaded ' + p); }
-          tree.push({ path: p, mode: '100644', type: 'blob', sha });
+          files.set(p, { mode: '100644', sha });
         }
-        const newTree = (await gh(`${R}/git/trees`, { method: 'POST', body: { base_tree: baseTree, tree } })).sha;
+        const tree = [...files].map(([path, f]) => ({ path, mode: f.mode, type: 'blob', sha: f.sha }));
+        const newTree = (await gh(`${R}/git/trees`, { method: 'POST', body: { tree } })).sha;
         const me = await gh('/user');                 // commits as your GitHub noreply address, never your email
         const who = { name: me.login, email: `${me.id}+${me.login}@users.noreply.github.com` };
         const commit = await gh(`${R}/git/commits`, { method: 'POST', body: { message: msg || 'Pack builder update', tree: newTree, parents: [head], author: who, committer: who } });
@@ -314,14 +336,26 @@ function animate(now) {
 requestAnimationFrame(animate);
 
 // Converts like a phone does when the pack is added (web/index.html addFile + build): fit by shape, then auto.
+// A picture's settings: its own (pack.json "pictures"), else the pack's format, else auto; fit by shape.
+function picSet(name) {
+  const s = (cur.meta.pictures || {})[name] || {};
+  return { fit: s.fit || '', format: s.format || cur.meta.format || 'auto', own: s };
+}
 async function convert(t) {
   const file = new File([await store.file(cur.id, t.name)], t.name);
   const src = await decode(file, {});
-  const ratio = src[0].canvas.width / src[0].canvas.height, fit = ratio >= 1.6 ? 'fill' : 'fit';
+  const set = picSet(t.name), ratio = src[0].canvas.width / src[0].canvas.height;
+  const fit = set.fit || (ratio >= 1.6 ? 'fill' : 'fit');
   const frames = src.map(s => ({ img: scale(s.canvas, fit), delay: s.delay }));
-  const full = !gifFits(frames);
+  const full = set.format === 'full' || (set.format === 'auto' && !gifFits(frames));
   const out = full ? await encodePjm(frames) : encodeGif(frames);
-  Object.assign(t, { frames: out.shown, fi: -1, next: 0, full, phone: out.blob.size, nf: frames.length });
+  Object.assign(t, { frames: out.shown, fi: -1, next: 0, full, fit, phone: out.blob.size, nf: frames.length });
+}
+async function setPic(name, patch) {
+  const pictures = { ...(cur.meta.pictures || {}) };
+  pictures[name] = { ...(pictures[name] || {}), ...patch };
+  try { await store.saveMeta(cur.id, { ...cur.meta, pictures }); } catch (e) { alert(e.message); }
+  await load(cur.id);
 }
 
 function renderPacks() {
@@ -356,7 +390,7 @@ async function openPack(id) {
   const m = cur.meta;
   for (const inp of $('meta').querySelectorAll('[data-m]')) {
     const k = inp.dataset.m;
-    inp.value = k === 'cards' ? [].concat(m.cards || []).join(', ') : m[k] ?? '';
+    inp.value = k === 'cards' ? [].concat(m.cards || []).join(', ') : k === 'format' ? (m.format || 'auto') : m[k] ?? '';
   }
   $('metaStatus').textContent = '';
   renderTiles();
@@ -364,15 +398,23 @@ async function openPack(id) {
 function renderTiles() {
   const g = $('grid'); g.innerHTML = '';
   const old = new Map(tiles.map(t => [t.name, t]));
-  tiles = cur.files.map(f => old.get(f.name)?.size === f.size && old.get(f.name)?.pack === cur.id ? old.get(f.name) : { name: f.name, size: f.size, pack: cur.id });
+  tiles = cur.files.map(f => {
+    const key = JSON.stringify(picSet(f.name)), o = old.get(f.name);
+    return o && o.size === f.size && o.pack === cur.id && o.key === key ? o : { name: f.name, size: f.size, pack: cur.id, key };
+  });
   tiles.forEach((t, i) => {
     const el = document.createElement('div'); el.className = 'tile'; el.draggable = true;
     el.innerHTML = `<span class="num">${i + 1}</span><canvas width="${W * S}" height="${H * S}"></canvas><div class="nm"></div><div class="info">Converting…</div>
+      <div class="btns" data-set><button class="chip" data-fit="fill" title="Crop to fill the screen">Fill</button><button class="chip" data-fit="fit" title="Whole picture, black bars">Fit</button>
+        <button class="chip" data-fmt="gif" style="margin-left:8px">GIF</button><button class="chip" data-fmt="full">Full color</button></div>
       <div class="btns"><button class="secondary" data-a="-1" title="Earlier">◀</button><button class="secondary" data-a="1" title="Later">▶</button><button class="secondary" data-a="del" style="color:var(--red);margin-left:auto">Delete</button></div>`;
     el.querySelector('.nm').textContent = t.name; el.querySelector('.nm').title = t.name;
     t.cv = el.querySelector('canvas'); t.info = el.querySelector('.info'); t.el = el;
     if (t.frames) { t.next = 0; showInfo(t); }
     el.querySelectorAll('[data-a]').forEach(b => b.onclick = () => b.dataset.a === 'del' ? del(t) : move(i, i + +b.dataset.a));
+    el.querySelector('[data-set]').hidden = !!cur.loose;      // loose pictures have no pack.json to keep settings
+    el.querySelectorAll('[data-fit]').forEach(b => b.onclick = () => setPic(t.name, { fit: b.dataset.fit }));
+    el.querySelectorAll('[data-fmt]').forEach(b => b.onclick = () => setPic(t.name, { format: b.dataset.fmt }));
     el.ondragstart = (e) => { e.dataTransfer.setData('text/x-tile', String(i)); el.classList.add('drag'); };
     el.ondragend = () => el.classList.remove('drag');
     el.ondragover = (e) => { if (e.dataTransfer.types.includes('text/x-tile')) { e.preventDefault(); el.classList.add('target'); } };
@@ -384,6 +426,9 @@ function renderTiles() {
   (async () => { for (const t of tiles) if (!t.frames && !t.failed) { try { await convert(t); showInfo(t); } catch (e) { console.warn(e); t.failed = true; t.info.innerHTML = '<span class="err">A phone couldn\'t read this picture</span>'; } updateTotal(); } })();
 }
 function showInfo(t) {
+  const own = picSet(t.name).own;
+  t.el.querySelectorAll('[data-fit]').forEach(b => { b.classList.toggle('on', b.dataset.fit === t.fit); b.classList.toggle('set', b.dataset.fit === own.fit); });
+  t.el.querySelectorAll('[data-fmt]').forEach(b => { b.classList.toggle('on', (b.dataset.fmt === 'full') === t.full); b.classList.toggle('set', b.dataset.fmt === own.format); });
   t.info.innerHTML = `${t.nf} frame${t.nf === 1 ? '' : 's'} · file ${kb(t.size)} · on a screen ${kb(t.phone)}<span class="tag${t.full ? ' full' : ''}">${t.full ? 'Full color' : 'GIF'}</span>`;
 }
 function updateTotal() {
@@ -400,12 +445,20 @@ async function move(from, to) {
     const final = await store.order(cur.id, names);
     const byOld = new Map(tiles.map(t => [t.name, t]));
     tiles = names.map((nm, i) => Object.assign(byOld.get(nm), { name: final[i] }));
+    const pics = cur.meta.pictures || {};
+    if (Object.keys(pics).length) {                  // settings follow the renamed pictures
+      const pictures = {}; names.forEach((nm, i) => { if (pics[nm]) pictures[final[i]] = pics[nm]; });
+      await store.saveMeta(cur.id, { ...cur.meta, pictures });
+    }
   } catch (e) { alert(e.message); }
   await load(cur.id);
 }
 async function del(t) {
   if (!confirm(`Delete ${t.name} from this pack? (After you publish, it's only in the repo's history.)`)) return;
-  try { await store.del(cur.id, t.name); } catch (e) { alert(e.message); }
+  try {
+    await store.del(cur.id, t.name);
+    if ((cur.meta.pictures || {})[t.name]) { const pictures = { ...cur.meta.pictures }; delete pictures[t.name]; await store.saveMeta(cur.id, { ...cur.meta, pictures }); }
+  } catch (e) { alert(e.message); }
   await load(cur.id);
 }
 async function addFiles(list) {
@@ -419,7 +472,7 @@ async function addFiles(list) {
 }
 
 $('saveMeta').onclick = async () => {
-  const m = {}; $('meta').querySelectorAll('[data-m]').forEach(i => m[i.dataset.m] = i.value);
+  const m = { ...cur.meta }; $('meta').querySelectorAll('[data-m]').forEach(i => m[i.dataset.m] = i.value);
   try { await store.saveMeta(cur.id, m); $('metaStatus').className = 'status ok'; $('metaStatus').textContent = '✓ Saved' + (LOCAL ? '' : ' (goes up when you publish)'); await load(cur.id); }
   catch (e) { $('metaStatus').className = 'status err'; $('metaStatus').textContent = e.message; }
 };

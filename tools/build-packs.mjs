@@ -5,6 +5,8 @@
 //   <source>/<pack folder>/        pictures (gif, png, jpg, webp; animated is fine) + optional pack.json
 //   <source>/<pack folder>/pack.json  { "title": "...", "about": "...", "cards": ["PocketJumbo-EED0"], "order": 10 }
 //                                  "cards" = only those screens see it (per-family messages). Lower "order" first.
+//                                  "format": "gif" | "full" (else auto) and "pictures": { "<file>": { "fit", "format" } }
+//                                  tell phones how to convert (set in the pack builder); passed on as format / pics.
 //   <source>/<picture>             loose pictures = the "New pictures" pack
 // Forgiving: any folder name works (Christmas2026 -> id christmas2026), file names are made web-safe
 // (200 (1).webp -> 200-1.webp), pictures play in natural name order (no numbering needed), pack.json may be
@@ -31,7 +33,8 @@ packs.push({ id: 'holiday-starter', title: 'Holiday starter animations', about: 
 
 const isFile = (p) => fs.statSync(p).isFile();
 // Copies pictures into docs/packs/<id>/ under web-safe, unique names; returns the names in play order.
-function copyPics(paths, id) {
+// rename (optional) collects source file name -> published name.
+function copyPics(paths, id, rename = {}) {
   fs.mkdirSync(path.join(out, id), { recursive: true });
   const names = [];
   for (const f of [...paths].sort((a, b) => byName(path.basename(a), path.basename(b)))) {
@@ -39,6 +42,7 @@ function copyPics(paths, id) {
     let n = first, i = 2;
     while (names.includes(n)) n = first.replace(/(\.\w+)$/, `-${i++}$1`);
     fs.copyFileSync(f, path.join(out, id, n));
+    rename[path.basename(f)] = n;
     names.push(n);
   }
   return names;
@@ -60,8 +64,15 @@ for (const src of sources) for (const folder of fs.readdirSync(src).sort(byName)
     const meta = readPackMeta(dir);
     const pics = fs.readdirSync(dir).filter(f => PIC.test(f) && isFile(path.join(dir, f))).map(f => path.join(dir, f));
     if (!pics.length) { console.warn(`warning: pack folder "${folder}" has no pictures; skipped`); continue; }
+    const rename = {}, files = copyPics(pics, id, rename), conv = {};
+    for (const [src, s] of Object.entries(meta.pictures || {})) {
+      if (!rename[src] || !s || typeof s !== 'object') continue;
+      const c = {}; if (s.fit === 'fill' || s.fit === 'fit') c.fit = s.fit; if (s.format === 'gif' || s.format === 'full') c.format = s.format;
+      if (Object.keys(c).length) conv[rename[src]] = c;
+    }
     packs.push({ id, title: meta.title || folder, about: meta.about || '', ...(meta.cards ? { cards: [].concat(meta.cards) } : {}),
-      order: Number(meta.order) || 50, files: copyPics(pics, id) });
+      ...(meta.format === 'gif' || meta.format === 'full' ? { format: meta.format } : {}), ...(Object.keys(conv).length ? { pics: conv } : {}),
+      order: Number(meta.order) || 50, files });
   } catch (e) {
     console.warn(`warning: pack folder "${folder}" skipped: ${e.message}`);
   }

@@ -21,7 +21,11 @@
 - **Pack builder hosted:** https://hogfanboy.github.io/hd-wf2-christmas-card/builder/ (docs/builder/, built by
   build-web.mjs from tools/pack-builder.html). Sign in with a fine-grained GitHub token (Contents + Actions write on
   both repos), kept in the browser. Changes wait in the page; Publish = one commit via the GitHub API (noreply
-  author) + workflow dispatch. Tested against a fake GitHub API only; first real use still to do.
+  author) + workflow dispatch. Publish sends the complete file list (fixes 422 GitRPC::BadObjectState, which came
+  from deleting paths already gone because the repo changed after the page loaded). Fake-API tested; real use next.
+- **Pack convert settings:** builder details "Phones convert the pictures as" GIF / Auto / Full color (new packs
+  default GIF) and Fill/Fit + GIF/Full color buttons per picture (bold = set on that picture). Saved in pack.json
+  (`format`, `pictures`), passed on by build-packs as manifest `format` / `pics`, used by the phone page.
 - **Pack builder (local):** `tools/pack-builder.mjs` (launch config `pack-builder`, http://localhost:8095). Edits
   ../pocket-jumbotron-content: new pack, details as real JSON, drop pictures, drag to reorder, delete, previews as a
   phone converts them, Publish = commit + push + `gh workflow run` (site rebuilds in ~3 min). Tested on a scratch
