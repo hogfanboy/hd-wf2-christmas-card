@@ -6,8 +6,7 @@
 - **beta15:** hourly and daily forecasts slide. Hourly = one 32-px column per hour (12 or 24 h + now), temperature
   in its temperature color, at midnight the new weekday in white + dotted line. 10 days = the 5-day columns sliding.
   Strips hold 3 s, slide, hold 2 s (screen lasts max(item secs, strip)). Card 1: 24 hours + 10 days.
-- **beta14:** one "Hourly forecast" checkbox (12 / 24 hours = `hourly` / `chart`) and one "Daily forecast" (5 / 10
-  days = `forecast` / `days10`). 14 days removed; old `days16` plays as 10 days.
+- **beta14:** Hourly checkbox (12/24 h = `hourly`/`chart`), Daily (5/10 days = `forecast`/`days10`).
 - **beta11-13:** weather "Screens" checklist; line under the temperature: sky, what matters, FEELS. **beta10:** alerts (weather.gov). **beta7:** Christmas lights. **beta9:** QR big/small alternating. **beta8:** card remembers the weather town (NVS `wxhome`), page redesign.
 - **Fonts/icons:** crisp Jumbo font and shaded weather icons with hard edges (details in PROJECT-NOTES).
 - **Shuffle:** page Play order In order / Shuffle (`order<TAB>shuffle` in show.txt), never the same item twice.
