@@ -360,7 +360,11 @@ $('wbtn').onclick = async () => {
   let port;
   try { port = await navigator.serial.requestPort({ filters: [{ usbVendorId: ESPRESSIF_VID }] }); } catch { return; }
   $('wonly').hidden = true; $('wjump').hidden = true; busy = true; wifiOnly = true;
+  for (const id of ['installbox', 'needs', 'retry']) $(id).hidden = true;   // WiFi only: no install steps
+  document.querySelector('h1').textContent = 'Change your screen\'s WiFi';
+  document.querySelector('.lede').textContent = 'Nothing is reinstalled and your pictures stay.';
   $('tag2').textContent = 'Change the WiFi';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
   await improvSetup(port);
   busy = false;
 };

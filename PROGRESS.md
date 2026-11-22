@@ -56,4 +56,4 @@
    should now come in as GIF and look like the originals. Try Shuffle at the same time.
 3. **Online builder** works (Christmas 2026 published from it). Next there: Holiday starter animations → new cards.
 4. **Installer is solid** - spare 2026-11-22: 10/10 verified writes, 0 retries; mid-write unplug recovered on re-plug
-   by itself (details PROJECT-NOTES). Next: "Try WiFi only" on card 1 (new layout at the page bottom), then 1.0.0.
+   by itself (details PROJECT-NOTES). WiFi only worked on card 1 (install steps now hide). Next: 1.0.0.
