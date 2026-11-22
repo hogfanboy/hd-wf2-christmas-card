@@ -114,7 +114,7 @@ function optsField(it) {
   if (w.days.length < 7) o.push('days=' + w.days);
   if (w.h1 !== '' && w.h2 !== '' && w.h1 !== w.h2) o.push(`hours=${w.h1}-${w.h2}`);
   if (it.kind === 'countdown' && it.lead !== '' && it.lead != null) o.push('lead=' + it.lead);
-  if (it.kind === 'weather') for (const [opt, k] of WX_PAGES) if (it[k]) o.push(opt);
+  if (it.kind === 'weather') for (const [opt, k, , tg] of WX_PAGES) if (it[k]) o.push(tg && it[tg[0]] ? tg[3] : opt);
   if (it.kind === 'weather' && it.alerts) o.push('alerts');
   return '@' + o.join(' ');
 }
@@ -126,7 +126,10 @@ function parseOpts(field) {
     if (k === 'days') o.when.days = v;
     if (k === 'hours') [o.when.h1, o.when.h2] = v.split('-');
     if (k === 'lead') o.lead = v;
-    const pg = WX_PAGES.find(p => p[0] === k); if (pg) o[pg[1]] = true;
+    for (const [opt, ik, , tg] of WX_PAGES) {
+      if (k === opt) o[ik] = true;
+      if (tg && (k === tg[3] || (k === 'days16' && ik === 'fc'))) { o[ik] = true; o[tg[0]] = true; }   // days16: the old 14 days
+    }
     if (k === 'alerts') o.alerts = true;
   }
   return o;
@@ -219,7 +222,7 @@ function addDrawn(kind, o = {}) {
       <label>Units <select data-k="unit"><option value="F">°F</option><option value="C">°C</option><option value="A">Auto</option></select></label>
       <div class="wpages"><div><b>Screens</b> (tick what you want; each plays for the item's seconds)</div>
         <label><input type="checkbox" data-k="alerts"> Weather alerts (US only): watches and warnings before the weather; a warning also comes back every few items</label>
-        ${WX_PAGES.map(([, k, t]) => `<label><input type="checkbox" data-k="${k}"> ${t}</label>`).join('')}</div>
+        ${WX_PAGES.map(([, k, t, tg]) => `<label><input type="checkbox" data-k="${k}"> ${t}${tg ? ` <select class="wtg" data-k="${tg[0]}"><option value="">${tg[1]}</option><option value="1">${tg[2]}</option></select>` : ''}</label>`).join('')}</div>
       <button class="chip walert" type="button">⚠ See a sample alert</button>` : ''}
     ${colors}
     <label>Size <select data-k="font">${sizes}</select>
@@ -228,17 +231,22 @@ function addDrawn(kind, o = {}) {
   ed.querySelectorAll('[data-k]').forEach(inp => {
     const k = inp.dataset.k;
     if (inp.type === 'checkbox') inp.checked = !!it[k];
+    else if (inp.classList.contains('wtg')) inp.value = it[k] ? '1' : '';
     else if (k === 'date') inp.value = new Date().getFullYear() + '-' + it.date;
     else inp.value = it[k];
     inp.oninput = () => {
-      it[k] = inp.type === 'checkbox' ? inp.checked : k === 'font' ? +inp.value : k === 'date' ? inp.value.slice(5) : inp.value;
+      it[k] = inp.type === 'checkbox' ? inp.checked : inp.classList.contains('wtg') ? inp.value === '1' : k === 'font' ? +inp.value : k === 'date' ? inp.value.slice(5) : inp.value;
       if (k === 'fg') { it.useTheme = false; const c = ed.querySelector('[data-k=useTheme]'); if (c) c.checked = false; }
       if (k === 'useTheme' && it.useTheme) { it.fg = TH().main; const c = ed.querySelector('[data-k=fg]'); if (c) c.value = it.fg; }
       if (k === 'lead') it.whenRefresh();
       el.querySelector('.name').textContent = label(it);
       if (k === 'unit') wxFetch(it);
       if (k === 'alerts') alertsFetch(it);
-      if (WX_PAGES.some(p => p[1] === k)) it.focusPage = it[k] ? k : null;   // the preview jumps to a screen just ticked
+      const pg = WX_PAGES.find(p => p[1] === k || p[3]?.[0] === k);   // the preview jumps to a screen just ticked or toggled
+      if (pg) {
+        if (pg[3]?.[0] === k && !it[pg[1]]) { it[pg[1]] = true; const c = ed.querySelector(`[data-k=${pg[1]}]`); if (c) c.checked = true; }   // picking 24 hours ticks Hourly
+        const sc = wxKeyScreens(it, pg[1]); it.focusPage = it[pg[1]] ? (k === 'days10' && it.days10 ? sc[1] : sc[0]) : null;
+      }
       it.t0 = performance.now(); updateSpace();
     };
   });

@@ -37,7 +37,7 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "1.0.0-beta13";
+static const char *FW_VERSION = "1.0.0-beta14";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
@@ -88,7 +88,7 @@ struct ShowItem {
   bool themed = false;            // color "theme": fg follows the card's theme
 };
 // Weather screens after "now" (show.txt options, checkboxes on the page), in the order they play.
-enum { WXP_RAINSOON = 1, WXP_HOURLY = 2, WXP_CHART = 4, WXP_DAYS5 = 8, WXP_DAYS16 = 16, WXP_DETAILS = 32, WXP_AIR = 64, WXP_SUN = 128 };
+enum { WXP_RAINSOON = 1, WXP_HOURLY = 2, WXP_CHART = 4, WXP_DAYS5 = 8, WXP_DAYS10 = 16, WXP_DETAILS = 32, WXP_AIR = 64, WXP_SUN = 128 };
 typedef void (*WxDraw)(const ShowItem &, uint32_t frame, uint32_t ms);   // draws one weather screen (weather.ino)
 struct WxAlert { char title[32]; uint8_t level; time_t until; };   // a weather alert (weather.ino): level 1-3
 struct Theme { uint32_t main, acc, dim; };   // color theme: main text, accent, dim (canvas.ino THEMES)

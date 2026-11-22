@@ -355,41 +355,26 @@ static void drawHourly(const ShowItem &it, uint32_t frame, uint32_t) { hourCols(
 // Next 24 hours: now and every 6 hours, the same columns (was a line chart: too busy on the LEDs).
 static void drawChart(const ShowItem &it, uint32_t frame, uint32_t) { hourCols(it, frame, 6); }
 // 5 days: 5 columns of 25 px: weekday, small icon, high (item color), low (blue), chance of rain/snow (a drop and
-// the %, only on days with 10% or more).
+// the %, only on days with 10% or more). 10 days = two of these screens, days 1-5 then 6-10, with a page bar on
+// the top row (free above the weekdays): the left half lit on the first page, the right half on the second.
+static int wxDayFrom = 0;                        // first day on the screen (0 or 5)
+static bool wxDayBar = false;                    // 10 days: draw the page bar
 static void drawDays5(const ShowItem &it, uint32_t frame, uint32_t) {
   static const char *const DOW[] = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
   int today = wxToday();
-  for (int i = 0; i < std::min(wx.fcN, 5); i++) {
-    int cx = 2 + i * 25 + 12;
+  if (wxDayBar) for (int x = 2; x < W - 2; x++) if (x < W / 2 - 2 || x >= W / 2 + 2)
+    px(x, 0, (x < W / 2) == (wxDayFrom == 0) ? th().acc : 0x303030);
+  for (int c = 0; c < 5 && wxDayFrom + c < wx.fcN; c++) {
+    int i = wxDayFrom + c, cx = 2 + c * 25 + 12;
+    if (isnan(wx.fcHi[i]) || isnan(wx.fcLo[i])) continue;   // a far day with no numbers yet would print as a long garbage number
     String hi = String((int)lroundf(wx.fcHi[i])), lo = String((int)lroundf(wx.fcLo[i]));
     labelC(DOW[(today + i) % 7], cx, 1, th().acc);
-    wxMini(wxKind(wx.fcCode[i]), cx, 18, frame + i * 7);
-    uint32_t hc = it.rainbow ? hsv((millis() / 8 + i * 300) % 1536) : it.fg;
+    wxMini(wxKind(wx.fcCode[i]), cx, 18, frame + c * 7);
+    uint32_t hc = it.rainbow ? hsv((millis() / 8 + c * 300) % 1536) : it.fg;
     if (pjLabels) { setFont(9); printAt(hi, cx - textWidth(hi) / 2, 29 + 11, hc); }
     else labelC(hi, cx, 31, hc);
     labelC(lo, cx, 42, WX_LO);                   // lows in the same cool blue as the "L"
     if (!isnan(wx.fcRain[i]) && wx.fcRain[i] >= 10) wxRainPct(wx.fcRain[i], cx, 54);
-  }
-}
-// 14 days: two pages of 7 columns of 18 px (days 1-7, then 8-14 for the second half of the time): 2-letter
-// weekday (today in the accent color), high (item color), low (blue), and on days with a 30% chance or more a drop
-// (or a snowflake) over the chance. Numbers only: icons don't fit 18 px and bars read as noise.
-static void drawDays16(const ShowItem &it, uint32_t frame, uint32_t ms) {
-  static const char *const D2[] = {"SU", "MO", "TU", "WE", "TH", "FR", "SA"};
-  int n = std::min(wx.fcN, 14), total = (it.sec ? it.sec : 10) * 1000;
-  int first = n > 7 && (int)ms >= total / 2 ? 7 : 0, today = wxToday();
-  for (int c = 0; c < 7 && first + c < n; c++) {
-    int i = first + c, cx = 1 + c * 18 + 9;
-    if (isnan(wx.fcHi[i]) || isnan(wx.fcLo[i])) continue;   // a far day with no numbers yet would print as a long garbage number
-    uint32_t hc = it.rainbow ? hsv((millis() / 8 + c * 200) % 1536) : it.fg;
-    auto tc = [](const String &t, int cx, int top, uint32_t col) { tightLabel(t, cx - tightW(t) / 2, top, col); };   // 1 px between letters
-    tc(D2[(today + i) % 7], cx, 2, i == 0 ? th().acc : th().dim);
-    tc(String((int)lroundf(wx.fcHi[i])), cx, 16, hc);
-    tc(String((int)lroundf(wx.fcLo[i])), cx, 29, WX_LO);
-    if (isnan(wx.fcRain[i]) || wx.fcRain[i] < 30) continue;
-    if (wxKind(wx.fcCode[i]) == WX_SNOW) { for (int d = -2; d <= 2; d++) { px(cx - 1 + d, 45, 0xFFFFFF); px(cx - 1, 45 + d, 0xFFFFFF); } }
-    else wxDrop(cx - 3, 43);
-    tc(String((int)lroundf(wx.fcRain[i])), cx, 52, WX_PCT);
   }
 }
 // Details: wind (direction it comes from), gusts, humidity, UV index (colored by level), dew point.
@@ -747,8 +732,13 @@ static void playWeather(const ShowItem &item) {
   if ((pg & WXP_RAINSOON) && rainSoon(&snow, &ends) >= 0 && wxScreen(it, frame, drawRainSoon)) return;
   if ((pg & WXP_HOURLY) && wx.hrN && wxScreen(it, frame, drawHourly)) return;
   if ((pg & WXP_CHART) && wx.hrN >= 2 && wxScreen(it, frame, drawChart)) return;
-  if ((pg & WXP_DAYS5) && wx.fcN && wxScreen(it, frame, drawDays5)) return;
-  if ((pg & WXP_DAYS16) && wx.fcN >= 2 && wxScreen(it, frame, drawDays16)) return;
+  if ((pg & (WXP_DAYS5 | WXP_DAYS10)) && wx.fcN) {
+    wxDayBar = (pg & WXP_DAYS10) && wx.fcN > 5;
+    wxDayFrom = 0;
+    if (wxScreen(it, frame, drawDays5)) return;
+    wxDayFrom = 5;
+    if (wxDayBar && wxScreen(it, frame, drawDays5)) return;
+  }
   if ((pg & WXP_DETAILS) && wxScreen(it, frame, drawDetails)) return;
   if ((pg & WXP_AIR) && aqiNow() >= 0 && wxScreen(it, frame, drawAir)) return;
   if ((pg & WXP_SUN) && wxScreen(it, frame, drawSun)) return;
