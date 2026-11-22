@@ -332,45 +332,51 @@ static void drawRainSoon(const ShowItem &it, uint32_t frame, uint32_t ms) {
   labelC("1H", 70, 55, th().dim);
   label("2H", W - 1 - labelW("2H"), 55, th().dim);
 }
-// Next 12 hours: now and every 3 hours, columns like the 5-day screen (moon icons at night).
-static void wxMiniDN(int kind, bool day, int cx, int cy, uint32_t frame) {
+// Hourly and daily strips (1.0.0-beta15): wider than the screen, so they hold still on their first columns for
+// 3 s, slide left at 40 px/s until the last column is in, and hold 2 s (a strip that fits just stands still).
+static const uint32_t STRIP_HOLD0 = 3000, STRIP_HOLD1 = 2000, STRIP_PXMS = 25;
+static int stripMax(int w) { return std::max(0, w - W); }                     // how far a strip w px wide slides
+static uint32_t stripMs(int w) { int m = stripMax(w); return m ? STRIP_HOLD0 + m * STRIP_PXMS + STRIP_HOLD1 : 0; }
+static int stripOff(uint32_t ms, int w) { return ms < STRIP_HOLD0 ? 0 : std::min(stripMax(w), (int)((ms - STRIP_HOLD0) / STRIP_PXMS)); }
+static void wxMiniDN(int kind, bool day, int cx, int cy, uint32_t frame) {   // moon icons at night
   if (!day && (kind == WX_SUN || kind == WX_PARTLY)) wxSprite(kind == WX_SUN ? WXS_MINI7 : WXS_MINI8, cx, cy + 1);
   else wxMini(kind, cx, cy, frame);
 }
-static void hourCols(const ShowItem &it, uint32_t frame, int step) {
-  for (int c = 0; c < 5 && c * step < wx.hrN; c++) {
-    int i = c * step, cx = 2 + c * 25 + 12;
-    String hn = c ? hourName(wx.hr0 + i) : String("NOW");
-    if (labelW(hn) > 23) hn.remove(hn.length() - 1);   // "11AM" is too wide for the column: "11A"
-    labelC(hn, cx, 3, th().acc);
-    wxMiniDN(wxKind(wx.hrCode[i]), wx.hrDay[i], cx, 21, frame + c * 7);
-    String t = String((int)lroundf(wx.hrT[i]));
-    uint32_t hc = it.rainbow ? hsv((millis() / 8 + c * 300) % 1536) : it.fg;
+static const char *const WX_DOW[] = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
+// Every hour, one 32-px column each: hour ("NOW", then "3PM"; at midnight the new weekday in white with a dotted
+// line before it), icon, temperature in its temperature color, chance of rain/snow at 10% or more.
+static int wxHours = 12;                         // 12 or 24 (+ the "now" column)
+static int hourStripW() { return std::min(wxHours + 1, wx.hrN) * 32; }
+static void drawHourStrip(const ShowItem &it, uint32_t frame, uint32_t ms) {
+  int n = std::min(wxHours + 1, wx.hrN), off = stripOff(ms, n * 32), today = wxToday();
+  for (int c = 0; c < n; c++) {
+    int x0 = c * 32 - off, cx = x0 + 16, hr = wx.hr0 + c;
+    if (x0 >= W || x0 + 32 <= 0) continue;
+    bool midnight = c && hr % 24 == 0;
+    if (midnight) for (int y = 0; y < H; y += 2) px(x0, y, 0x404040);
+    labelC(c == 0 ? String("NOW") : midnight ? String(WX_DOW[(today + hr / 24) % 7]) : hourName(hr), cx, 3, midnight ? 0xFFFFFF : th().acc);
+    wxMiniDN(wxKind(wx.hrCode[c]), wx.hrDay[c], cx, 21, frame + c * 7);
+    String t = String((int)lroundf(wx.hrT[c]));
+    uint32_t hc = it.rainbow ? hsv((millis() / 8 + c * 300) % 1536) : tempColor(wx.hrT[c]);
     if (pjLabels) { setFont(9); printAt(t, cx - textWidth(t) / 2, 35 + pjf->cap, hc); }
     else labelC(t, cx, 35, hc);
-    if (wx.hrPop[i] >= 10) wxRainPct(wx.hrPop[i], cx, 49);
+    if (wx.hrPop[c] >= 10) wxRainPct(wx.hrPop[c], cx, 49);
   }
 }
-static void drawHourly(const ShowItem &it, uint32_t frame, uint32_t) { hourCols(it, frame, 3); }
-// Next 24 hours: now and every 6 hours, the same columns (was a line chart: too busy on the LEDs).
-static void drawChart(const ShowItem &it, uint32_t frame, uint32_t) { hourCols(it, frame, 6); }
-// 5 days: 5 columns of 25 px: weekday, small icon, high (item color), low (blue), chance of rain/snow (a drop and
-// the %, only on days with 10% or more). 10 days = two of these screens, days 1-5 then 6-10, with a page bar on
-// the top row (free above the weekdays): the left half lit on the first page, the right half on the second.
-static int wxDayFrom = 0;                        // first day on the screen (0 or 5)
-static bool wxDayBar = false;                    // 10 days: draw the page bar
-static void drawDays5(const ShowItem &it, uint32_t frame, uint32_t) {
-  static const char *const DOW[] = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
-  int today = wxToday();
-  if (wxDayBar) for (int x = 2; x < W - 2; x++) if (x < W / 2 - 2 || x >= W / 2 + 2)
-    px(x, 0, (x < W / 2) == (wxDayFrom == 0) ? th().acc : 0x303030);
-  for (int c = 0; c < 5 && wxDayFrom + c < wx.fcN; c++) {
-    int i = wxDayFrom + c, cx = 2 + c * 25 + 12;
+// Days: 25-px columns like before (5 days fit and stand still; 10 days slide): weekday, small icon, high (item
+// color), low (blue), chance of rain/snow (a drop and the %, only on days with 10% or more).
+static int wxDays = 5;                           // 5 or 10
+static int dayStripW() { return 3 + std::min(wxDays, wx.fcN) * 25; }
+static void drawDays5(const ShowItem &it, uint32_t frame, uint32_t ms) {
+  int n = std::min(wxDays, wx.fcN), off = stripOff(ms, dayStripW()), today = wxToday();
+  for (int i = 0; i < n; i++) {
+    int cx = 2 + i * 25 + 12 - off;
+    if (cx - 12 >= W || cx + 13 <= 0) continue;
     if (isnan(wx.fcHi[i]) || isnan(wx.fcLo[i])) continue;   // a far day with no numbers yet would print as a long garbage number
     String hi = String((int)lroundf(wx.fcHi[i])), lo = String((int)lroundf(wx.fcLo[i]));
-    labelC(DOW[(today + i) % 7], cx, 1, th().acc);
-    wxMini(wxKind(wx.fcCode[i]), cx, 18, frame + c * 7);
-    uint32_t hc = it.rainbow ? hsv((millis() / 8 + c * 300) % 1536) : it.fg;
+    labelC(WX_DOW[(today + i) % 7], cx, 1, th().acc);
+    wxMini(wxKind(wx.fcCode[i]), cx, 18, frame + i * 7);
+    uint32_t hc = it.rainbow ? hsv((millis() / 8 + i * 300) % 1536) : it.fg;
     if (pjLabels) { setFont(9); printAt(hi, cx - textWidth(hi) / 2, 29 + 11, hc); }
     else labelC(hi, cx, 31, hc);
     labelC(lo, cx, 42, WX_LO);                   // lows in the same cool blue as the "L"
@@ -430,8 +436,10 @@ static void drawSun(const ShowItem &it, uint32_t frame, uint32_t) {
   }
   labelC(MOON_NAME[phase], W / 2, 55, th().acc);
 }
+static uint32_t wxMinMs = 0;                     // a strip's length: the screen lasts at least this long
 static bool wxScreen(const ShowItem &it, uint32_t &frame, WxDraw draw) {   // true = interrupted (button, new show)
-  uint32_t total = (it.sec ? it.sec : 10) * 1000UL, start = millis();
+  uint32_t total = std::max((it.sec ? it.sec : 10) * 1000UL, wxMinMs), start = millis();
+  wxMinMs = 0;
   shownValid = false;
   while (millis() - start < total) {
     uint32_t t0 = millis();
@@ -730,14 +738,15 @@ static void playWeather(const ShowItem &item) {
   // the extra screens the item asks for, in this order; each only when there is something to show
   uint8_t pg = it.wxPages;
   if ((pg & WXP_RAINSOON) && rainSoon(&snow, &ends) >= 0 && wxScreen(it, frame, drawRainSoon)) return;
-  if ((pg & WXP_HOURLY) && wx.hrN && wxScreen(it, frame, drawHourly)) return;
-  if ((pg & WXP_CHART) && wx.hrN >= 2 && wxScreen(it, frame, drawChart)) return;
+  if ((pg & (WXP_HOURLY | WXP_CHART)) && wx.hrN) {   // chart = 24 hours (both on, from an old show: 24)
+    wxHours = pg & WXP_CHART ? 24 : 12;
+    wxMinMs = stripMs(hourStripW());
+    if (wxScreen(it, frame, drawHourStrip)) return;
+  }
   if ((pg & (WXP_DAYS5 | WXP_DAYS10)) && wx.fcN) {
-    wxDayBar = (pg & WXP_DAYS10) && wx.fcN > 5;
-    wxDayFrom = 0;
+    wxDays = pg & WXP_DAYS10 ? 10 : 5;
+    wxMinMs = stripMs(dayStripW());
     if (wxScreen(it, frame, drawDays5)) return;
-    wxDayFrom = 5;
-    if (wxDayBar && wxScreen(it, frame, drawDays5)) return;
   }
   if ((pg & WXP_DETAILS) && wxScreen(it, frame, drawDetails)) return;
   if ((pg & WXP_AIR) && aqiNow() >= 0 && wxScreen(it, frame, drawAir)) return;

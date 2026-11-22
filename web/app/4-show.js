@@ -220,7 +220,7 @@ function addDrawn(kind, o = {}) {
       <button class="chip wauto">📍 Where the screen is</button>
       <div class="row wres"></div>
       <label>Units <select data-k="unit"><option value="F">°F</option><option value="C">°C</option><option value="A">Auto</option></select></label>
-      <div class="wpages"><div><b>Screens</b> (tick what you want; each plays for the item's seconds)</div>
+      <div class="wpages"><div><b>Screens</b> (tick what you want; each plays for the item's seconds, longer when it slides across)</div>
         <label><input type="checkbox" data-k="alerts"> Weather alerts (US only): watches and warnings before the weather; a warning also comes back every few items</label>
         ${WX_PAGES.map(([, k, t, tg]) => `<label><input type="checkbox" data-k="${k}"> ${t}${tg ? ` <select class="wtg" data-k="${tg[0]}"><option value="">${tg[1]}</option><option value="1">${tg[2]}</option></select>` : ''}</label>`).join('')}</div>
       <button class="chip walert" type="button">⚠ See a sample alert</button>` : ''}
@@ -245,7 +245,7 @@ function addDrawn(kind, o = {}) {
       const pg = WX_PAGES.find(p => p[1] === k || p[3]?.[0] === k);   // the preview jumps to a screen just ticked or toggled
       if (pg) {
         if (pg[3]?.[0] === k && !it[pg[1]]) { it[pg[1]] = true; const c = ed.querySelector(`[data-k=${pg[1]}]`); if (c) c.checked = true; }   // picking 24 hours ticks Hourly
-        const sc = wxKeyScreens(it, pg[1]); it.focusPage = it[pg[1]] ? (k === 'days10' && it.days10 ? sc[1] : sc[0]) : null;
+        it.focusPage = it[pg[1]] ? pg[1] : null;
       }
       it.t0 = performance.now(); updateSpace();
     };

@@ -20,8 +20,8 @@
 //     lead=N           countdown: only in the last N days before the date (a reminder)
 //     forecast         weather: then a 5-day forecast screen
 //     rainsoon hourly chart days10 details air sun   (fw 1.0.0-beta11) more weather screens, played in this order
-//                      around forecast: rain/snow in the next 2 hours (only when some is coming), next 12 hours,
-//                      next 24 hours, [5 days], 10 days (two pages of 5; replaces forecast; fw 1.0.0-beta14, the
+//                      around forecast: rain/snow in the next 2 hours (only when some is coming), next 12 hours
+//                      or 24 (every hour, sliding; fw 1.0.0-beta15), [5 days], 10 days (replaces forecast; fw 1.0.0-beta14, the
 //                      old days16 plays as days10), wind/humidity/UV/dew point, air quality, sunrise/sunset + moon
 //     alerts           weather: US weather alerts for the town (weather.gov) before it; warnings also every 3rd item
 //                      (fw 1.0.0-beta10; alerts=demo shows a made-up warning and watch, for testing)

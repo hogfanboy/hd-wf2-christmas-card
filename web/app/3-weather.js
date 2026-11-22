@@ -58,13 +58,18 @@ function wxMini(kind, cx, cy, f) {
   if (kind === 'storm' && tr(f / 4) % 12 < 2) { tctx.strokeStyle = '#fff07a'; tctx.lineWidth = 1; tctx.beginPath(); tctx.moveTo(cx + 1.5, cy + 2.5); tctx.lineTo(cx - 1.5, cy + 6.5); tctx.lineTo(cx + 1.5, cy + 6.5); tctx.lineTo(cx - 1.5, cy + 10.5); tctx.stroke(); }
   wxSpr('MINI' + MINI_IX[kind], ['sun', 'partly', 'cloud'].includes(kind) ? cx : cx + 2, cy + 1);
 }
-function drawForecast(it, w, t, from = 0, bar = false) {   // bar: 10 days, the page bar on the top row (like the card)
-  const f = Math.floor(t / 40), dow = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'], today = new Date().getDay();
-  if (bar) for (let x = 2; x < W - 2; x++) if (x < W / 2 - 2 || x >= W / 2 + 2) P(x, 0, (x < W / 2) === (from === 0) ? TH().acc : '#303030');
+// Hourly and daily strips (copies of the card's stripMs/stripOff): hold 3 s, slide left at 40 px/s, hold 2 s.
+const stripMs = (w) => { const m = Math.max(0, w - W); return m ? 3000 + m * 25 + 2000 : 0; };
+const stripOff = (ms, w) => ms < 3000 ? 0 : Math.min(Math.max(0, w - W), Math.trunc((ms - 3000) / 25));
+const dayN = (it, w) => Math.min(it.days10 ? 10 : 5, w.fc.length);
+function drawForecast(it, w, t, ms = 0) {   // copy of the card's drawDays5: 25-px day columns, 10 days slide
+  const f = Math.floor(t / 40), dow = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'], today = new Date().getDay(), n = dayN(it, w), off = stripOff(ms, 3 + n * 25);
   smallF(); tctx.textBaseline = 'top';
-  w.fc.slice(from, from + 5).forEach(([code, hi, lo, rain], i) => {
-    if (hi == null || lo == null) return;
-    const cx = 2 + i * 25 + 12, d = dow[(today + from + i) % 7], h = String(Math.round(hi)), l = String(Math.round(lo));
+  w.fc.slice(0, n).forEach(([code, hi, lo, rain], i) => {
+    const cx = 2 + i * 25 + 12 - off;
+    if (hi == null || lo == null || cx - 12 >= W || cx + 13 <= 0) return;
+    const d = dow[(today + i) % 7], h = String(Math.round(hi)), l = String(Math.round(lo));
+    smallF(); tctx.textBaseline = 'top';
     tctx.fillStyle = TH().acc; T(d, cx - M(d) / 2, 1);
     wxMini(wxKind(code), cx, 18, f + i * 7);
     tctx.fillStyle = it.rainbow ? hue(t / 8 + i * 300) : it.fg;
@@ -76,7 +81,7 @@ function drawForecast(it, w, t, from = 0, bar = false) {   // bar: 10 days, the 
 // ---------- More weather screens (copies of the card's drawRainSoon, drawHourly, ... in weather.ino) ----------
 // [show.txt option, item key, checkbox text, toggle], in the order the card plays them after "now". A toggle
 // [item key, off text, on text, show.txt option when on] is a choice next to the checkbox: hourly = 12 hours
-// ("hourly") or 24 hours ("chart"); daily = 5 days ("forecast") or 10 days ("days10": two pages of 5).
+// ("hourly") or 24 hours ("chart"), one column per hour, sliding; daily = 5 days ("forecast") or 10 days ("days10", sliding).
 const WX_PAGES = [
   ['rainsoon', 'rainsoon', 'Rain on the way: only when rain or snow is coming in the next 2 hours'],
   ['hourly', 'hourly', 'Hourly forecast', ['hours24', '12 hours', '24 hours', 'chart']],
@@ -141,19 +146,21 @@ function drawRainSoon(it, w, ms) {
   tctx.fillStyle = '#505a6e'; tctx.fillRect(1, base, W - 2, 1);
   L('NOW', 1, 55, TH().acc); LC('1H', 70, 55, TH().dim); L('2H', W - 1 - LW('2H'), 55, TH().dim);
 }
-function hourCols(it, w, f, t, step) {     // copy of the card's hourCols: next 12 hours (step 3) and next 24 hours (step 6)
-  for (let c = 0; c < 5 && c * step < w.hr.length; c++) {
-    const i = c * step, cx = 2 + c * 25 + 12, [temp, code, pop, day] = w.hr[i], k = wxKind(code);
-    let hn = c ? wxHourName(w.hr0 + i, w.F) : 'NOW'; if (LW(hn) > 23) hn = hn.slice(0, -1);
-    LC(hn, cx, 3, TH().acc);
+const hourN = (it, w) => Math.min(it.hours24 ? 25 : 13, w.hr.length);
+function drawHourStrip(it, w, ms, f, t) {   // copy of the card's drawHourStrip: one 32-px column per hour, sliding
+  const n = hourN(it, w), off = stripOff(ms, n * 32), dow = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'], today = new Date().getDay();
+  for (let c = 0; c < n; c++) {
+    const x0 = c * 32 - off, cx = x0 + 16, hr = w.hr0 + c, [temp, code, pop, day] = w.hr[c], k = wxKind(code);
+    if (x0 >= W || x0 + 32 <= 0) continue;
+    const mid = c && hr % 24 === 0;
+    if (mid) for (let y = 0; y < H; y += 2) P(x0, y, '#404040');
+    LC(c === 0 ? 'NOW' : mid ? dow[(today + Math.trunc(hr / 24)) % 7] : wxHourName(hr, w.F), cx, 3, mid ? '#ffffff' : TH().acc);
     if (!day && (k === 'sun' || k === 'partly')) wxSpr(k === 'sun' ? 'MINI7' : 'MINI8', cx, 22); else wxMini(k, cx, 21, f + c * 7);
-    const s = String(Math.round(temp)); tctx.fillStyle = it.rainbow ? hue(t / 8 + c * 300) : it.fg;
+    const s = String(Math.round(temp)); tctx.fillStyle = it.rainbow ? hue(t / 8 + c * 300) : tempColor(temp, w.F);
     if (curLabels) { setF(9); tctx.textBaseline = 'top'; T(s, cx - Math.trunc(M(s) / 2), 35); } else LC(s, cx, 35, tctx.fillStyle);
     if (pop >= 10) { smallF(); tctx.textBaseline = 'top'; wxRainPct(pop, cx, 49); }
   }
 }
-const drawHourly = (it, w, ms, f, t) => hourCols(it, w, f, t, 3);
-const drawChart = (it, w, ms, f, t) => hourCols(it, w, f, t, 6);
 function drawDetails(it, w) {
   const DIR = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'], unit = w.F ? ' MPH' : ' KM/H', num = (v) => v == null ? '-' : String(Math.round(v));
   const rows = [['WIND', (w.windDir != null ? DIR[Math.trunc((w.windDir + 22) / 45) % 8] + ' ' : '') + num(w.wind) + unit], ['GUSTS', num(w.gust) + unit],
@@ -197,13 +204,12 @@ function wxSay(w, pj) {
   return say;
 }
 // Which screens have something to show (the card skips the others), and how to draw each.
-const WX_HAS = { rainsoon: (w) => rainSoon(w).m >= 0, hourly: (w) => w.hr?.length, chart: (w) => w.hr?.length >= 2, fc: (w) => w.fc?.length,
-  fc2: (w) => w.fc?.length > 5, details: () => true, air: (w) => w.aqi >= 0, sun: () => true };
-const WX_DRAW = { rainsoon: drawRainSoon, hourly: drawHourly, chart: drawChart, fc: (it, w, ms, f, t) => drawForecast(it, w, t, 0, it.days10 && w.fc.length > 5),
-  fc2: (it, w, ms, f, t) => drawForecast(it, w, t, 5, true), details: drawDetails, air: drawAir, sun: drawSun };
-// The screen of a checkbox (with its toggle): hourly -> 'hourly' or 'chart'; daily -> 'fc', plus 'fc2' for 10 days.
-const wxKeyScreens = (it, k) => k === 'hourly' ? [it.hours24 ? 'chart' : 'hourly'] : k === 'fc' ? (it.days10 ? ['fc', 'fc2'] : ['fc']) : [k];
-const wxScreens = (it, w) => WX_PAGES.filter(p => it[p[1]]).flatMap(p => wxKeyScreens(it, p[1])).filter(s => WX_HAS[s](w));
+const WX_HAS = { rainsoon: (w) => rainSoon(w).m >= 0, hourly: (w) => w.hr?.length, fc: (w) => w.fc?.length,
+  details: () => true, air: (w) => w.aqi >= 0, sun: () => true };
+const WX_DRAW = { rainsoon: drawRainSoon, hourly: drawHourStrip, fc: (it, w, ms, f, t) => drawForecast(it, w, t, ms),
+  details: drawDetails, air: drawAir, sun: drawSun };
+const WX_MINMS = { hourly: (it, w) => stripMs(hourN(it, w) * 32), fc: (it, w) => stripMs(3 + dayN(it, w) * 25) };   // strips last at least this long
+const wxScreens = (it, w) => WX_PAGES.filter(p => it[p[1]] && WX_HAS[p[1]](w)).map(p => p[1]);
 // Every item key the checkboxes and toggles use (for loading a show from the card).
 const WX_KEYS = WX_PAGES.flatMap(p => p[3] ? [p[1], p[3][0]] : [p[1]]);
 // ---------- Stocks: the screen reads the same small files from the website (made hourly, tools/build-feeds.mjs) ----------
@@ -340,7 +346,8 @@ function renderItem(it, t) {      // t = ms since the item started
     const al = it.alerts ? (it.alertSample > performance.now() ? SAMPLE_ALERTS() : it.alertList || []) : [];
     const say = wxSay(w, curLabels), nowLen = Math.max(per, say.length * 2500);   // "now" stays long enough for every line
     const screens = ['now', ...wxScreens(it, w)];
-    const at0 = (i) => al.length * 4500 + (i ? nowLen + (i - 1) * per : 0);       // when screen i starts
+    const len = screens.map((s, i) => i ? Math.max(per, WX_MINMS[s]?.(it, w) || 0) : nowLen);
+    const at0 = (i) => al.length * 4500 + len.slice(0, i).reduce((a, b) => a + b, 0);   // when screen i starts
     const jump = it.focusPage && screens.includes(it.focusPage) ? at0(screens.indexOf(it.focusPage)) : 0;
     const cyc = at0(screens.length), tc = ((t + jump) % cyc + cyc) % cyc;   // t can be a little below 0 right after a change
     if (tc < al.length * 4500) { drawAlert(al[Math.floor(tc / 4500)], tc); return tctx.getImageData(0, 0, W, H); }
