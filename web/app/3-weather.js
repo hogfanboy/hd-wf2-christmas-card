@@ -325,13 +325,46 @@ function drawStr(it, s, x, y, t) {
   const gap = curPJ ? PJFont.font(curPJ).gap : 0;
   for (let i = 0; i < s.length; i++) { tctx.fillStyle = hue(t / 4 + i * 120); T(s[i], x, y); x += M(s[i]) + gap; }
 }
-function daysUntil(mmdd) {
-  const now = new Date(), [m, d] = mmdd.split('-').map(Number);
-  let tgt = new Date(now.getFullYear(), m - 1, d, 12);
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12);
-  if (tgt < today) tgt = new Date(now.getFullYear() + 1, m - 1, d, 12);
-  return Math.round((tgt - today) / 86400000);
+// US holidays: the same list and rules as the card (screens.ino HOLIDAYS). [key, menu name, screen name, month, day,
+// wd, n, effect]: wd -1 = fixed date, 7 = Easter, else the n-th weekday (0 = Sunday) of the month, n -1 = the last.
+const HOLIDAYS = [
+  ['newyear', "New Year's Day", 'NEW YEAR', 1, 1, -1, 0, 'fireworks'], ['mlk', 'Martin Luther King Jr. Day', 'MLK DAY', 1, 0, 1, 3, 'stars'],
+  ['valentine', "Valentine's Day", 'VALENTINES DAY', 2, 14, -1, 0, 'hearts'], ['presidents', "Presidents' Day", 'PRESIDENTS DAY', 2, 0, 1, 3, 'flag'],
+  ['stpatrick', "St. Patrick's Day", 'ST PATRICKS DAY', 3, 17, -1, 0, 'shamrocks'], ['easter', 'Easter', 'EASTER', 0, 0, 7, 0, 'bunny'],
+  ['mothers', "Mother's Day", 'MOTHERS DAY', 5, 0, 0, 2, 'hearts'], ['memorial', 'Memorial Day', 'MEMORIAL DAY', 5, 0, 1, -1, 'flag'],
+  ['fathers', "Father's Day", 'FATHERS DAY', 6, 0, 0, 3, 'balloons'], ['july4', 'Fourth of July', 'JULY 4TH', 7, 4, -1, 0, 'fireworks'],
+  ['labor', 'Labor Day', 'LABOR DAY', 9, 0, 1, 1, 'flag'], ['halloween', 'Halloween', 'HALLOWEEN', 10, 31, -1, 0, 'bats'],
+  ['veterans', 'Veterans Day', 'VETERANS DAY', 11, 11, -1, 0, 'flag'], ['thanksgiving', 'Thanksgiving', 'THANKSGIVING', 11, 0, 4, 4, 'turkey'],
+  ['christmas', 'Christmas', 'CHRISTMAS', 12, 25, -1, 0, 'sleigh']];
+const dowOf = (y, m, d) => new Date(y, m - 1, d).getDay();
+function holidayDay(h, y) {                       // [month, day] of holiday h in year y
+  let [, , , m, d, wd, n] = h;
+  if (wd === 7) {                                 // Easter (anonymous Gregorian algorithm)
+    const a = y % 19, b = tr(y / 100), c = y % 100, e = (19 * a + b - tr(b / 4) - tr((b - tr((b + 8) / 25) + 1) / 3) + 15) % 30;
+    const l = (32 + 2 * (b % 4) + 2 * tr(c / 4) - e - c % 4) % 7, k = tr((a + 11 * e + 22 * l) / 451);
+    return [tr((e + l - 7 * k + 114) / 31), (e + l - 7 * k + 114) % 31 + 1];
+  }
+  if (wd >= 0 && n > 0) d = 1 + (wd - dowOf(y, m, 1) + 7) % 7 + (n - 1) * 7;
+  else if (wd >= 0) { const last = new Date(y, m, 0).getDate(); d = last - (dowOf(y, m, last) - wd + 7) % 7; }
+  return [m, d];
 }
+// Days until a countdown's date (MM-DD, a holiday key or "next"; -1 = not a date) and which holiday it is (-1 = none).
+function countdownDays(when) {
+  const now = new Date(), y = now.getFullYear(), today = new Date(y, now.getMonth(), now.getDate(), 12);
+  const to = (yy, m, d) => Math.round((new Date(yy, m - 1, d, 12) - today) / 864e5);
+  let n = -1, hol = -1;
+  HOLIDAYS.forEach((h, i) => {
+    if (when !== 'next' && when !== h[0]) return;
+    for (let yy = y; yy <= y + 1; yy++) { const [m, d] = holidayDay(h, yy), k = to(yy, m, d); if (k < 0) continue; if (n < 0 || k < n) { n = k; hol = i; } break; }
+  });
+  if (hol < 0 && /^\d\d-\d\d$/.test(when || '')) {
+    const [m, d] = when.split('-').map(Number); let yy = y;
+    n = to(y, m, d); if (n < 0) n = to(++yy, m, d);
+    hol = HOLIDAYS.findIndex(h => { const [hm, hd] = holidayDay(h, yy); return hm === m && hd === d; });
+  }
+  return { n, hol };
+}
+const countdownName = (it) => { const h = countdownDays(it.date).hol; return it.date === 'next' && h >= 0 ? HOLIDAYS[h][2] : it.text ? it.text.toUpperCase() : h >= 0 ? HOLIDAYS[h][2] : ''; };
 const wxPlace = (it) => it.place || (it.lat === 'auto' ? card.place || '' : '');
 function renderItem(it, t) {      // t = ms since the item started
   curLabels = it.font >= 8;
@@ -385,8 +418,8 @@ function renderItem(it, t) {      // t = ms since the item started
       bigS = (it.h24 ? String(h).padStart(2, '0') : h) + ':' + String(d.getMinutes()).padStart(2, '0');
       l2 = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '').toUpperCase() ;
     } else {
-      const n = daysUntil(it.date);
-      bigS = n ? String(n) : 'TODAY!'; l1 = n ? (n === 1 ? 'DAY UNTIL' : 'DAYS UNTIL') : it.text.toUpperCase(); l2 = n ? it.text.toUpperCase() : '';
+      const n = countdownDays(it.date).n, name = countdownName(it);
+      bigS = n ? String(n) : 'TODAY!'; l1 = n ? (n === 1 ? 'DAY UNTIL' : 'DAYS UNTIL') : name; l2 = n ? name : '';
     }
     const pmW = it.kind === 'clock' && !it.h24 ? (curLabels ? PJFont.width(8, 'PM') + 2 : 13) : 0;      // 12-hour clock: small AM/PM beside the time
     fitBig(it.font, bigS, W - 2, pmW);

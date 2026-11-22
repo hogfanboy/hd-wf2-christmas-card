@@ -23,7 +23,7 @@ function select(it) {
 }
 const label = (it) => it.kind === 'pic' ? it.name : it.kind === 'text' ? '“' + it.text + '”' : it.kind === 'clock' ? 'Clock'
   : it.kind === 'fx' ? (FX[it.effect] || 'Effect') : it.kind === 'weather' ? (!it.lat ? 'Weather: pick a town' : it.lat === 'auto' ? 'Weather here' + (card.place ? ' (' + card.place + ')' : '') : 'Weather' + (it.place ? ' in ' + it.place : ''))
-  : it.kind === 'stocks' ? 'Stocks: ' + (it.syms.split(',').filter(Boolean).map(s => MKT_LABEL[s] || s).join(', ') || 'pick some') : (it.lead !== '' && it.lead != null ? '🔔 ' : 'Countdown to ') + (it.text || '…') + (/^\d\d-\d\d$/.test(it.date) ? ' · ' + md(it.date.replace('-', '')) : '');
+  : it.kind === 'stocks' ? 'Stocks: ' + (it.syms.split(',').filter(Boolean).map(s => MKT_LABEL[s] || s).join(', ') || 'pick some') : (it.lead !== '' && it.lead != null ? '🔔 ' : 'Countdown to ') + (it.date === 'next' ? 'the next holiday' : it.text || HOLIDAYS.find(h => h[0] === it.date)?.[1] || '…') + (/^\d\d-\d\d$/.test(it.date) ? ' · ' + md(it.date.replace('-', '')) : '');
 function move(it, d) {
   const i = items.indexOf(it), j = i + d;
   if (j < 0 || j >= items.length) return;
@@ -212,7 +212,9 @@ function addDrawn(kind, o = {}) {
        &nbsp; Background <input type="color" data-k="bg"></label>`
     : `
     ${kind === 'text' || kind === 'countdown' ? `<input type="text" maxlength="${kind === 'text' ? 120 : 21}" data-k="text" placeholder="${kind === 'text' ? 'Your message' : 'What for, e.g. Christmas'}">` : ''}
-    ${kind === 'countdown' ? `<label>Date <input type="date" data-k="date"></label>
+    ${kind === 'countdown' ? `<label>Holiday <select class="hol"><option value="">My own date</option><option value="next">The next holiday (whichever comes next)</option>
+        ${HOLIDAYS.map(h => `<option value="${h[0]}">${h[1]}</option>`).join('')}</select></label>
+      <label class="owndate">Date <input type="date" data-k="date"></label>
       <label>Start showing <input class="s" type="number" min="0" max="365" data-k="lead" placeholder="any" style="width:70px"> days before (blank = all year)</label>` : ''}
     ${kind === 'clock' ? `<label><input type="checkbox" data-k="h24"> 24-hour clock</label>` : ''}
     ${kind === 'stocks' ? '<div class="row syms">Loading…</div>' : ''}
@@ -232,7 +234,7 @@ function addDrawn(kind, o = {}) {
     const k = inp.dataset.k;
     if (inp.type === 'checkbox') inp.checked = !!it[k];
     else if (inp.classList.contains('wtg')) inp.value = it[k] ? '1' : '';
-    else if (k === 'date') inp.value = new Date().getFullYear() + '-' + it.date;
+    else if (k === 'date') inp.value = /^\d\d-\d\d$/.test(it.date) ? new Date().getFullYear() + '-' + it.date : '';
     else inp.value = it[k];
     inp.oninput = () => {
       it[k] = inp.type === 'checkbox' ? inp.checked : inp.classList.contains('wtg') ? inp.value === '1' : k === 'font' ? +inp.value : k === 'date' ? inp.value.slice(5) : inp.value;
@@ -250,6 +252,26 @@ function addDrawn(kind, o = {}) {
       it.t0 = performance.now(); updateSpace();
     };
   });
+  const hs = ed.querySelector('.hol');
+  if (hs) {                                        // holiday picker: moving dates (Thanksgiving, Easter...) are worked out by the screen
+    const show = () => {
+      const own = it.date !== 'next' && !HOLIDAYS.some(h => h[0] === it.date);
+      hs.value = own ? '' : it.date;
+      ed.querySelector('.owndate').style.display = own ? '' : 'none';
+      ed.querySelector('[data-k=text]').style.display = it.date === 'next' ? 'none' : '';
+    };
+    hs.onchange = () => {
+      const k = hs.value, h = HOLIDAYS.find(x => x[0] === k);
+      if (/^\d\d-\d\d$/.test(it.date)) it.ownDate = it.date;
+      it.date = k || it.ownDate || '12-25';
+      if (k) { it.text = ''; it.effect = 'auto'; }        // blank label: the screen shows the holiday's own name
+      ed.querySelector('[data-k=text]').value = it.text;
+      ed.querySelector('[data-k=effect]').value = it.effect;
+      ed.querySelector('[data-k=date]').value = /^\d\d-\d\d$/.test(it.date) ? new Date().getFullYear() + '-' + it.date : '';
+      show(); el.querySelector('.name').textContent = label(it); it.t0 = performance.now(); updateSpace();
+    };
+    show();
+  }
   if (kind === 'weather') {
     ed.querySelector('.walert').onclick = () => {   // 9 s of made-up alerts on the preview (the checkbox turns on)
       if (!it.alerts) { it.alerts = true; ed.querySelector('[data-k=alerts]').checked = true; alertsFetch(it); }

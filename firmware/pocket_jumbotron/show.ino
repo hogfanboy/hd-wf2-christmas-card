@@ -3,7 +3,7 @@
 //     pic       <sec> <file in /gifs>
 //     text      <sec> <fg> <bg> <font 1-4> <effect> <message>
 //     clock     <sec> <fg> <bg> <font> <effect> <12|24>
-//     countdown <sec> <fg> <bg> <font> <effect> <MM-DD> <label>
+//     countdown <sec> <fg> <bg> <font> <effect> <MM-DD | holiday key | next> <label>   (holidays: screens.ino)
 //     fx        <sec> <fg> <bg> <font> <effect>                      (an effect on its own, full screen)
 //     weather   <sec> <fg> <bg> <font> <effect> <F|C|A> <lat> <lon> <place>   lat/lon "auto" = where the card is
 //               (found by its internet address, online.ino), A = F in the US, else C; empty place = that town
@@ -12,7 +12,8 @@
 //               random order, new each round, never the same item twice in a row. Older firmware skips it)
 //   sec 0 = automatic (pictures: 8-20 s by their own length; scrolling text: one pass; others: 8-10 s).
 //   fg/bg are RRGGBB hex, fg may be "rainbow". effect: one of FX_NAMES (none, snow, sparkle, hearts, confetti,
-//   fireworks, stars, fire, matrix; sleigh, balloons, fish, rain since 1.0). Unknown names (e.g. the removed "plasma") play as none.
+//   fireworks, stars, fire, matrix; sleigh, balloons, fish, rain since 1.0; lights; turkey, bunny, bats,
+//   shamrocks, flag since 1.0.0-beta19). Unknown names (e.g. the removed "plasma") play as none.
 //   Any line may end with an options field starting with '@' (space-separated, all optional; fw 0.9.0+):
 //     dates=MMDD-MMDD  only between these days, every year (may wrap past New Year, e.g. 1215-0105)
 //     days=0123456     only on these weekdays (0 = Sunday)
@@ -80,7 +81,7 @@ static void parseOptions(ShowItem &it, const String &opts) {
     else if (k == "alerts") it.alerts = v == "demo" ? 2 : 1;
   }
 }
-static int daysUntil(const String &mmdd);
+static int countdownDays(const String &when, int *hol);
 // Is this item on the schedule right now? (see the options above)
 bool itemActive(const ShowItem &it) {
   bool timed = it.dFrom || it.days != 0x7F || it.hFrom >= 0 || it.lead >= 0;
@@ -98,7 +99,7 @@ bool itemActive(const ShowItem &it) {
     bool in = it.hFrom < it.hTo ? (h >= it.hFrom && h < it.hTo) : (h >= it.hFrom || h < it.hTo);
     if (!in) return false;
   }
-  if (it.lead >= 0 && it.type == 'd' && it.extra.length() >= 5 && daysUntil(it.extra) > it.lead) return false;
+  if (it.lead >= 0 && it.type == 'd' && countdownDays(it.extra, nullptr) > it.lead) return false;
   return true;
 }
 

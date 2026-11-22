@@ -40,7 +40,7 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "1.0.0-beta18";
+static const char *FW_VERSION = "1.0.0-beta19";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
@@ -76,7 +76,7 @@ int offX = 0, offY = 0;                        // centers GIFs smaller than the 
 struct ShowItem {
   char type = 'p';                // p picture, t text, c clock, d countdown, f effect, w weather
   uint16_t sec = 0;
-  String file, text, extra;       // extra: clock 12/24, countdown MM-DD, weather "F,lat,lon"
+  String file, text, extra;       // extra: clock 12/24, countdown MM-DD / holiday key / next, weather "F,lat,lon"
   uint32_t fg = 0xFFFFFF, bg = 0;
   bool rainbow = false;
   uint8_t font = 2, effect = 0;   // font: 1 tiny, 2-4 classic S/M/B, 8-12 PJ (canvas.ino). effect: FX_NAMES index
@@ -101,9 +101,10 @@ bool shuffleShow = false;                      // show.txt "order shuffle" line 
 struct Flake { int16_t x, y; uint8_t spd, bri; };   // effect particles (show.ino)
 // Effect names in show lines (show.ino); index = ShowItem.effect.
 const char *const FX_NAMES[] = {"none", "snow", "sparkle", "hearts", "confetti", "fireworks", "stars", "fire", "matrix",
-                               "sleigh", "balloons", "fish", "rain", "auto", "lights"};   // auto: weather items, snow or rain to match
+                               "sleigh", "balloons", "fish", "rain", "auto", "lights", "turkey", "bunny", "bats", "shamrocks", "flag"};
+                               // auto: weather items snow or rain to match; countdowns the holiday's own effect
 enum { FX_NONE, FX_SNOW, FX_SPARKLE, FX_HEARTS, FX_CONFETTI, FX_FIREWORKS, FX_STARS, FX_FIRE, FX_MATRIX,
-       FX_SLEIGH, FX_BALLOONS, FX_FISH, FX_RAIN, FX_AUTO, FX_LIGHTS, FX_COUNT };
+       FX_SLEIGH, FX_BALLOONS, FX_FISH, FX_RAIN, FX_AUTO, FX_LIGHTS, FX_TURKEY, FX_BUNNY, FX_BATS, FX_SHAMROCKS, FX_FLAG, FX_COUNT };
 // ---------- Settings: time zone + night mode (NVS, see net.ino settingsLoad) ----------
 String tzString = "UTC0";
 String geoTz;                                  // the time zone that goes with the card's location (online.ino)

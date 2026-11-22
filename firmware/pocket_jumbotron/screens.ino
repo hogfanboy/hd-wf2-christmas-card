@@ -53,25 +53,78 @@ static void playClock(const ShowItem &it) {
   }
 }
 
-static int daysUntil(const String &mmdd) {
-  int m = mmdd.substring(0, 2).toInt(), d = mmdd.substring(3, 5).toInt();
+// ---------- US holidays: a countdown's date is MM-DD, a holiday key (thanksgiving, easter...) or "next" ----------
+// wd -1: fixed month/day. wd 7: Easter. Else the n-th weekday (0 = Sunday) of the month, n -1 = the last one.
+// Names have no apostrophes (label font). The page has the same list (web/app/3-weather.js HOLIDAYS).
+struct Holiday { const char *key, *name; uint8_t m, d; int8_t wd, n; uint8_t fx; };
+static const Holiday HOLIDAYS[] = {
+  {"newyear", "NEW YEAR", 1, 1, -1, 0, FX_FIREWORKS},       {"mlk", "MLK DAY", 1, 0, 1, 3, FX_STARS},
+  {"valentine", "VALENTINES DAY", 2, 14, -1, 0, FX_HEARTS}, {"presidents", "PRESIDENTS DAY", 2, 0, 1, 3, FX_FLAG},
+  {"stpatrick", "ST PATRICKS DAY", 3, 17, -1, 0, FX_SHAMROCKS}, {"easter", "EASTER", 0, 0, 7, 0, FX_BUNNY},
+  {"mothers", "MOTHERS DAY", 5, 0, 0, 2, FX_HEARTS},        {"memorial", "MEMORIAL DAY", 5, 0, 1, -1, FX_FLAG},
+  {"fathers", "FATHERS DAY", 6, 0, 0, 3, FX_BALLOONS},      {"july4", "JULY 4TH", 7, 4, -1, 0, FX_FIREWORKS},
+  {"labor", "LABOR DAY", 9, 0, 1, 1, FX_FLAG},              {"halloween", "HALLOWEEN", 10, 31, -1, 0, FX_BATS},
+  {"veterans", "VETERANS DAY", 11, 11, -1, 0, FX_FLAG},     {"thanksgiving", "THANKSGIVING", 11, 0, 4, 4, FX_TURKEY},
+  {"christmas", "CHRISTMAS", 12, 25, -1, 0, FX_SLEIGH}};
+static const int N_HOLIDAYS = sizeof(HOLIDAYS) / sizeof(HOLIDAYS[0]);
+static int dowOf(int y, int m, int d) {                         // 0 = Sunday (Sakamoto)
+  static const uint8_t t[] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
+  if (m < 3) y--;
+  return (y + y / 4 - y / 100 + y / 400 + t[m - 1] + d) % 7;
+}
+static void holidayDay(int i, int y, int &m, int &d) {           // HOLIDAYS[i] in year y
+  const Holiday &h = HOLIDAYS[i];
+  m = h.m; d = h.d;
+  if (h.wd == 7) {                                               // Easter (anonymous Gregorian algorithm)
+    int a = y % 19, b = y / 100, c = y % 100, e = (19 * a + b - b / 4 - (b - (b + 8) / 25 + 1) / 3 + 15) % 30;
+    int l = (32 + 2 * (b % 4) + 2 * (c / 4) - e - c % 4) % 7, k = (a + 11 * e + 22 * l) / 451;
+    m = (e + l - 7 * k + 114) / 31; d = (e + l - 7 * k + 114) % 31 + 1;
+  } else if (h.wd >= 0 && h.n > 0) d = 1 + (h.wd - dowOf(y, m, 1) + 7) % 7 + (h.n - 1) * 7;
+  else if (h.wd >= 0) { static const uint8_t DIM[] = {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}; int dl = DIM[m - 1]; d = dl - (dowOf(y, m, dl) - h.wd + 7) % 7; }
+}
+static int daysTo(int y, int m, int d) {                         // whole days from today to y-m-d (negative = past)
   time_t now = time(nullptr); struct tm lt; localtime_r(&now, &lt);
   struct tm a = lt; a.tm_hour = 12; a.tm_min = a.tm_sec = 0; a.tm_isdst = -1;
-  struct tm b = a; b.tm_mon = m - 1; b.tm_mday = d;
+  struct tm b = a; b.tm_year = y - 1900; b.tm_mon = m - 1; b.tm_mday = d;
   time_t ta = mktime(&a), tb = mktime(&b);
-  if (tb < ta - 3600) { b.tm_year++; tb = mktime(&b); }
-  return (int)((tb - ta + 43200) / 86400);
+  return (int)floor((double)(tb - ta) / 86400 + 0.5);
+}
+// Days until a countdown's date (0 = today, -1 = not a date) and which holiday it is (-1 = none).
+static int countdownDays(const String &when, int *hol) {
+  time_t now = time(nullptr); struct tm lt; localtime_r(&now, &lt);
+  int y = lt.tm_year + 1900, best = -1, bi = -1;
+  for (int i = 0; i < N_HOLIDAYS; i++) {
+    if (when != "next" && when != HOLIDAYS[i].key) continue;
+    for (int yy = y; yy <= y + 1; yy++) {
+      int m, d; holidayDay(i, yy, m, d);
+      int n = daysTo(yy, m, d);
+      if (n < 0) continue;
+      if (best < 0 || n < best) { best = n; bi = i; }
+      break;
+    }
+  }
+  if (bi < 0 && when.length() >= 5 && isdigit((unsigned char)when[0])) {   // MM-DD, every year
+    int m = when.substring(0, 2).toInt(), d = when.substring(3, 5).toInt(), yy = y;
+    best = daysTo(y, m, d);
+    if (best < 0) best = daysTo(++yy, m, d);
+    for (int i = 0; i < N_HOLIDAYS && bi < 0; i++) { int hm, hd; holidayDay(i, yy, hm, hd); if (hm == m && hd == d) bi = i; }
+  }
+  if (hol) *hol = bi;
+  return best;
 }
 
 static void playCountdown(const ShowItem &item) {
-  if (!timeValid() || item.extra.length() < 5) return;
-  int days = daysUntil(item.extra);
+  if (!timeValid()) return;
+  int hol, days = countdownDays(item.extra, &hol);
+  if (days < 0) return;
   ShowItem it = item;
+  if (it.effect == FX_AUTO) it.effect = hol >= 0 ? HOLIDAYS[hol].fx : FX_SPARKLE;   // "match the holiday"
   if (days == 0 && it.lead >= 0) it.effect = FX_FIREWORKS;       // a reminder's big day
+  String name = item.extra == "next" && hol >= 0 ? String(HOLIDAYS[hol].name) : it.text.length() ? it.text : hol >= 0 ? String(HOLIDAYS[hol].name) : String("");
   effectInit(it); FxGuard fxg;
   String big = days == 0 ? "TODAY!" : String(days);
   String l1 = days == 0 ? "" : days == 1 ? "DAY UNTIL" : "DAYS UNTIL";
-  String l2 = upcase(it.text);
+  String l2 = upcase(name);
   if (days == 0) { l1 = l2; l2 = ""; }
   uint32_t total = (it.sec ? it.sec : 8) * 1000UL, start = millis(), frame = 0;
   pjLabels = isPJ(it.font);
