@@ -1,6 +1,10 @@
 # PROGRESS
 
-## Working state (fw 1.0.0-beta13 on card 1 via WiFi, card 2 radar probe v2 / beta10 on restart, 2026-11-22)
+## Working state (fw 1.0.0-beta14 on card 1 via WiFi, card 2 radar probe v2 / beta10 on restart, 2026-11-22)
+- **beta14:** one "Hourly forecast" checkbox with a 12 hours / 24 hours choice (`hourly` / `chart`) and one "Daily
+  forecast" checkbox with 5 days / 10 days (`forecast` / `days10`). 10 days = two 5-day screens, each for the item's
+  seconds, with a page bar on the top row (left half lit = days 1-5, right half = days 6-10). 14 days removed; old
+  `days16` plays as 10 days. Card 1's show: alerts rainsoon hourly days10 details air sun.
 - **beta13:** 16 days -> 14 days (two pages of 7 columns of 18 px; a day with no numbers is skipped: it printed
   as a long garbage number over its neighbors on card 1). New weather items start with only the "now" screen.
 - **beta12:** 24-hour chart -> 5 columns (now, +6..+24 h, like the 5 days); rain chance "40%" + drop fits in Jumbo.
@@ -48,8 +52,8 @@
    once (OSM tiles in the browser) and uploads it (~8 KB) when the town is saved; frames in flash, not RAM.
    Data: RainViewer over plain HTTP (zoom 7). Needs PNGdec 1.1.6 in CI libs; its 45 KB block fits only after
    playerFree(), so allocate it first and skip the round if it fails. Details in NOTES.md (merge only the notes).
-000. **"Weather screens look good" / "change X"** - card 1: now, 12 hours, 24 hours, 5 days, 14 days, details,
-   air, sun & moon. Then flash card 2 (restart it first: it runs the radar probe until then).
+000. **"Weather screens look good" / "change X"** - card 1: now, 12 hours, 10 days (watch the top-row page bar:
+   left half = days 1-5, right half = 6-10), details, air, sun & moon. Then flash card 2 (restart it first: it runs the radar probe until then).
 00. **"QR works close and far" / "change X"** - press S1 on either card; try the phone at 1.5 ft, 4 ft and 7 ft.
 0. **"Lights look good" / "change X"** - run `tools/effects-probe.ps1` (bulb size 2x2, spacing 8, pattern speed).
 1. **"Fonts/icons look good" / "change X"** - weather + forecast and a Jumbo text item ("use the straight rays").
