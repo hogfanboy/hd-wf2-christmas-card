@@ -26,7 +26,7 @@ const MOON_NAME = ['NEW MOON', 'WAXING CRESCENT', 'FIRST QUARTER', 'WAXING GIBBO
 function moonPhase() { const SYN = 29.530588853, age = (((Date.now() / 1000 - 947182440) / 86400) % SYN + SYN) % SYN; return Math.floor(age / SYN * 8 + 0.5) % 8; }
 function wxIcon(kind, day, moon, f) {
   const cx = 23, cy = 21, drift = tr((sin8(f * 2) - 128) / 64), sunF = tr(f / 5) % 6, flash = kind === 'storm' && tr(f / 4) % 12 < 2;
-  if (kind === 'sun') { if (day) wxSpr('SUN' + sunF, cx, cy); else { wxStars(cx, cy, f); wxSpr('MOON' + moon, cx, cy); } }
+  if (kind === 'sun') { if (day) wxSpr('SUN' + sunF, cx, cy); else { wxStars(cx, cy, f); wxSpr('MOON4', cx, cy); } }   // clear night: full moon
   else if (kind === 'partly') { if (day) wxSpr('SUNS' + sunF, cx - 7, cy - 7); else { wxStars(cx, cy, f); wxSpr('MOONS' + moon, cx - 7, cy - 7); } wxSpr('CLOUD_L', cx + 3 + drift, cy + 6); }
   else if (kind === 'cloud') { wxSpr('CLOUD_B', cx - 4 - drift, cy - 6); wxSpr('CLOUD_L', cx + 3 + drift, cy + 5); }
   else if (kind === 'fog') { wxSpr('CLOUD_M', cx + 1, cy - 5); for (let i = 0; i < 3; i++) { tctx.fillStyle = i === 1 ? '#a0a8b8' : '#8c94a4'; tctx.fillRect(cx - 15 + (tr(f / 6) + i * 3) % 6, cy + 10 + i * 4, 26, 1); } }
@@ -376,7 +376,7 @@ function renderItem(it, t) {      // t = ms since the item started
   if (it.kind === 'text') {
     setF(it.font);
     const tw = M(it.text);
-    const x = tw > W - 4 ? W - (Math.floor(t / 25) % (W + tw)) : (W - tw) / 2;
+    const x = tw > W - 4 ? W - (Math.floor(t / 40) % (W + tw)) : (W - tw) / 2;
     drawStr(it, it.text, x, Math.round((H + capOf()) / 2), t);
   } else {
     let bigS, l1 = '', l2 = '';

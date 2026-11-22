@@ -1,13 +1,16 @@
 # PROGRESS
 
-## Working state (fw 1.0.0-beta16 on card 1 via WiFi, card 2 radar probe v2 / beta10 on restart, 2026-11-22)
+## Working state (fw 1.0.0-beta17 built, not flashed; card 1 runs beta16, card 2 radar probe v2, 2026-11-22)
+- **beta17:** scrolling messages move 1 px per 40-ms frame on a fixed clock (25 px/s, like the strips; was 40 px/s
+  on wall-clock time). Clear nights show a full moon (now screen + hourly); partly cloudy and the sun & moon screen
+  keep tonight's real phase. Moon sprites redrawn: whole-pixel circle (no 2-px nubs at the edges), lit/dark line
+  snapped to whole pixels, gibbous with a clear dark bite (phase 0.34/0.66), lone crescent-tip pixels removed.
 - **beta16:** strips slide 25 px/s = exactly 1 px per 40-ms frame on a fixed clock (was 40 px/s: uneven 1-2 px
   steps). New weather items on the page start with Hourly (12 h) and Daily (5 days) checked.
 - **beta15:** hourly and daily forecasts slide. Hourly = one 32-px column per hour (12 or 24 h + now), temperature
   in its temperature color, at midnight the new weekday in white + dotted line. 10 days = the 5-day columns sliding.
   Strips hold 3 s, slide, hold 2 s (screen lasts max(item secs, strip)). Card 1: 24 hours + 10 days.
-- **beta14:** Hourly checkbox (12/24 h = `hourly`/`chart`), Daily (5/10 days = `forecast`/`days10`).
-- **beta11-13:** weather "Screens" checklist; line under the temperature: sky, what matters, FEELS. **beta10:** alerts (weather.gov). **beta7:** Christmas lights. **beta9:** QR big/small alternating. **beta8:** card remembers the weather town (NVS `wxhome`), page redesign.
+- **beta7-14:** Hourly (12/24 h) and Daily (5/10 days) checkboxes, weather Screens checklist, alerts (weather.gov), Christmas lights, QR big/small, card remembers the weather town (NVS `wxhome`).
 - **Fonts/icons:** crisp Jumbo font and shaded weather icons with hard edges (details in PROJECT-NOTES).
 - **Shuffle:** page Play order In order / Shuffle (`order<TAB>shuffle` in show.txt), never the same item twice.
 - **Border trim (beta4 page):** every picture's plain-color border (all 4 corners the same color) is cut off before
@@ -23,7 +26,6 @@
   "On new cards" (pack.json `install`), per picture On/Off + dates ("11-15 to 01-06"), and a "What a new card
   gets" list with size vs 4.1 MB. build-install.mjs reads it (`--first-show-only` to check). Tested on a copy of
   the content repo: builder writes the right pack.json, the build makes the same first show as before.
-- **Pack convert settings:** GIF / Auto / Full color per pack and per picture in the builder (pack.json `format`, `pictures`).
 - Card 1 (FM6124C): 192.168.50.16 / eed0 (USB COM10). Card 2 (RUL6024): 192.168.50.199 / 5df8. Heap ~70 KB.
 - Everything else (news removed, app, schedule, stocks, night mode, packs, effects): PROJECT-NOTES.md.
 
@@ -48,7 +50,8 @@
    once (OSM tiles in the browser) and uploads it (~8 KB) when the town is saved; frames in flash, not RAM.
    Data: RainViewer over plain HTTP (zoom 7). Needs PNGdec 1.1.6 in CI libs; its 45 KB block fits only after
    playerFree(), so allocate it first and skip the round if it fails. Details in NOTES.md (merge only the notes).
-000. **"Weather screens look good" / "change X"** - card 1: now, 24 hours sliding, 10 days sliding, details, air,
+000. **"Flash beta17"** - judge message scrolling and the moons (sun & moon screen) by eye.
+00a. **"Weather screens look good" / "change X"** - card 1: now, 24 hours sliding, 10 days sliding, details, air,
    sun & moon. Speed, hold times, column width and temperature colors are easy to change. Then flash card 2 (restart it first: it runs the radar probe until then).
 00. **"QR works close and far" / "change X"** - press S1 on either card; try the phone at 1.5 ft, 4 ft and 7 ft.
 0. **"Lights look good" / "change X"** - run `tools/effects-probe.ps1` (bulb size 2x2, spacing 8, pattern speed).

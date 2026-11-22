@@ -212,7 +212,7 @@ static void wxIcon(int kind, bool day, int moon, uint32_t frame) {
   bool flash = kind == WX_STORM && (frame / 4) % 12 < 2;
   switch (kind) {
     case WX_SUN:
-      if (day) wxSprite(WXS_SUN0 + sunF, cx, cy); else { wxStars(cx, cy, frame); wxSprite(WXS_MOON0 + moon, cx, cy); }
+      if (day) wxSprite(WXS_SUN0 + sunF, cx, cy); else { wxStars(cx, cy, frame); wxSprite(WXS_MOON4, cx, cy); }   // clear night: full moon
       break;
     case WX_PARTLY:
       if (day) wxSprite(WXS_SUNS0 + sunF, cx - 7, cy - 7); else { wxStars(cx, cy, frame); wxSprite(WXS_MOONS0 + moon, cx - 7, cy - 7); }

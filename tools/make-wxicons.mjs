@@ -65,10 +65,15 @@ function sun(S, cx, cy, r, rot) {
 // moon gets a thin dim rim so it is still a round shape (a gray arc around the dark side looked odd on the panel).
 function moon(S, cx, cy, r, p) {
   const lit = hex(0xF4EED4), dark = hex(0xC8C0A0), rim = hex(0x50505C);
-  const k = Math.cos(2 * Math.PI * p);
+  // k = how far the lit/dark line bulges (as part of r). Snapped so the bulge is a whole number of pixels: half a
+  // pixel more leaves a 2-pixel step sticking out in the middle of the line.
+  const k0 = Math.cos(2 * Math.PI * p), k = Math.sign(k0) * Math.round(r * Math.abs(k0)) / r;
+  // The outline and the lit/dark line are decided per whole pixel by its center (not by how much of it is covered):
+  // that gives a clean pixel circle with flat runs at the top, bottom and sides instead of 2-pixel nubs sticking out.
   S.paint((x, y) => {
-    const d = Math.hypot(x - cx, y - cy); if (d > r) return null;
-    const nx = (x - cx) / r, ny = (y - cy) / r, w = Math.sqrt(Math.max(0, 1 - ny * ny));
+    const X = Math.floor(x) + 0.5, Y = Math.floor(y) + 0.5;
+    const d = Math.hypot(X - cx, Y - cy); if (d > r) return null;
+    const nx = (X - cx) / r, ny = (Y - cy) / r, w = Math.sqrt(Math.max(0, 1 - ny * ny));
     if (!(p <= 0.5 ? nx > w * k : nx < -w * k)) return p === 0 && d > r - 1.1 ? [...rim, 1] : null;
     let c = mix(lit, dark, clamp01((Math.hypot(x - (cx - r * 0.4), y - (cy - r * 0.3)) / r) - 0.2));
     if (Math.hypot(x - (cx - r * 0.45), y - (cy + r * 0.25)) < r * 0.2) c = mix(c, dark, 0.8);
@@ -106,15 +111,24 @@ function bolt(S, ox, oy) {
 }
 
 const SPR = [];                                    // [name, w, h, ox, oy, px] (ox/oy: where the sprite's 0,0 sits from the anchor)
-function add(name, w, h, draw) { const S = sprite(w, h); draw(S); SPR.push([name, w, h, -Math.floor(w / 2), -Math.floor(h / 2), S.out()]); }
+// prune: drop lit pixels with no lit neighbor above, below, left or right (a crescent's tip hanging on by a corner).
+function add(name, w, h, draw, prune) {
+  const S = sprite(w, h); draw(S); const px = S.out();
+  if (prune) {
+    const on = (x, y) => x >= 0 && y >= 0 && x < w && y < h && px[y * w + x][3] > 0;
+    const drop = px.map((_, i) => { const x = i % w, y = Math.floor(i / w); return on(x, y) && !on(x - 1, y) && !on(x + 1, y) && !on(x, y - 1) && !on(x, y + 1); });
+    drop.forEach((d, i) => { if (d) px[i] = [0, 0, 0, 0]; });
+  }
+  SPR.push([name, w, h, -Math.floor(w / 2), -Math.floor(h / 2), px]);
+}
 const SUN_FRAMES = 6;
 for (let f = 0; f < SUN_FRAMES; f++) add(`SUN${f}`, 40, 40, (S) => sun(S, 20, 20, 9, (f / SUN_FRAMES) * (Math.PI / 4)));
 for (let f = 0; f < SUN_FRAMES; f++) add(`SUNS${f}`, 30, 30, (S) => sun(S, 15, 15, 6.5, (f / SUN_FRAMES) * (Math.PI / 4)));
 // 8 phases: new, waxing crescent, first quarter, waxing gibbous, full, waning gibbous, last quarter, waning crescent
 // (crescents a bit fatter than 1/8 so they read on the panel).
-const PHASE = [0, 0.16, 0.25, 0.375, 0.5, 0.625, 0.75, 0.84];
-PHASE.forEach((p, i) => add(`MOON${i}`, 24, 24, (S) => moon(S, 12, 12, 10.5, p)));
-PHASE.forEach((p, i) => add(`MOONS${i}`, 18, 18, (S) => moon(S, 9, 9, 7.5, p)));
+const PHASE = [0, 0.16, 0.25, 0.34, 0.5, 0.66, 0.75, 0.84];   // gibbous at 0.34: a clear dark bite, so it never reads as full
+PHASE.forEach((p, i) => add(`MOON${i}`, 24, 24, (S) => moon(S, 12, 12, 10.5, p), p > 0));
+PHASE.forEach((p, i) => add(`MOONS${i}`, 18, 18, (S) => moon(S, 9, 9, 7.5, p), p > 0));
 add('CLOUD_L', 38, 26, (S) => cloud(S, 16, 14, 1, 0xF8FAFF, 0xA8B2C6));
 add('CLOUD_M', 38, 26, (S) => cloud(S, 16, 14, 1, 0xC6CCD8, 0x7C8498));
 add('CLOUD_D', 38, 26, (S) => cloud(S, 16, 14, 1, 0x8C92A4, 0x4A5064));
@@ -129,7 +143,7 @@ const MINI = [
   (S) => { cloud(S, 10, 6, 0.5, 0xC6CCD8, 0x7C8498); },
   (S) => { cloud(S, 10, 6, 0.5, 0xF8FAFF, 0xA8B2C6); },
   (S) => { cloud(S, 10, 6, 0.5, 0x8C92A4, 0x4A5064); },
-  (S) => moon(S, 12, 9, 7, 0.82),                  // 7, 8: night hours (hourly screen): moon, moon behind a cloud
+  (S) => moon(S, 12, 9, 7, 0.5),                   // 7, 8: night hours (hourly screen): full moon when clear, moon behind a cloud
   (S) => { moon(S, 7, 6, 5.5, 0.8); cloud(S, 11, 10, 0.5, 0xF8FAFF, 0xA8B2C6); },
 ];
 MINI.forEach((d, i) => add(`MINI${i}`, 24, 18, d));

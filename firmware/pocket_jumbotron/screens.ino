@@ -7,17 +7,18 @@ static void playText(const ShowItem &it) {
   int tw = textWidth(it.text);
   int base = textBaseline(it.font, 0, H);
   bool scroll = tw > W - 4;
-  uint32_t total = it.sec ? it.sec * 1000UL : scroll ? (uint32_t)(W + tw) * 25 : 6000;
+  // Scrolling moves exactly 1 px per 40-ms frame on a fixed clock (25 px/s, same as the weather strips): every step
+  // the same size, so it looks smooth. One pass = W + tw frames.
+  uint32_t total = it.sec ? it.sec * 1000UL : scroll ? (uint32_t)(W + tw) * 40 : 6000;
   uint32_t start = millis(), frame = 0;
   shownValid = false;
-  while (millis() - start < total) {
-    uint32_t t0 = millis();
+  for (uint32_t k = 0; k * 40 < total; k++) {
     paintBackground(it, frame);
-    int x = scroll ? W - (int)((millis() - start) / 25) % (W + tw) : (W - tw) / 2;
-    drawText(it.text, x, base, it, millis());
+    int x = scroll ? W - (int)(k % (uint32_t)(W + tw)) : (W - tw) / 2;
+    drawText(it.text, x, base, it, start + k * 40);
     pushCanvas();
     frame++;
-    int32_t wait = 25 - (int32_t)(millis() - t0);
+    int32_t wait = (int32_t)(start + (k + 1) * 40 - millis());
     if (waitMs(wait > 0 ? wait : 1)) return;
   }
 }
