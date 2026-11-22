@@ -5,11 +5,7 @@
   forecast" checkbox with 5 days / 10 days (`forecast` / `days10`). 10 days = two 5-day screens, each for the item's
   seconds, with a page bar on the top row (left half lit = days 1-5, right half = days 6-10). 14 days removed; old
   `days16` plays as 10 days. Card 1's show: alerts rainsoon hourly days10 details air sun.
-- **beta13:** 16 days -> 14 days (two pages of 7 columns of 18 px; a day with no numbers is skipped: it printed
-  as a long garbage number over its neighbors on card 1). New weather items start with only the "now" screen.
-- **beta12:** 24-hour chart -> 5 columns (now, +6..+24 h, like the 5 days); rain chance "40%" + drop fits in Jumbo.
-- **beta11:** weather "Screens" checklist (alerts, rain on the way, hours, 5/14 days, details, air, sun & moon);
-  line under the temperature: sky, what matters, FEELS. Card 1 runs every screen. Details in PROJECT-NOTES.
+- **beta11-13:** weather "Screens" checklist; line under the temperature: sky, what matters, FEELS (PROJECT-NOTES).
 - **beta10:** alerts (weather.gov). **beta7:** Christmas lights. **beta9:** QR big/small alternating. **beta8:** card remembers the weather town (NVS `wxhome`), page redesign.
 - **Fonts/icons:** crisp Jumbo font and shaded weather icons with hard edges (details in PROJECT-NOTES).
 - **Shuffle:** page Play order In order / Shuffle (`order<TAB>shuffle` in show.txt), never the same item twice.
