@@ -90,3 +90,4 @@ Custom firmware + website for ~15 LED "Christmas cards" already mailed out last 
 - Cameras show partial-frame bands at low refresh (rolling shutter, invisible to the eye).
 - arduino-cli shares the user's Arduino IDE sketchbook/core (`~/Documents/Arduino/libraries`). Installs affect their other projects.
 - Arduino `.ino` files are concatenated. Globals used across files must be declared in the main `.ino` before use. A C-linkage override (`verifyRollbackLater`) must live in a `.cpp` file.
+- The player opens GIFs up to 480 px wide (AnimatedGIF MAX_WIDTH); wider ones log "can't open (err 2)". The app always converts to 128x64 first, so only raw curl uploads hit this.
