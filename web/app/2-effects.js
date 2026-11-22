@@ -148,8 +148,8 @@ function fxStep(s, d, behind) {
       s.sparks = s.sparks.filter(p => p.life > 0).slice(-96);
       if (!s.sleighWait) {
         const step = tr(frame / 4) & 1, ns = step ? 0 : 1, d1 = x + tr(50 * k), d2 = x + tr(83 * k), dy = y - tr(3 * k), hx0 = tr(20.5 * k), hy = tr(13 * k), sm = behind ? '_S' : '';
-        line(px, x + tr(30.5 * k), y + tr(15 * k), d1 + hx0, dy + step + hy, hx(0xC89030));
-        line(px, d1 + hx0, dy + step + hy, d2 + hx0, dy + ns + hy, hx(0xC89030));
+        fxLine(px, x + tr(30.5 * k), y + tr(15 * k), d1 + hx0, dy + step + hy, hx(0xC89030));
+        fxLine(px, d1 + hx0, dy + step + hy, d2 + hx0, dy + ns + hy, hx(0xC89030));
         spr((step ? 'DEER0' : 'DEER1') + sm, d1, dy + step);
         spr((step ? 'DEER1R' : 'DEER0R') + sm, d2, dy + ns);
         spr('SLEIGH' + sm, x, y);
@@ -258,7 +258,7 @@ function fxSpr(d, name, x, y, flip = false, col = [0, 0, 0]) {     // same as fx
     else { d[q] = p[o]; d[q + 1] = p[o + 1]; d[q + 2] = p[o + 2]; }
   }
 }
-function line(px, x0, y0, x1, y1, c) {
+function fxLine(px, x0, y0, x1, y1, c) {     // not "line": 3-weather.js has one (the app is one script)
   const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1; let e = dx + dy;
   for (;;) { px(x0, y0, c); if (x0 === x1 && y0 === y1) break; const e2 = 2 * e; if (e2 >= dy) { e += dy; x0 += sx; } if (e2 <= dx) { e += dx; y0 += sy; } }
 }

@@ -66,6 +66,15 @@ check('version order (release > its betas, beta10 > beta9)', !orderErr, orderErr
 
 // 4. The firmware build will pick up the app: web_index.h exists and isn't empty.
 const h = path.join(root, 'firmware/pocket_jumbotron/web_index.h');
+// web/app/*.js become one script: a second top-level "function x" silently replaces the first (beta20: the
+// sleigh's reins called the weather code's line() and froze the page).
+{
+  const seen = {}, dup = [];
+  for (const f of fs.readdirSync(path.join(root, 'web/app')).filter((f) => f.endsWith('.js')).sort())
+    for (const m of fs.readFileSync(path.join(root, 'web/app', f), 'utf8').matchAll(/^(?:async )?function\s+([A-Za-z_$][\w$]*)/gm))
+      if (seen[m[1]]) dup.push(`${m[1]} (${seen[m[1]]}, ${f})`); else seen[m[1]] = f;
+  check('app functions have unique names (web/app/*.js)', !dup.length, dup.join(', '));
+}
 check('web_index.h present', fs.existsSync(h) && fs.statSync(h).size > 10000);
 
 console.log(failed ? `\n${failed} check(s) failed` : '\nAll checks passed');
