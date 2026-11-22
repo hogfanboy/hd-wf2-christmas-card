@@ -30,6 +30,7 @@
 - New cards' first show = loose pictures + "install" packs (pack builder), not hard-coded in the build.
 - One firmware and one panel setup for every card. Card stores GIF/JPEG frames, never WEBP (videos too).
 - Structs used in function signatures go in the main .ino; no default arguments in other .ino files.
+- No sports scores (2026-11-22): people who care have the game on TV.
 - Test uploads with curl: `-H "Content-Type: text/plain"` for /api/show, then POST /api/play.
 
 ## Next (the user can answer with one of these commands)
