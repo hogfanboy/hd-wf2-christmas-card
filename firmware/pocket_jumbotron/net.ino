@@ -46,6 +46,7 @@ void settingsLoad() {
   nightLevel = prefs.getUChar("nlevel", 0);
   autoUpdate = prefs.getBool("aupd", true);
   themeIx = prefs.getUChar("theme", 2);
+  wxHome = prefs.getString("wxhome", "");
   if (apPass.length() != 8) {                      // first boot: make this card's own hotspot password
     char buf[9];
     for (int i = 0; i < 8; i++) buf[i] = '0' + (esp_random() % 10);

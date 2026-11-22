@@ -45,13 +45,13 @@ static int countPictures() {
 }
 static void handleInfo() {
   if (!touch()) return;
-  char buf[600];
+  char buf[768];
   snprintf(buf, sizeof(buf), "{\"api\":1,\"fw\":\"%s\",\"name\":\"%s\",\"total\":%u,\"used\":%u,\"files\":%d,\"items\":%u,\"brightness\":%u,\"heap\":%u,"
-           "\"tz\":\"%s\",\"nightFrom\":%d,\"nightTo\":%d,\"nightLevel\":%u,\"night\":%s,\"time\":%lu,\"place\":\"%s\",\"tzAuto\":%s,\"autoUpdate\":%s,\"theme\":%u}",
+           "\"tz\":\"%s\",\"nightFrom\":%d,\"nightTo\":%d,\"nightLevel\":%u,\"night\":%s,\"time\":%lu,\"place\":\"%s\",\"tzAuto\":%s,\"autoUpdate\":%s,\"theme\":%u,\"wxHome\":\"%s\"}",
            FW_VERSION, hostName.c_str(), (unsigned)LittleFS.totalBytes(), (unsigned)LittleFS.usedBytes(), countPictures(),
            (unsigned)playlist.size(), brightnessPct, (unsigned)ESP.getFreeHeap(), jsonEsc(tzString).c_str(), nightFrom, nightTo, nightLevel,
            nightNow ? "true" : "false", timeValid() ? (unsigned long)time(nullptr) : 0UL,
-           geoOk ? jsonEsc(geoCity.substring(0, 40)).c_str() : "", tzAuto ? "true" : "false", autoUpdate ? "true" : "false", themeIx);
+           geoOk ? jsonEsc(geoCity.substring(0, 40)).c_str() : "", tzAuto ? "true" : "false", autoUpdate ? "true" : "false", themeIx, jsonEsc(wxHome).c_str());
   sendJson(buf);
 }
 
@@ -168,6 +168,9 @@ static void handleSettings() {
   if (web->hasArg("nf")) { nightFrom = constrain((int)web->arg("nf").toInt(), -1, 23); prefs.putChar("nfrom", nightFrom); }
   if (web->hasArg("nt")) { nightTo = constrain((int)web->arg("nt").toInt(), -1, 23); prefs.putChar("nto", nightTo); }
   if (web->hasArg("theme")) { themeIx = constrain((int)web->arg("theme").toInt(), 0, 6); prefs.putUChar("theme", themeIx); }
+  if (web->hasArg("wx") && web->arg("wx").length() < 90) {   // the page remembers the last weather town here
+    wxHome = web->arg("wx"); wxHome.replace("\t", " "); prefs.putString("wxhome", wxHome);
+  }
   if (web->hasArg("au")) { autoUpdate = web->arg("au") != "0"; prefs.putBool("aupd", autoUpdate); }
   if (web->hasArg("nl")) { nightLevel = constrain((int)web->arg("nl").toInt(), 0, 100); prefs.putUChar("nlevel", nightLevel); }
   forceNightCheck();

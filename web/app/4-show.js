@@ -22,7 +22,7 @@ function select(it) {
   if (it && it.kind !== 'pic') it.t0 = performance.now();
 }
 const label = (it) => it.kind === 'pic' ? it.name : it.kind === 'text' ? '“' + it.text + '”' : it.kind === 'clock' ? 'Clock'
-  : it.kind === 'fx' ? (FX[it.effect] || 'Effect') : it.kind === 'weather' ? (it.lat === 'auto' ? 'Weather here' + (card.place ? ' (' + card.place + ')' : '') : 'Weather' + (it.place ? ' in ' + it.place : ''))
+  : it.kind === 'fx' ? (FX[it.effect] || 'Effect') : it.kind === 'weather' ? (!it.lat ? 'Weather: pick a town' : it.lat === 'auto' ? 'Weather here' + (card.place ? ' (' + card.place + ')' : '') : 'Weather' + (it.place ? ' in ' + it.place : ''))
   : it.kind === 'stocks' ? 'Stocks: ' + (it.syms.split(',').filter(Boolean).map(s => MKT_LABEL[s] || s).join(', ') || 'pick some') : (it.lead !== '' && it.lead != null ? '🔔 ' : 'Countdown to ') + (it.text || '…') + (/^\d\d-\d\d$/.test(it.date) ? ' · ' + md(it.date.replace('-', '')) : '');
 function move(it, d) {
   const i = items.indexOf(it), j = i + d;
@@ -181,7 +181,7 @@ function marks(it) {
 // Message / clock / countdown items with their own little editor.
 const COLORS = { fg: '#ffbe3c', bg: '#000000' };
 const META = { text: 'Message', clock: 'Shows the time (needs internet)', countdown: 'Counts the days (needs internet). With "days before" it is a reminder: fireworks on the day',
-  fx: 'Drawn by the screen itself: takes no space', weather: 'Pick your town below, or where the screen is',
+  fx: 'Drawn by the screen itself: takes no space', weather: '⚠ Pick a town below. Weather without a town is not sent to the screen.',
   stocks: 'Market prices and today\'s change (needs internet, updated every hour, may be delayed)' };
 const usesF = () => /^en-(US|LR|MM)$/i.test(navigator.language) || /-(US)$/i.test(navigator.language);
 const SIZE_NAME = { 8: 'Jumbo thin', 9: 'Jumbo small', 10: 'Jumbo medium', 11: 'Jumbo big', 12: 'Jumbo huge',
@@ -194,8 +194,8 @@ function addDrawn(kind, o = {}) {
     h24: !new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12 }, o);
   const el = baseEl(it);
   it.metaEl.textContent = META[kind]; it.metaEl.classList.add('desc');
-  const wxMeta = () => it.lat === 'auto' ? `Weather where the screen is${card.place ? ': ' + card.place : ''} (found automatically)` : `Weather for ${it.place} (needs internet)`;
-  if (kind === 'weather' && (it.place || it.lat === 'auto')) it.metaEl.textContent = wxMeta();
+  const wxMeta = () => it.lat === 'auto' ? `Weather where the screen is${card.place ? ': ' + card.place : ''}, guessed from its internet connection. Not right? Type your town.` : `Weather for ${it.place} (needs internet)`;
+  const wxMark = () => { const need = !it.lat; el.classList.toggle('need', need); it.metaEl.textContent = need ? META.weather : wxMeta(); };
   const ed = document.createElement('div'); ed.className = 'edit';
   const colors = `<label>Color <input type="checkbox" data-k="useTheme"> Theme &nbsp; <input type="color" data-k="fg"> <input type="checkbox" data-k="rainbow"> Rainbow
       &nbsp; Background <input type="color" data-k="bg"></label>`;
@@ -249,7 +249,7 @@ function addDrawn(kind, o = {}) {
           b.onclick = async () => {
             Object.assign(it, { lat: p.latitude.toFixed(3), lon: p.longitude.toFixed(3), place: p.name });
             q.value = p.name; res.textContent = '';
-            it.metaEl.textContent = wxMeta();
+            wxMark(); wxRemember(it);
             el.querySelector('.name').textContent = label(it);
             await wxFetch(it); it.t0 = performance.now(); updateSpace();
           };
@@ -261,11 +261,13 @@ function addDrawn(kind, o = {}) {
     ed.querySelector('.wauto').onclick = () => {
       Object.assign(it, { lat: 'auto', lon: 'auto', place: '' });
       q.value = ''; res.textContent = '';
-      it.metaEl.textContent = wxMeta();
+      wxMark(); wxRemember(it);
       el.querySelector('.name').textContent = label(it);
       wxFetch(it); it.t0 = performance.now(); updateSpace();
     };
     q.onkeydown = (e) => { if (e.key === 'Enter') find(); };
+    wxMark();
+    if (!it.lat && !loadingShow) setTimeout(() => q.focus(), 0);
     wxFetch(it);
   }
   if (kind === 'stocks') {
@@ -303,7 +305,23 @@ $('addRem').onclick = () => {
   it.el.querySelector('[data-k=text]').focus();
 };
 $('addFx').onclick = () => addDrawn('fx');
-$('addWx').onclick = () => addDrawn('weather');
+// A new weather item starts with the last town picked (the screen remembers it), else another weather item's town,
+// else where the screen is (found from its internet connection). Only with none of those does it ask for a town.
+function wxDefault() {
+  const h = card.wxHome || '', [lat, lon, ...p] = h.split(',');
+  if (h === 'auto') return { lat: 'auto', lon: 'auto', place: '' };
+  if (lat && lon && !isNaN(+lat) && !isNaN(+lon)) return { lat, lon, place: p.join(',') };
+  const other = items.find(i => i.kind === 'weather' && i.lat);
+  if (other) return { lat: other.lat, lon: other.lon, place: other.place };
+  return card.place ? { lat: 'auto', lon: 'auto', place: '' } : {};
+}
+function wxRemember(it) {
+  const v = it.lat === 'auto' ? 'auto' : [it.lat, it.lon, clean(it.place)].join(',');
+  if (v === card.wxHome || card.fw === '?') return;
+  card.wxHome = v;
+  api('/api/settings?wx=' + encodeURIComponent(v), { method: 'POST' }).catch(() => {});
+}
+$('addWx').onclick = () => addDrawn('weather', wxDefault());
 $('addStocks').onclick = () => addDrawn('stocks');
 
 const ready = () => items.filter(i => i.kind === 'pic' ? i.blob && !i.failed : i.kind === 'weather' ? i.lat : i.kind === 'stocks' ? i.syms : true);

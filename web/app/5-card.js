@@ -10,11 +10,20 @@ async function api(path, opts) {
 const verKey = (s) => { const m = /^(\d+)\.(\d+)\.(\d+)(-[a-z]*(\d*))?/i.exec(String(s)) || [];
   return [+m[1] || 0, +m[2] || 0, +m[3] || 0, m[4] ? +(m[5] || 0) : 99]; };
 const newer = (a, b) => { const x = verKey(a), y = verKey(b); for (let i = 0; i < 4; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false; };
+function setConn(ok, name) {
+  $('conn').className = 'pill ' + (ok ? 'on' : 'off');
+  $('connText').textContent = ok ? name : 'Not connected';
+  $('connHelp').hidden = ok;
+}
 async function loadInfo() {
   try {
     card = await api('/api/info');
     $('diag').textContent = JSON.stringify(card) + '\napp ' + (location.pathname === '/local' ? 'built-in' : APP_BUILD) + ' · ' + navigator.userAgent + ' · ' + new Date().toString();
-    $('cardInfo').textContent = `Connected to ${card.name || 'your screen'} · ${card.items ?? card.files} item${(card.items ?? card.files) === 1 ? '' : 's'} playing · version ${card.fw} · app ${location.pathname === '/local' ? 'built-in' : APP_BUILD}`;
+    setConn(true, card.name || 'your screen');
+    const n = card.items ?? card.files;
+    $('about').innerHTML = [['Name', card.name], ['Playing', n + ' item' + (n === 1 ? '' : 's')], ['Location', card.place || 'not found yet'],
+      ['Software', card.fw], ['App', location.pathname === '/local' ? 'built-in' : APP_BUILD], ['Space used', card.total ? kb(card.used) + ' of ' + kb(card.total) : '']]
+      .filter(r => r[1]).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
     $('bright').value = card.brightness;
     $('brightLabel').textContent = card.brightness + '%';
     if (card.theme !== undefined) themeIx = card.theme;
@@ -23,7 +32,7 @@ async function loadInfo() {
     checkUpdate();
     // Every time the page opens, start from what the screen is playing, so adding one reminder can't wipe the rest.
     if (showState === 'start') loadShow(true);
-  } catch { $('cardInfo').textContent = 'Can\'t reach the screen. Are you on the same WiFi?'; }
+  } catch { setConn(false); }
   updateSpace();
 }
 loadInfo();
@@ -70,7 +79,7 @@ async function loadShow(auto) {
         if (f[0] === 'clock') addDrawn('clock', { ...o, h24: f[6] === '24' });
         if (f[0] === 'countdown') addDrawn('countdown', { ...o, date: f[6], text: f[7] || '' });
         if (f[0] === 'fx' && o.effect !== 'none') addDrawn('fx', o);
-        if (f[0] === 'weather') addDrawn('weather', { ...o, unit: f[6] || 'F', lat: f[7] || '', lon: f[8] || '', place: f[9] || '' });
+        if (f[0] === 'weather') { const w = addDrawn('weather', { ...o, unit: f[6] || 'F', lat: f[7] || '', lon: f[8] || '', place: f[9] || '' }); if (!card.wxHome && w.lat) wxRemember(w); }
         if (f[0] === 'stocks') addDrawn('stocks', { ...o, syms: f[6] || '' });
       }
       const added = items[before];
@@ -105,6 +114,8 @@ $('send').onclick = async () => {
   const list = ready();
   if (showState === 'loading') { alert('Still reading what\'s on the screen. Try again in a moment.'); return; }
   if (showState === 'failed' && !confirm('This page couldn\'t read what the screen is playing, so Send will erase it. Send anyway?')) return;
+  const noTown = items.filter(i => i.kind === 'weather' && !i.lat).length;
+  if (noTown && !confirm(`${noTown === 1 ? 'A weather item has' : noTown + ' weather items have'} no town and won't be sent. Send the rest?`)) return;
   if (!confirm(`Replace everything on the screen with these ${list.length} item${list.length > 1 ? 's' : ''}?`)) return;
   const st = $('sendStatus'); st.className = 'status';
   $('send').disabled = true;

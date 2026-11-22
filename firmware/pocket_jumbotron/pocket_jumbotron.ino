@@ -37,13 +37,14 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "1.0.0-beta7";
+static const char *FW_VERSION = "1.0.0-beta8";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
 static const uint8_t fastBits = 2;             // color bits in fast scan for the QR screen (~650 Hz; 2-6 tried, 2 reads best)
 uint8_t brightnessPct = 100;                   // user setting, saved in NVS
 uint8_t themeIx = 2;                           // color theme (canvas.ino THEMES), saved in NVS
+String wxHome;                                 // last weather town picked on the page ("lat,lon,place" or "auto"), NVS
 bool autoUpdate = true;                        // daily update check from the website (online.ino), saved in NVS
 extern bool updateNow;
 // The HUB75 library already applies CIE1931 brightness correction (lumConvTab), so no extra gamma here.

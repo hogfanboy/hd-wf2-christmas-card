@@ -66,13 +66,45 @@
   .stack > * + * { margin-top:10px; }
   .flex { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .update { border-color:var(--gold); }
+  /* Page frame: header with the connection, numbered steps, settings, and the screen's details at the bottom. */
+  .top { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:6px 0 2px; }
+  .brand { display:flex; align-items:center; gap:10px; min-width:0; }
+  .brand svg { width:30px; height:30px; flex:none; }
+  .brand h1 { margin:0; white-space:nowrap; }
+  .pill { display:flex; align-items:center; gap:7px; min-width:0; max-width:55%; padding:5px 11px 5px 9px; border:1px solid var(--line); border-radius:999px; background:var(--bg2); font-size:13px; font-weight:600; color:var(--muted); }
+  .pill span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pill i { flex:none; width:8px; height:8px; border-radius:50%; background:#5a5a6e; }
+  .pill.on i { background:var(--green); box-shadow:0 0 6px var(--green); }
+  .pill.off { color:var(--red); border-color:#5a2430; } .pill.off i { background:var(--red); }
+  .warn { border-color:#5a2430; }
+  h2 { display:flex; align-items:center; gap:9px; }
+  h2 .n { display:inline-grid; place-items:center; width:24px; height:24px; border-radius:50%; background:var(--gold); color:#1a1300; font-size:13px; flex:none; }
+  .sect { font-size:12px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--muted); margin:28px 4px -4px; }
+  .setting + .setting { border-top:1px solid var(--line); padding-top:16px; margin-top:16px; }
+  .setting h3 { font-size:15px; margin:0 0 8px; }
+  dl.kv { display:grid; grid-template-columns:max-content minmax(0,1fr); gap:6px 16px; margin:0; font-size:14px; }
+  dl.kv dt { color:var(--muted); } dl.kv dd { margin:0; overflow-wrap:anywhere; }
+  details + details { margin-top:12px; }
+  footer { text-align:center; color:var(--muted); font-size:12px; margin-top:24px; }
+  /* A weather item without a town: red until one is picked (it isn't sent without one). */
+  .item.need { border-color:var(--red); }
+  .item.need .meta { color:var(--red); }
+  .item .wq { width:auto; }
+  .item .edit label { flex-wrap:wrap; }
+  .item.need .wq { border-color:var(--red); box-shadow:0 0 0 3px rgba(255,90,110,.2); }
 </style>
 </head>
 <body>
 <main>
-  <h1>Pocket <span>Jumbotron</span></h1>
-  <div class="muted" id="cardInfo">Connecting to your screen…</div>
-  <details class="muted" style="font-size:12px"><summary>Something wrong? Details to send with a screenshot</summary><pre id="diag" style="white-space:pre-wrap;margin:4px 0"></pre></details>
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="2" width="30" height="28" rx="5" fill="#0d0d14" stroke="#c8202f" stroke-width="2.5"/><path fill="#ffbe3c" d="M4 7.25h3.5v3.5h-3.5zM7.5 7.25h3.5v3.5h-3.5zM11 7.25h3.5v3.5h-3.5zM4 10.75h3.5v3.5h-3.5zM11 10.75h3.5v3.5h-3.5zM4 14.25h3.5v3.5h-3.5zM7.5 14.25h3.5v3.5h-3.5zM11 14.25h3.5v3.5h-3.5zM4 17.75h3.5v3.5h-3.5zM4 21.25h3.5v3.5h-3.5z"/><path fill="#4cc3ff" d="M17.5 7.25h3.5v3.5h-3.5zM21 7.25h3.5v3.5h-3.5zM24.5 7.25h3.5v3.5h-3.5zM24.5 10.75h3.5v3.5h-3.5zM24.5 14.25h3.5v3.5h-3.5zM17.5 17.75h3.5v3.5h-3.5zM24.5 17.75h3.5v3.5h-3.5zM21 21.25h3.5v3.5h-3.5z"/></svg>
+      <h1>Pocket <span>Jumbotron</span></h1>
+    </div>
+    <div class="pill" id="conn"><i></i><span id="connText">Connecting…</span></div>
+  </header>
+
+  <div class="box warn" id="connHelp" hidden>Can't reach the screen. Make sure this phone is on the same WiFi as the screen, then reload this page.</div>
 
   <div class="box update stack" id="updBox" hidden>
     <b>New software for your screen: <span id="updVer"></span></b>
@@ -86,7 +118,7 @@
   </div>
 
   <div class="box stack">
-    <h2>1. Build your show</h2>
+    <h2><span class="n">1</span>Build your show</h2>
     <div class="flex themes"><span class="muted">Theme</span><span id="themeRow" style="display:flex;gap:14px;flex-wrap:wrap;padding:6px 4px"></span></div>
     <div id="themeName" style="font-size:13px;margin-top:-4px"></div>
     <div class="flex showline"><span id="showStatus" class="status" style="margin:0;flex:1">Reading what's on the screen…</span><button class="chip" id="loadShow">↻ Reload</button></div>
@@ -114,42 +146,47 @@
   </div>
 
   <div class="box stack">
-    <h2>2. Send to screen</h2>
+    <h2><span class="n">2</span>Send to screen</h2>
     <div class="muted">This <b>replaces everything</b> on the screen with the show above.</div>
     <button class="primary" id="send" disabled>Send to screen</button>
     <div class="status" id="sendStatus"></div>
   </div>
 
-  <div class="box stack">
-    <h2>Brightness</h2>
-    <input type="range" id="bright" min="10" max="100" step="5" value="100">
-    <div class="muted" id="brightLabel"></div>
-  </div>
-
-  <div class="box stack">
-    <h2>Clock &amp; night mode</h2>
-    <div class="muted" id="timeInfo">The screen gets the time from the internet.</div>
-    <div class="flex">
-      <span class="muted">At night, from</span>
-      <select class="s" id="nf"></select><span class="muted">to</span><select class="s" id="nt"></select>
+  <div class="sect">Settings</div>
+  <div class="box">
+    <div class="setting stack">
+      <h3>Brightness</h3>
+      <input type="range" id="bright" min="10" max="100" step="5" value="100">
+      <div class="muted" id="brightLabel"></div>
     </div>
-    <div class="flex">
-      <span class="muted">Night brightness</span>
-      <select class="s" id="nl"><option value="0">Off (dark)</option><option value="10">10%</option><option value="25">25%</option><option value="50">50%</option></select>
+    <div class="setting stack">
+      <h3>Clock &amp; night mode</h3>
+      <div class="muted" id="timeInfo">The screen gets the time from the internet.</div>
+      <div class="flex">
+        <span class="muted">At night, from</span>
+        <select class="s" id="nf"></select><span class="muted">to</span><select class="s" id="nt"></select>
+      </div>
+      <div class="flex">
+        <span class="muted">Night brightness</span>
+        <select class="s" id="nl"><option value="0">Off (dark)</option><option value="10">10%</option><option value="25">25%</option><option value="50">50%</option></select>
+      </div>
+      <button class="secondary" id="saveTime">Save night mode</button>
+      <div class="status" id="timeStatus"></div>
     </div>
-    <button class="secondary" id="saveTime">Save night mode</button>
-    <div class="status" id="timeStatus"></div>
+    <div class="setting stack" id="auBox" hidden>
+      <h3>Software updates</h3>
+      <label class="flex"><input type="checkbox" id="au" style="width:auto"> <span>Update by itself (checks the website at 3 am)</span></label>
+      <div class="status" id="auStatus"></div>
+    </div>
   </div>
 
-  <div class="box stack" id="auBox" hidden>
-    <h2>Software updates</h2>
-    <label class="flex"><input type="checkbox" id="au" style="width:auto"> <span>Update by itself (checks the website at 3 am)</span></label>
-    <div class="status" id="auStatus"></div>
+  <div class="sect">About this screen</div>
+  <div class="box">
+    <dl class="kv" id="about"><dt>Status</dt><dd>Connecting…</dd></dl>
   </div>
-
-  <div class="box stack">
+  <div class="box">
     <details>
-      <summary>Advanced: install a software update file</summary>
+      <summary>Install a software update file</summary>
       <div class="stack" style="margin-top:10px">
         <div class="muted">Only use a file you were sent for the Pocket Jumbotron (ends in <b>.bin</b>).</div>
         <label class="btn secondary" for="fw">Choose update file</label>
@@ -158,13 +195,18 @@
       </div>
     </details>
     <details>
-      <summary>Advanced: change the screen's WiFi</summary>
+      <summary>Change the screen's WiFi</summary>
       <div class="stack" style="margin-top:10px">
         <div class="muted">The screen forgets this WiFi and restarts. Then hold its button for 2 seconds to pick a new one.</div>
         <button class="secondary" id="forget">Forget this WiFi</button>
       </div>
     </details>
+    <details>
+      <summary>Something wrong? Details to send with a screenshot</summary>
+      <pre id="diag" style="white-space:pre-wrap;margin:8px 0 0;font-size:12px;color:var(--muted)"></pre>
+    </details>
   </div>
+  <footer>Pocket Jumbotron</footer>
 </main>
 
 <!--VENDOR-->
