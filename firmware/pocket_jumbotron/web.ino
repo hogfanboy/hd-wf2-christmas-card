@@ -45,11 +45,14 @@ static int countPictures() {
 }
 static void handleInfo() {
   if (!touch()) return;
-  char buf[768];
+  char buf[1024];
   snprintf(buf, sizeof(buf), "{\"api\":1,\"fw\":\"%s\",\"name\":\"%s\",\"total\":%u,\"used\":%u,\"files\":%d,\"items\":%u,\"brightness\":%u,\"heap\":%u,"
+           "\"up\":%u,\"minHeap\":%u,\"block\":%u,\"boot\":\"%s\",\"bootWhy\":\"%s\",\"quietRestarts\":%u,\"crashes\":%u,"
            "\"tz\":\"%s\",\"nightFrom\":%d,\"nightTo\":%d,\"nightLevel\":%u,\"night\":%s,\"time\":%lu,\"place\":\"%s\",\"tzAuto\":%s,\"autoUpdate\":%s,\"theme\":%u,\"wxHome\":\"%s\"}",
            FW_VERSION, hostName.c_str(), (unsigned)LittleFS.totalBytes(), (unsigned)LittleFS.usedBytes(), countPictures(),
-           (unsigned)playlist.size(), brightnessPct, (unsigned)ESP.getFreeHeap(), jsonEsc(tzString).c_str(), nightFrom, nightTo, nightLevel,
+           (unsigned)playlist.size(), brightnessPct, (unsigned)ESP.getFreeHeap(),
+           (unsigned)upSec(), (unsigned)ESP.getMinFreeHeap(), (unsigned)ESP.getMaxAllocHeap(), BOOT_NAME[bootKind], bootDetail,
+           (unsigned)rtcQuietN, (unsigned)rtcCrashN, jsonEsc(tzString).c_str(), nightFrom, nightTo, nightLevel,
            nightNow ? "true" : "false", timeValid() ? (unsigned long)time(nullptr) : 0UL,
            geoOk ? jsonEsc(geoCity.substring(0, 40)).c_str() : "", tzAuto ? "true" : "false", autoUpdate ? "true" : "false", themeIx, jsonEsc(wxHome).c_str());
   sendJson(buf);
@@ -212,6 +215,14 @@ static void handleUpdateDone() {
   restartRequested = true;
 }
 
+// POST /api/restart (?quiet=1: like the 4 am restart, no intro or address screen; for testing it)
+static void handleRestart() {
+  if (!touch()) return;
+  if (web->arg("quiet") == "1") quietArm(BOOT_NIGHTLY);
+  sendJson("{\"ok\":true}");
+  restartRequested = true;
+}
+
 static void handleForgetWifi() {
   if (!touch()) return;
   prefs.remove("ssid"); prefs.remove("pass");
@@ -248,6 +259,7 @@ static void startHomeWeb() {
   web->on("/local", HTTP_GET, handleIndex);              // built-in copy of the app (no internet)
   web->on("/favicon.ico", HTTP_GET, handleFavicon);
   web->on("/api/info", HTTP_GET, handleInfo);
+  web->on("/api/restart", HTTP_POST, handleRestart);
   web->on("/api/clear", HTTP_POST, handleClear);
   web->on("/api/upload", HTTP_POST, handleUploadDone, handleUploadData);
   web->on("/api/play", HTTP_POST, handlePlay);

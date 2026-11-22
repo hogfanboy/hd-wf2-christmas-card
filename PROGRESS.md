@@ -1,32 +1,21 @@
 # PROGRESS
 
-## Working state (fw 1.0.0-beta17 built, not flashed; card 1 runs beta16, card 2 radar probe v2, 2026-11-22)
+## Working state (fw 1.0.0-beta18 on card 1 via WiFi, card 2 radar probe v2, 2026-11-22)
+- **beta18 (memory safety):** quiet restart every night at 4 am (after 20 h up; every 3 days with no clock) and at
+  once if the biggest free block drops under 12 KB (normal ~32 KB). Quiet = no intro, no address screen, clock kept
+  through RTC memory so night mode stays dark. `/api/info` adds up, minHeap, block, boot (power/restart/crash/
+  nightly/lowmem), bootWhy, quietRestarts, crashes (since power-on). `POST /api/restart?quiet=1` tests it (verified
+  on card 1: boot nightly, count 1). Soak: `tools/soak-log.ps1` (CSV in `soak/`, git-ignored; `-Summary`); 30-h run
+  on card 1 started 2026-11-22 01:50 (terminal tab), covers the first real 4 am restart on 11-23.
 - **beta17:** scrolling messages move 1 px per 40-ms frame on a fixed clock (25 px/s, like the strips; was 40 px/s
   on wall-clock time). Clear nights show a full moon (now screen + hourly); partly cloudy and the sun & moon screen
   keep tonight's real phase. Moon sprites redrawn: whole-pixel circle (no 2-px nubs at the edges), lit/dark line
   snapped to whole pixels, gibbous with a clear dark bite (phase 0.34/0.66), lone crescent-tip pixels removed.
-- **beta16:** strips slide 25 px/s = exactly 1 px per 40-ms frame on a fixed clock (was 40 px/s: uneven 1-2 px
-  steps). New weather items on the page start with Hourly (12 h) and Daily (5 days) checked.
-- **beta15:** hourly and daily forecasts slide. Hourly = one 32-px column per hour (12 or 24 h + now), temperature
-  in its temperature color, at midnight the new weekday in white + dotted line. 10 days = the 5-day columns sliding.
-  Strips hold 3 s, slide, hold 2 s (screen lasts max(item secs, strip)). Card 1: 24 hours + 10 days.
-- **beta7-14:** Hourly (12/24 h) and Daily (5/10 days) checkboxes, weather Screens checklist, alerts (weather.gov), Christmas lights, QR big/small, card remembers the weather town (NVS `wxhome`).
-- **Fonts/icons:** crisp Jumbo font and shaded weather icons with hard edges (details in PROJECT-NOTES).
-- **Shuffle:** page Play order In order / Shuffle (`order<TAB>shuffle` in show.txt), never the same item twice.
-- **Border trim (beta4 page):** every picture's plain-color border (all 4 corners the same color) is cut off before
-  scaling, so small art in a big square fills the screen (01-35-46 "Merry Christmas": 464x227 art in 512x512, now
-  full width). Near-black -> black now for GIF too, not only full color. The "bad full color" picture was this.
-- **Pack builder hosted:** https://hogfanboy.github.io/hd-wf2-christmas-card/builder/ (docs/builder/, built by
-  build-web.mjs from tools/pack-builder.html). Sign in with a fine-grained GitHub token (Contents + Actions write on
-  both repos), kept in the browser. Changes wait in the page; Publish = one commit via the GitHub API (noreply
-  author) + workflow dispatch. Publish sends the complete file list (fixes 422 GitRPC::BadObjectState, which came
-  from deleting paths already gone because the repo changed after the page loaded). Fake-API tested; real use next.
-- **New cards' first show is editable in the pack builder (2026-11-21):** the holiday greetings are now a real
-  pack, `Holiday Starter/` in the content repo (was generated in CI, so the builder never saw it). Pack setting
-  "On new cards" (pack.json `install`), per picture On/Off + dates ("11-15 to 01-06"), and a "What a new card
-  gets" list with size vs 4.1 MB. build-install.mjs reads it (`--first-show-only` to check). Tested on a copy of
-  the content repo: builder writes the right pack.json, the build makes the same first show as before.
-- Card 1 (FM6124C): 192.168.50.16 / eed0 (USB COM10). Card 2 (RUL6024): 192.168.50.199 / 5df8. Heap ~70 KB.
+- **beta7-16:** forecast strips slide 1 px per 40-ms frame (12/24 h, 5/10 days; hold 3 s, slide, hold 2 s), Screens
+  checklist, alerts, Christmas lights, QR big/small, wxhome, shuffle, border trim, crisp Jumbo font + icons.
+- **Pack builder hosted** at /builder/ (GitHub token, one-commit Publish); new cards' first show = `Holiday Starter/`
+  pack (`install`, per-picture dates). Details in PROJECT-NOTES.
+- Card 1 (FM6124C): 192.168.50.16 / eed0 (USB COM10). Card 2 (RUL6024): 192.168.50.199 / 5df8. Heap ~77 KB, block ~32 KB.
 - Everything else (news removed, app, schedule, stocks, night mode, packs, effects): PROJECT-NOTES.md.
 
 ## Verified pins (HD-WF2)
@@ -50,7 +39,9 @@
    once (OSM tiles in the browser) and uploads it (~8 KB) when the town is saved; frames in flash, not RAM.
    Data: RainViewer over plain HTTP (zoom 7). Needs PNGdec 1.1.6 in CI libs; its 45 KB block fits only after
    playerFree(), so allocate it first and skip the round if it fails. Details in NOTES.md (merge only the notes).
-000. **"Flash beta17"** - judge message scrolling and the moons (sun & moon screen) by eye.
+000. **"Soak results"** - after 11-23 08:00 run `tools/soak-log.ps1 -Cards 192.168.50.16 -Summary`: want crashes 0,
+   block low >= ~28 KB, one nightly restart. Then flash card 2 with beta18 and soak both. Radar waits on this.
+00. **Judge beta17 by eye** - message scrolling and the moons (sun & moon screen).
 00a. **"Weather screens look good" / "change X"** - card 1: now, 24 hours sliding, 10 days sliding, details, air,
    sun & moon. Speed, hold times, column width and temperature colors are easy to change. Then flash card 2 (restart it first: it runs the radar probe until then).
 00. **"QR works close and far" / "change X"** - press S1 on either card; try the phone at 1.5 ft, 4 ft and 7 ft.

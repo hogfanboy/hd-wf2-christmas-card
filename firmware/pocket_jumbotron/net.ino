@@ -298,7 +298,7 @@ void netService() {
     startHomeWeb();
     Serial.printf("Home WiFi ok: http://%s  (http://%s.local)  RSSI %d, free heap %u\n", WiFi.localIP().toString().c_str(),
                   hostName.c_str(), WiFi.RSSI(), (unsigned)ESP.getFreeHeap());
-    showAddress(10000);
+    if (!quietBoot) showAddress(10000);   // not after a quiet restart (4 am)
   }
   if (!webStarted && !staFailShown && millis() - staBeganAt > 30000) {
     staFailShown = true;

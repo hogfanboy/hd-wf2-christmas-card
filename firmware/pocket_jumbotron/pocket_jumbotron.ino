@@ -22,6 +22,9 @@
 #include "driver/gpio.h"
 #include "intro_gif.h"
 #include <time.h>
+#include <sys/time.h>
+#include <esp_system.h>
+#include <esp_timer.h>
 #include <HTTPClient.h>
 #include <Fonts/FreeSansBold12pt7b.h>
 #include <Fonts/FreeSansBold18pt7b.h>
@@ -37,7 +40,7 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "1.0.0-beta17";
+static const char *FW_VERSION = "1.0.0-beta18";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
@@ -117,6 +120,59 @@ static PixRow *shown = nullptr;                // what the panel currently shows
 static bool shownValid = false;
 static PixRow *saved = nullptr;                // canvas snapshot for disposal 3 (allocated only if a GIF uses it)
 
+// ---------- Health: quiet restarts and the numbers for /api/info ----------
+// Days of downloads chop free memory into smaller pieces. A quiet restart puts it back: every night at 4 am (after
+// 20 h up), or at once if the biggest free piece gets small (normal while playing: ~32 KB). RTC_NOINIT memory
+// survives a software restart, so the card then skips the intro and the address screen and keeps the clock (night
+// mode stays right). It also counts quiet restarts and crashes since power-on, for the soak test.
+RTC_NOINIT_ATTR static uint32_t rtcMagic, rtcQuiet, rtcWhy, rtcTime, rtcQuietN, rtcCrashN;
+static const uint32_t RTC_MAGIC = 0x50A11E57, QUIET_MAGIC = 0x51E7B007;
+static const uint32_t LOWMEM_BLOCK = 12000;    // restart below this biggest free block (between items)
+enum { BOOT_POWER, BOOT_SOFT, BOOT_CRASH, BOOT_NIGHTLY, BOOT_LOWMEM };
+static const char *const BOOT_NAME[] = {"power", "restart", "crash", "nightly", "lowmem"};
+static uint8_t bootKind = BOOT_POWER;
+static const char *bootDetail = "";            // esp_reset_reason in words
+bool quietBoot = false;                        // this start was a quiet restart: no intro, no address screen
+
+static uint32_t upSec() { return (uint32_t)(esp_timer_get_time() / 1000000); }
+static void quietArm(uint8_t why) {             // the next software restart is a quiet one
+  rtcQuiet = QUIET_MAGIC; rtcWhy = why; rtcTime = timeValid() ? (uint32_t)time(nullptr) : 0; rtcQuietN++;
+}
+static void quietRestart(uint8_t why) {
+  quietArm(why);
+  Serial.printf("Quiet restart (%s): up %u s, free %u, largest block %u, lowest free %u\n", BOOT_NAME[why], (unsigned)upSec(),
+                (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap(), (unsigned)ESP.getMinFreeHeap());
+  delay(100);
+  ESP.restart();
+}
+static void healthBoot() {                     // setup(), after settingsLoad (needs tzString)
+  esp_reset_reason_t r = esp_reset_reason();
+  bool crash = r == ESP_RST_PANIC || r == ESP_RST_INT_WDT || r == ESP_RST_TASK_WDT || r == ESP_RST_WDT || r == ESP_RST_BROWNOUT;
+  bootDetail = r == ESP_RST_POWERON ? "power on" : r == ESP_RST_SW ? "software" : r == ESP_RST_PANIC ? "panic" :
+               r == ESP_RST_INT_WDT || r == ESP_RST_TASK_WDT || r == ESP_RST_WDT ? "watchdog" : r == ESP_RST_BROWNOUT ? "brownout" :
+               r == ESP_RST_EXT ? "reset pin" : r == ESP_RST_USB ? "usb" : "other";
+  if (r == ESP_RST_POWERON || rtcMagic != RTC_MAGIC) { rtcMagic = RTC_MAGIC; rtcQuietN = 0; rtcCrashN = 0; rtcQuiet = 0; }
+  if (crash) { rtcCrashN++; bootKind = BOOT_CRASH; }
+  else if (r == ESP_RST_SW && rtcQuiet == QUIET_MAGIC && (rtcWhy == BOOT_NIGHTLY || rtcWhy == BOOT_LOWMEM)) {
+    bootKind = rtcWhy; quietBoot = true;
+    if (rtcTime) {                               // keep the clock until NTP answers again
+      timeval tv = {(time_t)rtcTime + 2, 0}; settimeofday(&tv, nullptr);
+      setenv("TZ", tzString.c_str(), 1); tzset();
+    }
+  } else if (r != ESP_RST_POWERON) bootKind = BOOT_SOFT;
+  rtcQuiet = 0;
+  Serial.printf("Start: %s (%s), quiet restarts %u, crashes %u since power-on\n", BOOT_NAME[bootKind], bootDetail,
+                (unsigned)rtcQuietN, (unsigned)rtcCrashN);
+}
+void healthService() {                         // loop(), between items
+  uint32_t up = upSec();
+  if (up > 600 && ESP.getMaxAllocHeap() < LOWMEM_BLOCK) quietRestart(BOOT_LOWMEM);
+  if (up < 20UL * 3600) return;
+  if (!timeValid()) { if (up > 72UL * 3600) quietRestart(BOOT_NIGHTLY); return; }   // no clock: every 3 days
+  time_t t = time(nullptr); struct tm lt; localtime_r(&t, &lt);
+  if (lt.tm_hour == 4) quietRestart(BOOT_NIGHTLY);
+}
+
 void setup() {
   Serial.begin(115200);
   delay(300);
@@ -127,6 +183,8 @@ void setup() {
   settingsLoad();
   panelRegInit();                  // every panel (FM6124C ignores these; RUL6024 needs them)
   applyBrightness();
+  healthBoot();
+  if (quietBoot) forceNightCheck();           // the clock came along: dark at once if it is night
   panel->clearScreen();
   Serial.printf("Panel ok, %d-bit color, double buffer: %s, free heap %u\n", PIXEL_COLOR_DEPTH_BITS,
                 doubleBuffered ? "yes" : "no", (unsigned)ESP.getFreeHeap());
@@ -142,7 +200,7 @@ void setup() {
   loadPlaylist();
   Serial.printf("%u GIFs in playlist\n", (unsigned)playlist.size());
   markAppValid();                 // we started fine: cancel automatic rollback of a fresh update
-  playIntro();
+  if (!quietBoot) playIntro();
   if (playlist.empty()) showMessage("POCKET", "JUMBOTRON");
   netBegin();
 }
@@ -189,6 +247,7 @@ void loop() {
     applyBrightness();                               // the QR screen sets its own brightness
   }
   updateService();                                   // 3 am: newer firmware on the website? (online.ino)
+  healthService();                                   // 4 am quiet restart, or at once if memory gets tight
   if (holdPlayback || playlist.empty()) { delay(5); return; }
   if (playOrder.size() != playlist.size()) shuffleOrder();
   if (playIdx >= playlist.size()) { playIdx = 0; shuffleOrder(); }   // next round (a new random order in shuffle mode)

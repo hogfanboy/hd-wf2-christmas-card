@@ -40,7 +40,7 @@ cd firmware && "$A" compile -b "esp32:esp32:esp32s3:FlashMode=dio,FlashSize=8M,C
 ## Flash / talk to a card (run in a terminal tab the user can see, via `powershell -ExecutionPolicy Bypass -File ...`)
 - Firmware: `tools/flash-watch.ps1 -LogSec 300 -Images "0x10000=firmware\build\pocket_jumbotron\pocket_jumbotron.ino.bin"`. A card still on Huidu: start the script, then the user plugs in holding S1.
 - Serial log: `tools/serial-log.ps1 -Seconds 600`.
-- Over WiFi: firmware `curl -F "firmware=@firmware/build/pocket_jumbotron/pocket_jumbotron.ino.bin" http://<ip>/api/update`. API: `GET /api/info|show|file?name=`, `POST /api/clear|upload|show|play|brightness?v=|settings|update|forget-wifi`.
+- Over WiFi: firmware `curl -F "firmware=@firmware/build/pocket_jumbotron/pocket_jumbotron.ino.bin" http://<ip>/api/update`. API: `GET /api/info|show|file?name=`, `POST /api/clear|upload|show|play|brightness?v=|settings|update|forget-wifi|restart[?quiet=1]`.
 - esptool v5: `%LOCALAPPDATA%\Programs\esptool\esptool-windows-amd64\esptool.exe`. gh: `%LOCALAPPDATA%\Programs\gh\bin\gh.exe`.
 
 ## Media and testing without a card

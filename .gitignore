@@ -35,3 +35,6 @@ docs/builder/
 
 # Built by tools/build-feeds.mjs (published by GitHub Actions hourly)
 docs/feeds/
+
+# Soak test logs (tools/soak-log.ps1)
+soak/
