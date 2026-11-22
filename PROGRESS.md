@@ -43,7 +43,7 @@
 ## Next (the user can answer with one of these commands)
 0000. **"Build the radar screen"** - radar probe v2 approved by eye on card 2 (Seattle rain loop over a dim map,
    home cross + town, 25 MI ring, radar time top-right). Probe + notes: branch `claude/inspiring-perlman-7d2eaa`,
-   `firmware/probes/radar/` (NOTES.md has URLs, memory numbers, makebase.py). Make it a weather screen (`radar`
+   `firmware/probes/radar_probe/` (NOTES.md has URLs, memory numbers, makebase.py). Make it a weather screen (`radar`
    checkbox) that only plays when rain/snow is on the way (same test as rainSoon). The page builds the town's map
    once (OSM tiles in the browser) and uploads it (~8 KB) when the town is saved; frames in flash, not RAM.
 000. **"Weather screens look good" / "change X"** - card 1: now, 12 hours, 24 hours, 5 days, 14 days, details,
