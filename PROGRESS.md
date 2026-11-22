@@ -1,12 +1,13 @@
 # PROGRESS
 
-## Working state (fw 1.0.0-beta18 on card 1 via WiFi, card 2 radar probe v2, 2026-11-22)
+## Working state (fw 1.0.0-beta18 on both cards, 2026-11-22; card 1 on USB at the desk = dev card)
 - **beta18 (memory safety):** quiet restart every night at 4 am (after 20 h up; every 3 days with no clock) and at
   once if the biggest free block drops under 12 KB (normal ~32 KB). Quiet = no intro, no address screen, clock kept
   through RTC memory so night mode stays dark. `/api/info` adds up, minHeap, block, boot (power/restart/crash/
   nightly/lowmem), bootWhy, quietRestarts, crashes (since power-on). `POST /api/restart?quiet=1` tests it (verified
-  on card 1: boot nightly, count 1). Soak: `tools/soak-log.ps1` (CSV in `soak/`, git-ignored; `-Summary`); 30-h run
-  on card 1 started 2026-11-22 01:50 (terminal tab), covers the first real 4 am restart on 11-23.
+  on card 1: boot nightly, count 1). Soak: `tools/soak-log.ps1` (CSV in `soak/`, git-ignored; `-Summary`). Card 1 ran 8.9 h clean (block 31.7 KB,
+  0 crashes), then the soak moved to card 2 (family room, 20 items, flash full) on 2026-11-22 10:45, 32 h, tab
+  "soak card 2". Card 2 starts with block ~17.9 KB (min heap 14.8 KB): watch it against the 12 KB restart line.
 - **beta17:** scrolling messages move 1 px per 40-ms frame on a fixed clock (25 px/s, like the strips; was 40 px/s
   on wall-clock time). Clear nights show a full moon (now screen + hourly); partly cloudy and the sun & moon screen
   keep tonight's real phase. Moon sprites redrawn: whole-pixel circle (no 2-px nubs at the edges), lit/dark line
@@ -39,11 +40,12 @@
    once (OSM tiles in the browser) and uploads it (~8 KB) when the town is saved; frames in flash, not RAM.
    Data: RainViewer over plain HTTP (zoom 7). Needs PNGdec 1.1.6 in CI libs; its 45 KB block fits only after
    playerFree(), so allocate it first and skip the round if it fails. Details in NOTES.md (merge only the notes).
-000. **"Soak results"** - after 11-23 08:00 run `tools/soak-log.ps1 -Cards 192.168.50.16 -Summary`: want crashes 0,
-   block low >= ~28 KB, one nightly restart. Then flash card 2 with beta18 and soak both. Radar waits on this.
+000. **"Soak results"** - after 11-23 08:00 run `tools/soak-log.ps1 -Cards 192.168.50.199 -Summary`: want crashes 0,
+   no lowmem restarts, one nightly restart. If card 2's block keeps sinking, find what holds it (20 items). Don't
+   flash/restart card 2 till then; card 1 is free for firmware work. Radar waits on this.
 00. **Judge beta17 by eye** - message scrolling and the moons (sun & moon screen).
 00a. **"Weather screens look good" / "change X"** - card 1: now, 24 hours sliding, 10 days sliding, details, air,
-   sun & moon. Speed, hold times, column width and temperature colors are easy to change. Then flash card 2 (restart it first: it runs the radar probe until then).
+   sun & moon. Speed, hold times, column width and temperature colors are easy to change. Card 2 already has beta18.
 00. **"QR works close and far" / "change X"** - press S1 on either card; try the phone at 1.5 ft, 4 ft and 7 ft.
 0. **"Lights look good" / "change X"** - run `tools/effects-probe.ps1` (bulb size 2x2, spacing 8, pattern speed).
 1. **"Fonts/icons look good" / "change X"** - weather + forecast and a Jumbo text item ("use the straight rays").
