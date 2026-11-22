@@ -7,7 +7,9 @@
   nightly/lowmem), bootWhy, quietRestarts, crashes (since power-on). `POST /api/restart?quiet=1` tests it (verified
   on card 1: boot nightly, count 1). Soak: `tools/soak-log.ps1` (CSV in `soak/`, git-ignored; `-Summary`). Card 1 ran 8.9 h clean (block 31.7 KB,
   0 crashes), then the soak moved to card 2 (family room, 20 items, flash full) on 2026-11-22 10:45, 32 h, tab
-  "soak card 2". Card 2 starts with block ~17.9 KB (min heap 14.8 KB): watch it against the 12 KB restart line.
+  "soak card 2". Memory on a loaded card (measured on card 1 with 4 .pjm + 3 big GIFs + weather/clock/countdown):
+  between items block 27.6 KB (31.7 empty; 12 KB line is checked only here); while a .pjm plays ~17 KB (JPEGDEC +
+  frame buffer, freed after); lowest ~18 KB right after uploads. Player freed: block 59 KB, so radar's 45 KB fits.
 - **beta17:** scrolling messages move 1 px per 40-ms frame on a fixed clock (25 px/s, like the strips; was 40 px/s
   on wall-clock time). Clear nights show a full moon (now screen + hourly); partly cloudy and the sun & moon screen
   keep tonight's real phase. Moon sprites redrawn: whole-pixel circle (no 2-px nubs at the edges), lit/dark line
