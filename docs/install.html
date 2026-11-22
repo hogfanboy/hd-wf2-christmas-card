@@ -45,6 +45,15 @@
   .wifi .row { display:flex; gap:10px; margin-top:14px; } .wifi .row button { flex:1; }
   button.ghost { background:none; border:1px solid var(--line); color:var(--muted); font-size:15px; padding:10px 14px; width:auto; }
   #wstat { margin-top:12px; font-weight:600; min-height:27px; }
+  .tag { display:inline-block; font-size:13px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--gold); margin-bottom:8px; }
+  .tag.done { color:var(--green); }
+  .callout { margin-top:16px; padding:16px 18px; border-radius:12px; background:rgba(78,224,138,.1); border:1px solid rgba(78,224,138,.5); }
+  .callout b { display:block; font-size:21px; color:var(--green); margin-bottom:4px; }
+  .callout .arrow { display:block; text-align:center; font-size:30px; line-height:1; color:var(--gold); margin-top:8px; animation:bob 1s ease-in-out infinite; }
+  .next { border:2px solid var(--gold); animation:pulse 1.6s ease-out 6; }
+  @keyframes pulse { 0% { box-shadow:0 0 0 0 rgba(255,190,60,.6); } 100% { box-shadow:0 0 0 18px rgba(255,190,60,0); } }
+  @keyframes bob { 50% { transform:translateY(6px); } }
+  @media (prefers-reduced-motion: reduce) { .next, .callout .arrow { animation:none; } }
 </style>
 </head>
 <body>
@@ -65,8 +74,9 @@
     <b>You need:</b> your screen, the <b>USB cable with the same flat plug on both ends</b> (USB-A to USB-A), and a computer with Chrome or Edge.
   </div>
 
-  <div class="box">
-    <ol class="steps">
+  <div class="box" id="installbox">
+    <div class="tag" id="tag1">Step 1 of 2 · Install the software</div>
+    <ol class="steps" id="isteps">
       <li><b>Unplug the screen's power supply.</b> Then unplug the <b>two cables going to the LED panel</b> (the flat data ribbon and the power lead) so only the small controller board is left. <span class="muted">The computer only has to power that board.</span></li>
       <li><b>Plug the USB cable into the controller board first.</b> <span class="muted">That end is the tight one, so get it done now.</span> Leave the other end unplugged.</li>
       <li><b>Click the yellow button below.</b> A small window opens listing devices. It's empty for now; leave it open.</li>
@@ -77,22 +87,17 @@
     <button id="go" disabled>Loading software…</button>
     <div class="bar"><i id="bar"></i></div>
     <div id="status"></div>
+    <div class="callout" id="next1" hidden>
+      <b>Step 1 is done. Don't unplug yet!</b>
+      Now step 2: connect the screen to your home WiFi, just below. Leave the USB cable plugged in for it.
+      <span class="arrow">↓</span>
+    </div>
     <details><summary>Technical details</summary><pre id="log"></pre></details>
   </div>
 
-  <div class="box warn" id="retry" hidden>
-    <b>Didn't catch the screen?</b> No problem. Unplug the cable from the computer (leave it in the board), click the yellow button again, then <b>hold the button and plug it back into the computer</b>. If you've connected once before, the page notices by itself and no window is needed.
-  </div>
-
-  <div class="box" id="wonly">
-    <b>Already switched, and only need to change the WiFi?</b> <span class="muted">(new router, new house)</span> Plug the
-    screen's controller board into the computer with the USB cable (no button needed; the panel can stay connected and
-    the screen's own power on), then click below and pick <b>"USB JTAG/serial debug unit"</b>.
-    <button id="wbtn" class="ghost" style="margin-top:10px">Set up WiFi only</button>
-  </div>
-
   <div class="box wifi" id="wifi" hidden>
-    <b style="font-size:19px">Connect it to your home WiFi</b>
+    <div class="tag" id="tag2">Step 2 of 2</div>
+    <b style="font-size:21px;display:block">Connect it to your home WiFi</b>
     <div style="color:var(--muted);font-size:15px">Leave the cable plugged in for this step. The screen joins your WiFi now, so there's no setup with the button later.</div>
     <div id="wform" hidden>
       <label for="wssid">WiFi network</label>
@@ -107,8 +112,19 @@
     <div class="row"><button class="ghost" id="wskip">Skip, I'll use the button later</button></div>
   </div>
 
+  <div class="box warn" id="retry" hidden>
+    <b>Didn't catch the screen?</b> No problem. Unplug the cable from the computer (leave it in the board), click the yellow button again, then <b>hold the button and plug it back into the computer</b>. If you've connected once before, the page notices by itself and no window is needed.
+  </div>
+
+  <div class="box" id="wonly">
+    <b>Already switched, and only need to change the WiFi?</b> <span class="muted">(new router, new house)</span> Plug the
+    screen's controller board into the computer with the USB cable (no button needed; the panel can stay connected and
+    the screen's own power on), then click below and pick <b>"USB JTAG/serial debug unit"</b>.
+    <button id="wbtn" class="ghost" style="margin-top:10px">Set up WiFi only</button>
+  </div>
+
   <div class="box" id="done" hidden>
-    <div class="ok" style="font-size:22px;font-weight:800">Done! 🎉</div>
+    <div class="ok" style="font-size:22px;font-weight:800">All set! 🎉 Last thing: put it back together</div>
     <p id="steps-only" hidden>The screen restarts on your WiFi in a few seconds. Unplug the USB cable; open
       <a id="waddr2" href="#" target="_blank" rel="noopener"></a> on any phone or computer on your WiFi.</p>
     <ol id="steps-wifi" hidden>
@@ -138,6 +154,26 @@ const progress = (f) => { $('bar').style.width = Math.round(f * 100) + '%'; };
 const terminal = { clean() {}, writeLine(d) { log(d + '\n'); }, write(d) { log(d); } };
 
 let image = null, info = null, busy = false, armed = false;
+const WRITE_TRIES = 3;
+// install.html?soak=10 (testing only): after the install, write + verify the image again until 10 verified writes.
+const SOAK = Math.min(50, Math.max(0, parseInt(new URLSearchParams(location.search).get('soak'), 10) || 0));
+
+// Install finished and checked: say so loudly and walk the person on to the WiFi step.
+function showStep2() {
+  status('Software installed ✓', 'ok');
+  $('go').hidden = true; $('bar').parentNode.hidden = true;
+  $('tag1').textContent = 'Step 1 of 2 · Done ✓'; $('tag1').classList.add('done');
+  $('isteps').hidden = true; $('wonly').hidden = true; $('retry').hidden = true;
+  $('next1').hidden = false;
+  $('wifi').classList.add('next');
+  $('wifi').hidden = false;
+  setTimeout(() => $('next1').scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+}
+function demoStep2() {                                   // install.html#demo-step2: the after-install screens without a card
+  showStep2(); $('wform').hidden = false;
+  $('wssid').innerHTML = '<option>My Home WiFi</option><option value="*">Other network…</option>';
+  wstat('');
+}
 
 // MD5 (hex) of a Uint8Array: esptool-js asks the screen for the MD5 of what landed in flash and compares,
 // so a damaged write fails here instead of leaving a screen that can't start (the browser has no MD5).
@@ -197,6 +233,7 @@ async function loadImage() {
     status(`Software version ${info.version} ready.`);
     $('go').disabled = false;
     $('go').textContent = 'Open the device window';
+    if (location.hash === '#demo-step2') demoStep2();
   } catch (e) {
     status('Couldn\'t download the software: ' + e.message, 'bad');
   }
@@ -234,16 +271,41 @@ async function install(port) {
     log(`\nChip: ${chip}\n`);
     if (!/ESP32-S3/i.test(chip)) throw new Error(`this doesn't look like a Pocket Jumbotron (found ${chip})`);
     status('Installing… you can let go of the button now. Don\'t unplug anything.');
-    await loader.writeFlash({
-      fileArray: [{ data: image, address: 0 }],
-      flashSize: 'keep', flashMode: 'keep', flashFreq: 'keep', eraseAll: false, compress: true,
-      calculateMD5Hash: md5hex,
-      reportProgress: (_i, written, total) => {
-        progress(written / total);
-        // Progress counts compressed bytes; the empty picture space near the end is tiny compressed but slow to write.
-        status(written < total ? `Installing… ${Math.round(written / total * 100)}%  (don't unplug anything${written / total > 0.65 ? '; this part can pause for a minute' : ''})` : 'Checking the install… (don\'t unplug anything)');
-      },
-    });
+    // Write the whole image, then the screen MD5s its flash and esptool-js compares (throws on a mismatch). The screen
+    // stays in install mode after a mismatch, so write it again on the same connection, up to WRITE_TRIES times.
+    const writeVerified = async (label) => {
+      for (let attempt = 1; ; attempt++) {
+        const t0 = Date.now(), again = attempt > 1 ? ` (writing it again, try ${attempt} of ${WRITE_TRIES})` : '';
+        try {
+          await loader.writeFlash({
+            fileArray: [{ data: image, address: 0 }],
+            flashSize: 'keep', flashMode: 'keep', flashFreq: 'keep', eraseAll: false, compress: true,
+            calculateMD5Hash: md5hex,
+            reportProgress: (_i, written, total) => {
+              progress(written / total);
+              // Progress counts compressed bytes; the empty picture space near the end is tiny compressed but slow to write.
+              status(written < total ? `${label}${Math.round(written / total * 100)}%${again}  (don't unplug anything${written / total > 0.65 ? '; this part can pause for a minute' : ''})` : 'Checking the install… (don\'t unplug anything)');
+            },
+          });
+          log(`[write verified in ${Math.round((Date.now() - t0) / 1000)} s, try ${attempt}]\n`);
+          return attempt;
+        } catch (e) {
+          if (!/md5/i.test(e && e.message || '') || attempt >= WRITE_TRIES) throw e;
+          log(`\n[MD5 mismatch on try ${attempt}, writing again]\n`);
+        }
+      }
+    };
+    const tries = await writeVerified('Installing… ');
+    if (SOAK > 1) {                                      // test mode: keep rewriting and count how often the check catches damage
+      let extra = tries - 1, worst = tries; const t0 = Date.now();
+      for (let round = 2; round <= SOAK; round++) {
+        const n = await writeVerified(`Test round ${round} of ${SOAK}: `);
+        extra += n - 1; worst = Math.max(worst, n);
+        log(`[test round ${round}: verified, ${n} tr${n > 1 ? 'ies' : 'y'}]\n`);
+      }
+      const summary = `Test: ${SOAK} of ${SOAK} writes verified; ${extra} needed a second write (worst ${worst} tries); ${Math.round((Date.now() - t0) / 1000 / (SOAK - 1))} s each.`;
+      log('\n' + summary + '\n'); alert(summary);
+    }
     status('Restarting the screen…');
     // esptool-js 0.7.1's hard_reset only releases RTS (never pulls it first), so the screen stayed in install mode
     // until the tab closed. Pull reset (RTS) with the boot line (DTR) released, then let go: a normal start.
@@ -251,16 +313,15 @@ async function install(port) {
     await transport.setDTR(false); await transport.setRTS(true); await sleep(150); await transport.setRTS(false);
     try { await transport.disconnect(); } catch {}
     progress(1);
-    status('Done!', 'ok');
-    $('go').textContent = 'Installed';
-    armed = false; $('wonly').hidden = true;
+    armed = false;
+    showStep2();
     improvSetup();
   } catch (e) {
     log('\nERROR: ' + (e && e.message || e) + '\n');
     try { await transport?.disconnect(); } catch {}
-    if (/md5/i.test(e && e.message || '')) {            // written, but the check found damage: the screen is still in install mode
-      status('The install came out damaged, so it wasn\'t finished. Leave everything plugged in, click Try again and pick the screen again. If it happens twice, try another USB cable or port.', 'bad');
-    } else status('Lost the connection to the screen before it finished.', 'bad');
+    if (/md5/i.test(e && e.message || '')) {            // damaged WRITE_TRIES times in a row: the screen is still in install mode
+      status(`The install didn't check out after ${WRITE_TRIES} tries, so it wasn't finished. Try another USB cable or another USB port on the computer, then click Try again.`, 'bad');
+    } else status('Lost the connection to the screen before it finished. The screen is fine: unplug the cable from the computer, hold the button and plug it back in to start over.', 'bad');
     $('retry').hidden = false;
     $('go').disabled = false;
     $('go').textContent = 'Try again';
@@ -273,9 +334,12 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const wstat = (s, cls = '') => { $('wstat').className = cls; $('wstat').textContent = s; };
 let imp = null, wifiOnly = false;
 function improvDone(url) {
-  $('wifi').hidden = true; $('done').hidden = false;
+  $('wifi').hidden = true; $('next1').hidden = true; $('done').hidden = false;
+  $('done').classList.add('next');
+  setTimeout(() => $('done').scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
   if (wifiOnly) {
     $('steps-button').hidden = true; $('steps-only').hidden = !url;
+    $('done').querySelector('.ok').textContent = 'All set! 🎉';
     $('waddr2').href = url; $('waddr2').textContent = url;
     if (!url) $('done').querySelector('.ok').textContent = 'WiFi left as it was.';
   } else if (url) { $('steps-wifi').hidden = false; $('steps-button').hidden = true; $('waddr').href = url; $('waddr').textContent = url; }
@@ -287,6 +351,7 @@ $('wbtn').onclick = async () => {
   let port;
   try { port = await navigator.serial.requestPort({ filters: [{ usbVendorId: ESPRESSIF_VID }] }); } catch { return; }
   $('wonly').hidden = true; busy = true; wifiOnly = true;
+  $('tag2').textContent = 'Change the WiFi';
   await improvSetup(port);
   busy = false;
 };
