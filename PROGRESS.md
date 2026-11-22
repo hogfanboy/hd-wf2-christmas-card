@@ -24,8 +24,7 @@
   gets" list with size vs 4.1 MB. build-install.mjs reads it (`--first-show-only` to check). Tested on a copy of
   the content repo: builder writes the right pack.json, the build makes the same first show as before.
 - **Pack convert settings:** GIF / Auto / Full color per pack and per picture in the builder (pack.json `format`, `pictures`).
-- Card 1 (FM6124C): 192.168.50.16 / pocketjumbo-eed0 (PC USB COM10). Card 2 (RUL6024): 192.168.50.199 /
-  pocketjumbo-5df8. Both reachable, heap ~70 KB playing.
+- Card 1 (FM6124C): 192.168.50.16 / eed0 (USB COM10). Card 2 (RUL6024): 192.168.50.199 / 5df8. Heap ~70 KB.
 - Everything else (news removed, app, schedule, stocks, night mode, packs, effects): PROJECT-NOTES.md.
 
 ## Verified pins (HD-WF2)
