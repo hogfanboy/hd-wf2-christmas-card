@@ -139,6 +139,34 @@ const terminal = { clean() {}, writeLine(d) { log(d + '\n'); }, write(d) { log(d
 
 let image = null, info = null, busy = false, armed = false;
 
+// MD5 (hex) of a Uint8Array: esptool-js asks the screen for the MD5 of what landed in flash and compares,
+// so a damaged write fails here instead of leaving a screen that can't start (the browser has no MD5).
+function md5hex(data) {
+  const K = new Int32Array(64), S = [7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21];
+  for (let i = 0; i < 64; i++) K[i] = Math.floor(Math.abs(Math.sin(i + 1)) * 2 ** 32) | 0;
+  const n = data.length, total = ((n + 8) >>> 6 << 6) + 64, tail = new Uint8Array(total - (n & ~63));
+  tail.set(data.subarray(n & ~63)); tail[n & 63] = 0x80;
+  const dv = new DataView(tail.buffer); dv.setUint32(tail.length - 8, (n * 8) >>> 0, true); dv.setUint32(tail.length - 4, Math.floor(n / 2 ** 29), true);
+  let a0 = 0x67452301, b0 = 0xefcdab89 | 0, c0 = 0x98badcfe | 0, d0 = 0x10325476;
+  const M = new Int32Array(16), body = n & ~63;
+  for (let off = 0; off < total; off += 64) {
+    const src = off < body ? data : tail, o = off < body ? off : off - body;
+    for (let j = 0; j < 16; j++) { const p = o + j * 4; M[j] = src[p] | src[p + 1] << 8 | src[p + 2] << 16 | src[p + 3] << 24; }
+    let a = a0, b = b0, c = c0, d = d0;
+    for (let i = 0; i < 64; i++) {
+      let f, g;
+      if (i < 16) { f = (b & c) | (~b & d); g = i; }
+      else if (i < 32) { f = (d & b) | (~d & c); g = (5 * i + 1) & 15; }
+      else if (i < 48) { f = b ^ c ^ d; g = (3 * i + 5) & 15; }
+      else { f = c ^ (b | ~d); g = (7 * i) & 15; }
+      const s = S[(i >> 4) * 4 + (i & 3)], x = (a + f + K[i] + M[g]) | 0;
+      a = d; d = c; c = b; b = (b + (x << s | x >>> (32 - s))) | 0;
+    }
+    a0 = (a0 + a) | 0; b0 = (b0 + b) | 0; c0 = (c0 + c) | 0; d0 = (d0 + d) | 0;
+  }
+  return [a0, b0, c0, d0].map(v => [0, 8, 16, 24].map(sh => ((v >>> sh) & 255).toString(16).padStart(2, '0')).join('')).join('');
+}
+
 if (!('serial' in navigator)) {
   $('unsupported').hidden = false;
   $('go').textContent = 'Use Chrome or Edge on a computer';
@@ -209,10 +237,18 @@ async function install(port) {
     await loader.writeFlash({
       fileArray: [{ data: image, address: 0 }],
       flashSize: 'keep', flashMode: 'keep', flashFreq: 'keep', eraseAll: false, compress: true,
-      reportProgress: (_i, written, total) => { progress(written / total); status(`Installing… ${Math.round(written / total * 100)}%  (don't unplug anything)`); },
+      calculateMD5Hash: md5hex,
+      reportProgress: (_i, written, total) => {
+        progress(written / total);
+        // Progress counts compressed bytes; the empty picture space near the end is tiny compressed but slow to write.
+        status(written < total ? `Installing… ${Math.round(written / total * 100)}%  (don't unplug anything${written / total > 0.65 ? '; this part can pause for a minute' : ''})` : 'Checking the install… (don\'t unplug anything)');
+      },
     });
     status('Restarting the screen…');
-    await loader.after('hard_reset');
+    // esptool-js 0.7.1's hard_reset only releases RTS (never pulls it first), so the screen stayed in install mode
+    // until the tab closed. Pull reset (RTS) with the boot line (DTR) released, then let go: a normal start.
+    log('Restarting the screen...\n');
+    await transport.setDTR(false); await transport.setRTS(true); await sleep(150); await transport.setRTS(false);
     try { await transport.disconnect(); } catch {}
     progress(1);
     status('Done!', 'ok');
@@ -222,7 +258,9 @@ async function install(port) {
   } catch (e) {
     log('\nERROR: ' + (e && e.message || e) + '\n');
     try { await transport?.disconnect(); } catch {}
-    status('Lost the connection to the screen before it finished.', 'bad');
+    if (/md5/i.test(e && e.message || '')) {            // written, but the check found damage: the screen is still in install mode
+      status('The install came out damaged, so it wasn\'t finished. Leave everything plugged in, click Try again and pick the screen again. If it happens twice, try another USB cable or port.', 'bad');
+    } else status('Lost the connection to the screen before it finished.', 'bad');
     $('retry').hidden = false;
     $('go').disabled = false;
     $('go').textContent = 'Try again';
@@ -321,19 +359,29 @@ class Improv {
 async function improvSetup(given) {
   $('wifi').hidden = false; $('wform').hidden = true; $('done').hidden = true;
   wstat('Waiting for the screen to start up…');
-  let port = null;
-  if (given) { try { await given.open({ baudRate: 115200 }); port = given; } catch (e) { log('\nopen: ' + e.message + '\n'); } }
-  for (let t = 0; t < 40 && !port && !given; t++) {
-    await sleep(500);
-    const ports = (await navigator.serial.getPorts()).filter(p => p.getInfo().usbVendorId === ESPRESSIF_VID);
-    for (const p of ports) { try { await p.open({ baudRate: 115200 }); port = p; break; } catch (e) {} }
+  let port = null, st = null, sawPort = false;
+  const ask = async (tries) => {                       // the screen's state, asking once a second
+    for (let t = 0; t < tries && !st; t++) { try { await imp.send(2); } catch {} st = await imp.wait(m => m.kind === 'state', 1000); }
+  };
+  if (given) {
+    try { await given.open({ baudRate: 115200 }); port = given; } catch (e) { log('\nopen: ' + e.message + '\n'); }
+    if (port) { sawPort = true; imp = new Improv(port); await imp.start(); await ask(25); }
+  } else {
+    // The screen drops off USB as it restarts and comes back a moment later. A port opened too early is the old,
+    // dead connection, so: wait a bit, and if an opened port doesn't answer within 5 s, close it and open it again.
+    await sleep(2000);
+    const until = Date.now() + 45000;
+    while (!st && Date.now() < until) {
+      const ports = (await navigator.serial.getPorts()).filter(p => p.getInfo().usbVendorId === ESPRESSIF_VID);
+      for (const p of ports) { try { await p.open({ baudRate: 115200 }); port = p; break; } catch (e) {} }
+      if (!port) { await sleep(500); continue; }
+      sawPort = true; imp = new Improv(port); await imp.start();
+      await ask(5);
+      if (!st) { log('\n[no answer yet, reconnecting]\n'); await imp.close(); imp = null; port = null; await sleep(500); }
+    }
   }
-  if (!port) { wstat('Couldn\'t reach the screen over USB. That\'s OK: set up WiFi with the button instead.', 'bad'); return; }
-  imp = new Improv(port);
-  await imp.start();
-  let st = null;
-  for (let t = 0; t < 25 && !st; t++) { await imp.send(2); st = await imp.wait(m => m.kind === 'state', 1000); }
-  await sleep(300); imp.backlog = imp.backlog.filter(m => m.kind === 'result' && m.cmd === 2);   // answers to the extra asks
+  if (!sawPort) { wstat('Couldn\'t reach the screen over USB. That\'s OK: set up WiFi with the button instead.', 'bad'); return; }
+  if (st) { await sleep(300); imp.backlog = imp.backlog.filter(m => m.kind === 'result' && m.cmd === 2); }   // answers to the extra asks
   if (!st) { wstat('The screen didn\'t answer. Set up WiFi with the button instead.', 'bad'); return; }
   if (st.v === 4) {
     const r = await imp.wait(m => m.kind === 'result' && m.cmd === 2, 1500);

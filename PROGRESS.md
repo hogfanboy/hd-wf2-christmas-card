@@ -57,10 +57,9 @@
 2. **"Re-add the Christmas pack"** - on the phone page, ★ Get the latest pictures, add Christmas 2026, Send; they
    should now come in as GIF and look like the originals. Try Shuffle at the same time.
 3. **Online builder** works (Christmas 2026 published from it). Next there: Holiday starter animations → new cards.
-4. **Installer fixes** - full website install verified 2026-11-22 on the spare (AD:04, now beta20, first show
-   plays, Improv answers over COM12). Two page bugs: (a) after "Done!" the WiFi step says "The screen didn't
-   answer" (page opens the port before the card's USB re-appears after the reset; retry close/reopen), (b) no
-   read-back check (esptool-js 0.7.1 writeFlash without calculateMD5Hash), so a damaged write still says Done.
-   A tester's card (RUL6024) said Done, then blue top line, no USB even holding S1 (S1 is GPIO17, not boot):
-   likely a damaged write. Try: install page, yellow button, cancel, re-plug (connect event); else mail it here
-   for flash-watch. Then "Try WiFi only" on card 1, then 1.0.0.
+4. **Installer** - full website install verified 2026-11-22 on the spare (AD:04, beta20). install.html now
+   checks the write (MD5 read-back; a damaged write says "try again" and leaves the card in install mode) and
+   really restarts the card after (esptool-js 0.7.1 hard_reset only released RTS, so the card stayed in
+   install mode and the WiFi step never got an answer); verified on the spare: hash verified, WiFi list shown.
+   Tester's card (RUL6024, blue top line, no USB; S1 is GPIO17, not boot) probably got a damaged write: the
+   user sends a $5 replacement board flashed here with flash-watch. Next: "Try WiFi only" on card 1, then 1.0.0.
