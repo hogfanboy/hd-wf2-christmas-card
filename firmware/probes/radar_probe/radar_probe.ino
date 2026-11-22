@@ -14,7 +14,8 @@
 // the player blocks just for the fetch. The number to watch is "largest block" before the PNG allocation.
 //
 // WiFi and home come from the main firmware's NVS ("pj": ssid, pass, wxhome "lat,lon,..."), read only, so this
-// probe needs no settings. Flashing it replaces Pocket Jumbotron on that card until the real firmware goes back.
+// probe needs no settings. Rollback: put on a card over WiFi (/api/update), the probe never confirms itself, so
+// the next restart (hold S1 3 s, send 'x' on serial, or unplug) boots Pocket Jumbotron again by itself.
 // Build: same FQBN as the main firmware; needs the PNGdec library (arduino-cli lib install "PNGdec@1.1.6").
 
 #include <WiFi.h>
@@ -24,6 +25,10 @@
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
 #include "driver/gpio.h"
 #include "soc/gpio_struct.h"
+#include "esp_ota_ops.h"
+
+// Keep the probe unconfirmed (see rollback.cpp in the main firmware): any restart goes back to Pocket Jumbotron.
+extern "C" bool verifyRollbackLater() { return true; }
 
 static const HUB75_I2S_CFG::i2s_pins PINS = {
   /*R1*/ 2, /*G1*/ 6, /*B1*/ 10, /*R2*/ 3, /*G2*/ 7, /*B2*/ 11,
@@ -231,6 +236,9 @@ void setup() {
   delay(1500);
   Serial.println("\n\nRadar probe (RainViewer, PNGdec)");
   pinMode(BUTTON_PIN, INPUT_PULLUP);
+  esp_ota_img_states_t st;
+  if (esp_ota_get_state_partition(esp_ota_get_running_partition(), &st) == ESP_OK)
+    Serial.printf("OTA state %d (%s)\n", (int)st, st == ESP_OTA_IMG_PENDING_VERIFY ? "pending: a restart rolls back to Pocket Jumbotron" : "NOT pending: no rollback");
   panelStart();
   say("RADAR PROBE", "WiFi...");
   Preferences prefs;
@@ -239,6 +247,9 @@ void setup() {
   prefs.end();
   int c = home.indexOf(',');
   if (c > 0 && home.substring(0, c).toFloat() != 0) { homeLat = home.substring(0, c).toFloat(); homeLon = home.substring(c + 1).toFloat(); }
+#ifdef FORCE_LAT                                // test somewhere it is raining: --build-property compiler.cpp.extra_flags="-DFORCE_LAT=47.6 -DFORCE_LON=-122.3"
+  homeLat = FORCE_LAT; homeLon = FORCE_LON;
+#endif
   Serial.printf("home %.4f,%.4f (wxhome \"%s\")\n", homeLat, homeLon, home.c_str());
   if (!ssid.length()) { Serial.println("No WiFi saved in NVS (set it up with the main firmware first)"); say("RADAR PROBE", "no WiFi saved"); return; }
   WiFi.mode(WIFI_STA);
@@ -256,10 +267,20 @@ void setup() {
 }
 
 void loop() {
-  static uint32_t last = millis();
+  static uint32_t last = millis(), downAt = 0;
+  static uint8_t runs = 1;
   static bool was = true;
-  bool now = digitalRead(BUTTON_PIN) == HIGH;
-  if ((!now && was) || millis() - last > 10UL * 60 * 1000) { last = millis(); if (WiFi.status() == WL_CONNECTED) radarFetch(); }
-  was = now;
+  bool up = digitalRead(BUTTON_PIN) == HIGH;
+  if (!up && was) downAt = millis();
+  if (!up && downAt && millis() - downAt > 3000) { say("RESTART", "-> Jumbotron"); delay(300); ESP.restart(); }
+  if (Serial.available() && Serial.read() == 'x') ESP.restart();
+  bool tapped = up && !was && downAt && millis() - downAt < 3000;
+  uint32_t every = runs < 4 ? 30000UL : 10UL * 60 * 1000;   // a few quick repeats for numbers, then every 10 min
+  if (tapped || millis() - last > every) {
+    last = millis(); runs++;
+    if (WiFi.status() == WL_CONNECTED) radarFetch();
+  }
+  if (up) downAt = 0;
+  was = up;
   delay(20);
 }
