@@ -10,7 +10,7 @@
 //   player.ino    GIF and full-color .pjm players, canvas push
 //   screens.ino   text, clock and countdown items
 //   show.ino      the show list (/show.txt format), schedule, time and night mode
-//   weather.ino   weather and 5-day forecast (Open-Meteo)
+//   weather.ino   weather and 5-day forecast (Open-Meteo), moon phase, US weather alerts (weather.gov)
 //   web.ino       web API, the starter page that loads the app, built-in app at /local
 #include <LittleFS.h>
 #include <AnimatedGIF.h>
@@ -37,7 +37,7 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "1.0.0-beta9";
+static const char *FW_VERSION = "1.0.0-beta10";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
@@ -84,8 +84,10 @@ struct ShowItem {
   int8_t hFrom = -1, hTo = -1;
   int16_t lead = -1;
   bool forecast = false;
+  uint8_t alerts = 0;             // weather: 1 = show weather alerts (US, weather.gov), 2 = demo alerts (testing)
   bool themed = false;            // color "theme": fg follows the card's theme
 };
+struct WxAlert { char title[32]; uint8_t level; time_t until; };   // a weather alert (weather.ino): level 1-3
 struct Theme { uint32_t main, acc, dim; };   // color theme: main text, accent, dim (canvas.ino THEMES)
 std::vector<ShowItem> playlist;
 std::vector<uint16_t> playOrder;               // play order: playlist indexes, shuffled each round in shuffle mode
@@ -106,6 +108,7 @@ bool nightNow = false;
 
 // Declared here for setup(): the auto-made declarations skip functions with default arguments.
 bool startPanel(bool dbl, bool fast = false);   // panel.ino
+void alertsBetweenItems();                      // weather.ino: warnings come back every few items
 // Player state (player.ino), here because the panel restart (panel.ino) resets it too.
 static PixRow *shown = nullptr;                // what the panel currently shows (single-buffer mode)
 static bool shownValid = false;
@@ -194,5 +197,7 @@ void loop() {
   }
   skipped = 0;
   geoService();                                      // once per start: where am I (online.ino)
+  char type = it.type;                               // (the show may be replaced while it plays)
   playItem(it);
+  if (type != 'w') alertsBetweenItems();
 }

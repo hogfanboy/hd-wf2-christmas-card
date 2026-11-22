@@ -115,10 +115,11 @@ function optsField(it) {
   if (w.h1 !== '' && w.h2 !== '' && w.h1 !== w.h2) o.push(`hours=${w.h1}-${w.h2}`);
   if (it.kind === 'countdown' && it.lead !== '' && it.lead != null) o.push('lead=' + it.lead);
   if (it.kind === 'weather' && it.fc) o.push('forecast');
+  if (it.kind === 'weather' && it.alerts) o.push('alerts');
   return '@' + o.join(' ');
 }
 function parseOpts(field) {
-  const o = { when: { from: '', to: '', days: '0123456', h1: '', h2: '' }, lead: '', fc: false };
+  const o = { when: { from: '', to: '', days: '0123456', h1: '', h2: '' }, lead: '', fc: false, alerts: false };
   for (const t of field.slice(1).split(' ').filter(Boolean)) {
     const [k, v = ''] = t.split('=');
     if (k === 'dates') [o.when.from, o.when.to] = v.split('-');
@@ -126,6 +127,7 @@ function parseOpts(field) {
     if (k === 'hours') [o.when.h1, o.when.h2] = v.split('-');
     if (k === 'lead') o.lead = v;
     if (k === 'forecast') o.fc = true;
+    if (k === 'alerts') o.alerts = true;
   }
   return o;
 }
@@ -190,7 +192,7 @@ function addDrawn(kind, o = {}) {
   const it = Object.assign({ kind, secs: 0, useTheme: !('fg' in o), fg: TH().main, bg: COLORS.bg, rainbow: false,
     font: kind === 'text' || kind === 'stocks' ? 11 : 12, syms: '^GSPC,^DJI,^IXIC', effect: kind === 'countdown' ? 'snow' : kind === 'fx' ? 'fireworks' : 'none',
     text: kind === 'text' ? 'Happy Birthday!' : kind === 'countdown' ? 'Christmas' : '', date: '12-25',
-    unit: usesF() ? 'F' : 'C', lat: '', lon: '', place: '', lead: '', fc: kind === 'weather',
+    unit: usesF() ? 'F' : 'C', lat: '', lon: '', place: '', lead: '', fc: kind === 'weather', alerts: kind === 'weather',
     h24: !new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12 }, o);
   const el = baseEl(it);
   it.metaEl.textContent = META[kind]; it.metaEl.classList.add('desc');
@@ -215,7 +217,9 @@ function addDrawn(kind, o = {}) {
       <button class="chip wauto">📍 Where the screen is</button>
       <div class="row wres"></div>
       <label>Units <select data-k="unit"><option value="F">°F</option><option value="C">°C</option><option value="A">Auto</option></select>
-        &nbsp; <input type="checkbox" data-k="fc"> Then a 5-day forecast</label>` : ''}
+        &nbsp; <input type="checkbox" data-k="fc"> Then a 5-day forecast</label>
+      <label><input type="checkbox" data-k="alerts"> Weather alerts (US only): watches and warnings play before the weather; a warning also comes back every few items</label>
+      <button class="chip walert" type="button">⚠ See a sample alert</button>` : ''}
     ${colors}
     <label>Size <select data-k="font">${sizes}</select>
       &nbsp; Effect <select data-k="effect">${fxOptions(kind)}</select></label>`;
@@ -232,10 +236,15 @@ function addDrawn(kind, o = {}) {
       if (k === 'lead') it.whenRefresh();
       el.querySelector('.name').textContent = label(it);
       if (k === 'unit') wxFetch(it);
+      if (k === 'alerts') alertsFetch(it);
       it.t0 = performance.now(); updateSpace();
     };
   });
   if (kind === 'weather') {
+    ed.querySelector('.walert').onclick = () => {   // 9 s of made-up alerts on the preview (the checkbox turns on)
+      if (!it.alerts) { it.alerts = true; ed.querySelector('[data-k=alerts]').checked = true; alertsFetch(it); }
+      it.alertSample = performance.now() + 9000; it.t0 = performance.now(); select(it);
+    };
     const q = ed.querySelector('.wq'), res = ed.querySelector('.wres');
     q.value = it.place;
     const find = async () => {

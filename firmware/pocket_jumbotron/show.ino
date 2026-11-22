@@ -19,6 +19,8 @@
 //     hours=H-H        only from the first hour up to (not including) the second; may wrap past midnight
 //     lead=N           countdown: only in the last N days before the date (a reminder)
 //     forecast         weather: then a 5-day forecast screen
+//     alerts           weather: US weather alerts for the town (weather.gov) before it; warnings also every 3rd item
+//                      (fw 1.0.0-beta10; alerts=demo shows a made-up warning and watch, for testing)
 //   Items with a time rule are skipped until the clock is set. Older firmware ignores the field except as
 //   the last text of a line.
 //   Without /show.txt every file in /gifs plays in name order (the old behavior).
@@ -64,6 +66,7 @@ static void parseOptions(ShowItem &it, const String &opts) {
     else if (k == "hours" && dash > 0) { it.hFrom = constrain((int)v.substring(0, dash).toInt(), 0, 23); it.hTo = constrain((int)v.substring(dash + 1).toInt(), 0, 24); }
     else if (k == "lead") it.lead = v.toInt();
     else if (k == "forecast") it.forecast = true;
+    else if (k == "alerts") it.alerts = v == "demo" ? 2 : 1;
   }
 }
 static int daysUntil(const String &mmdd);

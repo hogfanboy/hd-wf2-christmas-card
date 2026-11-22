@@ -60,14 +60,19 @@ function sun(S, cx, cy, r, rot) {
     return [...mix(core, edge, t), 1];
   });
 }
-// Moon: a shaded crescent (cut out with alpha, so effects show through) with two craters (no halo: it read as a gray disc on the panel).
-function moon(S, cx, cy, r) {
-  const lit = hex(0xF4EED4), dark = hex(0xC8C0A0);
-  const cut = (x, y) => Math.hypot(x - (cx + r * 0.62), y - (cy - r * 0.45)) < r * 0.9;
+// Moon at phase p (0 new, 0.25 first quarter, 0.5 full, 0.75 last quarter; seen from the north, waxing = lit on the
+// right). Lit part shaded with craters; the dark part is see-through (effects show through) inside a thin dim rim,
+// so the round shape still reads at new moon (a filled gray disc read badly on the panel).
+function moon(S, cx, cy, r, p) {
+  const lit = hex(0xF4EED4), dark = hex(0xC8C0A0), rim = hex(0x50505C);
+  const k = Math.cos(2 * Math.PI * p);
   S.paint((x, y) => {
-    const d = Math.hypot(x - cx, y - cy); if (d > r || cut(x, y)) return null;
+    const d = Math.hypot(x - cx, y - cy); if (d > r) return null;
+    const nx = (x - cx) / r, ny = (y - cy) / r, w = Math.sqrt(Math.max(0, 1 - ny * ny));
+    if (!(p <= 0.5 ? nx > w * k : nx < -w * k)) return d > r - 1.1 ? [...rim, 1] : null;
     let c = mix(lit, dark, clamp01((Math.hypot(x - (cx - r * 0.4), y - (cy - r * 0.3)) / r) - 0.2));
     if (Math.hypot(x - (cx - r * 0.45), y - (cy + r * 0.25)) < r * 0.2) c = mix(c, dark, 0.8);
+    if (Math.hypot(x - (cx + r * 0.35), y - (cy - r * 0.3)) < r * 0.16) c = mix(c, dark, 0.8);
     if (Math.hypot(x - (cx - r * 0.1), y - (cy + r * 0.62)) < r * 0.14) c = mix(c, dark, 0.8);
     return [...c, 1];
   });
@@ -105,8 +110,11 @@ function add(name, w, h, draw) { const S = sprite(w, h); draw(S); SPR.push([name
 const SUN_FRAMES = 6;
 for (let f = 0; f < SUN_FRAMES; f++) add(`SUN${f}`, 40, 40, (S) => sun(S, 20, 20, 9, (f / SUN_FRAMES) * (Math.PI / 4)));
 for (let f = 0; f < SUN_FRAMES; f++) add(`SUNS${f}`, 30, 30, (S) => sun(S, 15, 15, 6.5, (f / SUN_FRAMES) * (Math.PI / 4)));
-add('MOON', 36, 36, (S) => moon(S, 18, 18, 10.5));
-add('MOONS', 26, 26, (S) => moon(S, 13, 13, 7.5));
+// 8 phases: new, waxing crescent, first quarter, waxing gibbous, full, waning gibbous, last quarter, waning crescent
+// (crescents a bit fatter than 1/8 so they read on the panel).
+const PHASE = [0, 0.16, 0.25, 0.375, 0.5, 0.625, 0.75, 0.84];
+PHASE.forEach((p, i) => add(`MOON${i}`, 24, 24, (S) => moon(S, 12, 12, 10.5, p)));
+PHASE.forEach((p, i) => add(`MOONS${i}`, 18, 18, (S) => moon(S, 9, 9, 7.5, p)));
 add('CLOUD_L', 38, 26, (S) => cloud(S, 16, 14, 1, 0xF8FAFF, 0xA8B2C6));
 add('CLOUD_M', 38, 26, (S) => cloud(S, 16, 14, 1, 0xC6CCD8, 0x7C8498));
 add('CLOUD_D', 38, 26, (S) => cloud(S, 16, 14, 1, 0x8C92A4, 0x4A5064));
