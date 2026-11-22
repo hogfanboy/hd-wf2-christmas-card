@@ -95,15 +95,19 @@ static void showHotspotScreen(const char *status) {
 // read it (0.8.4). Everything here is drawn with drawPixelRGB888 in 0/255 colors: the library's color table maps
 // 255 to 255, so these come out right at any bit depth (565 colors lose their low bits and went wrong at 2-bit).
 // The URL is upper case so the QR encoder uses alphanumeric mode: version 1 (21 modules) with a full 4-module
-// quiet zone fits at 2 LEDs per module (58 px), twice the size of the old lower-case code.
+// quiet zone. The screen switches every 2.5 s between a big code (2 LEDs per module, 58 px), which phones read
+// from about 4 to 7 ft, and a small one (1 LED per module, 29 px) for about 1.5 to 4 ft (QR probe, 2026-11-21).
+// Brightness made no difference to the distance, so it's not at full: half for the big code, a quarter for the small.
 static void pfill(int x, int y, int w, int h, uint8_t r, uint8_t g, uint8_t b) {
   for (int j = y; j < y + h; j++) for (int i = x; i < x + w; i++) panel->drawPixelRGB888(i, j, r, g, b);
 }
-static int qrSize = 0;
+static int qrSize = 0;                         // the big code's size: the text column goes to the right of it
+static bool qrSmall = false, addrHasQr = false;
+static uint32_t qrFlipAt = 0;
 static void qrDraw(const uint8_t *q) {        // q is an esp_qrcode_handle_t
-  int n = esp_qrcode_get_size(q), qz = 4, px = (n + 2 * qz) * 2 <= 64 ? 2 : 1;
-  int sz = (n + 2 * qz) * px, x0 = 2, y0 = (64 - sz) / 2;
-  qrSize = sz;
+  int n = esp_qrcode_get_size(q), qz = 4, big = (n + 2 * qz) * 2 <= 64 ? 2 : 1, px = qrSmall ? 1 : big;
+  int bigSz = (n + 2 * qz) * big, sz = (n + 2 * qz) * px, x0 = 2 + (bigSz - sz) / 2, y0 = (64 - sz) / 2;
+  qrSize = bigSz;
   pfill(x0, y0, sz, sz, 255, 255, 255);
   for (int y = 0; y < n; y++)
     for (int x = 0; x < n; x++)
@@ -142,6 +146,22 @@ static int pjPanel(const String &s, uint8_t font, int x, int base, uint8_t r, ui
 
 // Shown at startup once WiFi connects, and on a short S1 press.
 void showAddress(uint32_t ms) {
+  qrSmall = false;
+  drawAddress();
+  qrFlipAt = millis();
+  if (addrHasQr) Serial.printf("Address screen: %d-bit fast scan, big/small QR\n", fastBits);
+  addrUntil = millis() + ms;
+  if (!addrUntil) addrUntil = 1;
+}
+// While the address screen is up (loop): switch between the big and the small QR code.
+void addressTick() {
+  if (!addrHasQr || millis() - qrFlipAt < 2500) return;
+  qrSmall = !qrSmall;
+  qrFlipAt = millis();
+  drawAddress();
+}
+static void drawAddress() {
+  addrHasQr = false;
   panel->clearScreen();
   panel->setTextSize(1);
   if (staSsid.isEmpty()) {
@@ -153,10 +173,9 @@ void showAddress(uint32_t ms) {
     String ip = WiFi.localIP().toString();
     panelSetFast(true);                       // fast scan for phone cameras (back to full color after)
     panel->clearScreen();
-    // Full panel brightness: at the normal cap the light pulses are so short in fast scan that green drops off
-    // first (white looked purple). The QR lights ~40% of the LEDs, so this draws less than full white at the cap.
-    panel->setBrightness8(255);
-    if (!drawQr(ip)) qrSize = 0;
+    panel->setBrightness8(qrSmall ? 64 : 128);
+    addrHasQr = drawQr(ip);
+    if (!addrHasQr) qrSize = 0;
     int cx = qrSize ? 2 + qrSize + (W - 2 - qrSize) / 2 : W / 2;      // center of the right-hand column
     int colW = W - (qrSize ? qrSize + 4 : 0);
     uint8_t tf = pjPanel("SCAN ME", 9, 0, 0, 0, 0, 0, false) <= colW - 2 ? 9 : 8;
@@ -165,7 +184,6 @@ void showAddress(uint32_t ms) {
     pjPanel(l2, 8, cx - pjPanel(l2, 8, 0, 0, 0, 0, 0, false) / 2, 36, 0, 255, 255, true);
     int iw = digits47(ip, 0, 0, 0, 0, 0, false) - 1;
     digits47(ip, cx - iw / 2, 44, 255, 255, 255, true);
-    Serial.printf("Address screen: %d-bit fast scan, QR %d px\n", fastBits, qrSize);
   } else {
     text(0, "POCKET JUMBOTRON", C(255, 190, 60));
     text(12, "Can't join WiFi:", C(255, 90, 110));
@@ -174,8 +192,6 @@ void showAddress(uint32_t ms) {
     text(43, "2 sec to fix it.", C(90, 200, 255));
   }
   if (doubleBuffered) panel->flipDMABuffer();
-  addrUntil = millis() + ms;
-  if (!addrUntil) addrUntil = 1;
 }
 
 // ---------- WiFi setup hotspot page + API ----------

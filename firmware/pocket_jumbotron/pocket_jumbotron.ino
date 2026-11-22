@@ -37,7 +37,7 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "1.0.0-beta8";
+static const char *FW_VERSION = "1.0.0-beta9";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
@@ -173,14 +173,14 @@ void loop() {
   if (portalActive) { buttonAction = BTN_NONE; delay(2); return; }
   if (buttonAction == BTN_SHORT) {                   // press: show the address; press again: back to the show
     buttonAction = BTN_NONE;
-    if (addrUntil) addrUntil = 1;                    // already up: let it expire now
+    if (addrUntil) addrUntil = 1;               // already up: let it expire now
     else showAddress(10000);
   }
   if (addrUntil) {                                   // address screen is up
-    if ((int32_t)(millis() - addrUntil) < 0) { delay(5); return; }
+    if ((int32_t)(millis() - addrUntil) < 0) { addressTick(); delay(5); return; }
     addrUntil = 0;
     panelSetFast(false);                             // back to full color after the QR screen
-    applyBrightness();                               // some QR styles use full panel brightness
+    applyBrightness();                               // the QR screen sets its own brightness
   }
   updateService();                                   // 3 am: newer firmware on the website? (online.ino)
   if (holdPlayback || playlist.empty()) { delay(5); return; }

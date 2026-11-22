@@ -1,15 +1,15 @@
 # PROGRESS
 
-## Working state (fw 1.0.0-beta7 on both cards via WiFi; beta8 built, not flashed yet, 2026-11-21)
+## Working state (fw 1.0.0-beta7 on both cards via WiFi; beta9 on both cards via WiFi, 2026-11-21)
+- **beta9:** QR screen alternates big code (4-7 ft) and small code (1.5-4 ft) every 2.5 s; probe endpoint removed.
 - **beta8:** card remembers the last weather town (NVS `wxhome`, `/api/settings?wx=lat,lon,place|auto`, `wxHome` in
   /api/info). New weather item = that town, else another weather item's town, else "where the screen is" (IP
   lookup), else red "pick a town" + focus. Send warns about weather without a town. Page redesign: header with
   connection pill, numbered steps, Settings group, "About this screen" + advanced + diagnostics at the bottom; no
-  sideways scroll on phones. Tested on the fake card (375 px), not yet on a real card.
+  sideways scroll on phones. Tested on the fake card (375 px); on both cards, user testing.
 - **beta7:** Christmas lights effect (`lights`; preview on the page). Probe endpoints /api/qr and /api/fcprobe and
   their scripts removed. App code split into web/app/*.js (build output identical). CI runs tools/test.mjs.
   Lights demo on card 1 played fine (heap 74 KB after). `tools/effects-probe.ps1` = the lights demo (~40 s).
-- **beta5/6:** Origin/Host check on POSTs, aquarium on black, Improv WiFi fix + "Set up WiFi only" (details: git log).
 - **Fonts/icons:** crisp Jumbo font and shaded weather icons with hard edges (details in PROJECT-NOTES).
 - **Shuffle:** page "Play order: In order / 🔀 Shuffle" writes `order<TAB>shuffle` into show.txt; card plays a new
   random order each round, never the same item twice in a row. Tested on the fake card (Send + reload keeps it).
@@ -47,8 +47,7 @@
 - Test uploads with curl: `-H "Content-Type: text/plain"` for /api/show, then POST /api/play.
 
 ## Next (the user can answer with one of these commands)
-00. **"Flash beta8"** - push (CI publishes), update both cards from the page; add a weather item: it should
-   start with your town; pick another town, add a second one: it should start with that.
+00. **"QR works close and far" / "change X"** - press S1 on either card; try the phone at 1.5 ft, 4 ft and 7 ft.
 0. **"Lights look good" / "change X"** - run `tools/effects-probe.ps1` and watch the panel (bulb size 2x2, spacing 8,
    pattern speed).
 1. **"Fonts/icons look good" / "change X"** - look at a weather item (with forecast) and a Jumbo text item.
