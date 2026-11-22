@@ -40,26 +40,21 @@
    checkbox) that only plays when rain/snow is on the way (same test as rainSoon). The page builds the town's map
    once (OSM tiles in the browser) and uploads it (~8 KB) when the town is saved; frames in flash, not RAM.
    Data: RainViewer over plain HTTP (zoom 7). Needs PNGdec 1.1.6 in CI libs; its 45 KB block fits only after
-   playerFree(), so allocate it first and skip the round if it fails. Details in NOTES.md (merge only the notes).
+   playerFree(): allocate it first, skip the round if it fails. Details in NOTES.md (merge only the notes).
 000. **"Soak results"** - after 11-23 08:00 run `tools/soak-log.ps1 -Cards 192.168.50.199 -Summary`: want crashes 0,
    no lowmem restarts, one nightly restart. If card 2's block keeps sinking, find what holds it (20 items). Don't
    flash/restart card 2 till then; card 1 is free for firmware work. Radar waits on this. Card 2's auto-update
    is OFF for the soak (`POST /api/settings?au=0`); turn it back on after (`?au=1`).
 00. **Judge beta17 by eye** - message scrolling and the moons (sun & moon screen).
 00a. **"Weather screens look good" / "change X"** - card 1: now, 24 hours sliding, 10 days sliding, details, air,
-   sun & moon. Speed, hold times, column width and temperature colors are easy to change. Card 2 already has beta18.
+   sun & moon. Speed, hold times, column width and temperature colors are easy to change.
 00. **"QR works close and far" / "change X"** - press S1 on either card; try the phone at 1.5 ft, 4 ft and 7 ft.
 0. **"New effects look good" / "change X"** - run `tools/effects-probe.ps1` on card 1 (beta20): sleigh scene, turkey,
    bunny, bats, shamrocks, flag, 3 holiday countdowns, text over the flag, balloons, fish, hearts, text over the
-   small sleigh. Not redone yet (procedural, already full color): snow, sparkle, confetti, fireworks, stars, fire,
-   code rain, rain, lights, flag.
+   small sleigh. (Procedural effects like snow, fire, fireworks are already full color, not redone.)
 1. **"Fonts/icons look good" / "change X"** - weather + forecast and a Jumbo text item ("use the straight rays").
 2. **"Re-add the Christmas pack"** - on the phone page, ★ Get the latest pictures, add Christmas 2026, Send; they
    should now come in as GIF and look like the originals. Try Shuffle at the same time.
 3. **Online builder** works (Christmas 2026 published from it). Next there: Holiday starter animations → new cards.
-4. **Installer** - full website install verified 2026-11-22 on the spare (AD:04, beta20). install.html now
-   checks the write (MD5 read-back; a damaged write says "try again" and leaves the card in install mode) and
-   really restarts the card after (esptool-js 0.7.1 hard_reset only released RTS, so the card stayed in
-   install mode and the WiFi step never got an answer); verified on the spare: hash verified, WiFi list shown.
-   Tester's card (RUL6024, blue top line, no USB; S1 is GPIO17, not boot) probably got a damaged write: the
-   user sends a $5 replacement board flashed here with flash-watch. Next: "Try WiFi only" on card 1, then 1.0.0.
+4. **Installer** verified on the spare (2026-11-22, see PROJECT-NOTES). Tester's card (blue top line, no USB):
+   likely a damaged write; send him a $5 board flashed here. Next: "Try WiFi only" on card 1, then 1.0.0.
