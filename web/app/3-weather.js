@@ -78,7 +78,7 @@ const WX_PAGES = [
   ['hourly', 'hourly', 'Next 12 hours'],
   ['chart', 'chart', 'Next 24 hours'],
   ['forecast', 'fc', '5-day forecast'],
-  ['days16', 'days16', '16-day outlook'],
+  ['days16', 'days16', '14-day outlook'],
   ['details', 'details', 'Wind, humidity, UV, dew point'],
   ['air', 'air', 'Air quality'],
   ['sun', 'sun', 'Sunrise, sunset and the moon'],
@@ -152,12 +152,13 @@ function hourCols(it, w, f, t, step) {     // copy of the card's hourCols: next 
 }
 const drawHourly = (it, w, ms, f, t) => hourCols(it, w, f, t, 3);
 const drawChart = (it, w, ms, f, t) => hourCols(it, w, f, t, 6);
-function drawDays16(it, w, ms, f, t) {      // copy of the card's drawDays16: two pages of 8 days, numbers only
-  const D2 = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'], n = Math.min(w.fc.length, 16), today = new Date().getDay();
-  const first = n > 8 && ms >= (it.secs || 10) * 500 ? 8 : 0;
+function drawDays16(it, w, ms, f, t) {      // copy of the card's drawDays16: two pages of 7 days, numbers only
+  const D2 = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'], n = Math.min(w.fc.length, 14), today = new Date().getDay();
+  const first = n > 7 && ms >= (it.secs || 10) * 500 ? 7 : 0;
   const TC = (s, cx, top, c) => tightL(s, cx - Math.trunc(tightW(s) / 2), top, c);   // 1 px between letters
-  for (let c = 0; c < 8 && first + c < n; c++) {
-    const i = first + c, cx = c * 16 + 8, [code, h, l, rain] = w.fc[i];
+  for (let c = 0; c < 7 && first + c < n; c++) {
+    const i = first + c, cx = 1 + c * 18 + 9, [code, h, l, rain] = w.fc[i];
+    if (h == null || l == null) continue;
     TC(D2[(today + i) % 7], cx, 2, i === 0 ? TH().acc : TH().dim);
     TC(String(Math.round(h)), cx, 16, it.rainbow ? hue(t / 8 + c * 200) : it.fg);
     TC(String(Math.round(l)), cx, 29, WX_LO);
@@ -255,7 +256,7 @@ async function wxFetch(it) {
   if (!it.lat || it.lat === 'auto') { it.wx = null; return; }
   const F = it.unit === 'F' || (it.unit === 'A' && usesF());
   try {
-    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${it.lat}&longitude=${it.lon}&current=temperature_2m,apparent_temperature,weather_code,is_day,relative_humidity_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index,dew_point_2m&minutely_15=precipitation,snowfall&forecast_minutely_15=9&hourly=temperature_2m,weather_code,precipitation_probability,is_day&forecast_hours=25&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&timezone=auto&forecast_days=16${F ? '&temperature_unit=fahrenheit&wind_speed_unit=mph' : ''}`);
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${it.lat}&longitude=${it.lon}&current=temperature_2m,apparent_temperature,weather_code,is_day,relative_humidity_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index,dew_point_2m&minutely_15=precipitation,snowfall&forecast_minutely_15=9&hourly=temperature_2m,weather_code,precipitation_probability,is_day&forecast_hours=25&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&timezone=auto&forecast_days=14${F ? '&temperature_unit=fahrenheit&wind_speed_unit=mph' : ''}`);
     const j = await r.json(), c = j.current, d = j.daily, h = j.hourly, m = j.minutely_15, rain = d.precipitation_probability_max || [];
     const hm = (iso) => iso ? +iso.slice(11, 13) * 60 + +iso.slice(14, 16) : null;
     it.wx = { temp: c.temperature_2m, feels: c.apparent_temperature ?? c.temperature_2m, code: c.weather_code, day: !!c.is_day, F, off: j.utc_offset_seconds || 0,

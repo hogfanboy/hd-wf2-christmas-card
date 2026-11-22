@@ -1,15 +1,11 @@
 # PROGRESS
 
-## Working state (fw 1.0.0-beta12 on card 1 via WiFi, card 2 radar probe / beta10, 2026-11-21)
-- **beta12:** 24-hour chart replaced by 5 columns (now, +6..+24 h, like the 5 days); 16 days = numbers on two
-  pages of 8 columns; rain chance shows "40%" with the drop in the Jumbo font (1 px letter spacing). Bottom-row
-  clipping (labels at y 56/57 in the 9 px Jumbo label font) gone with the old screens. Checked in the page preview.
-- **beta11 (weather to the max):** weather item has a "Screens" checklist on the page: alerts, rain on the way
-  (only when rain/snow is due in 2 h, radar-colored 15-min bars), next 12 hours, 24-hour chart, 5 days, 16 days,
-  wind/humidity/UV/dew point, air quality (US AQI), sunrise/sunset + moon. Line under the temperature: sky, then
-  only what matters (rain coming / today's % >= 10, gusts, high UV, bad air), then FEELS; moon name dropped.
-  Moon icons: no gray arc on the dark side. All screens checked in the page preview with real Open-Meteo data.
-  **Card 1 runs every screen now** (Naperville, real alerts instead of the demo). Details in PROJECT-NOTES.
+## Working state (fw 1.0.0-beta13 on card 1 via WiFi, card 2 radar probe v2 / beta10 on restart, 2026-11-22)
+- **beta13:** 16 days -> 14 days (two pages of 7 columns of 18 px; a day with no numbers is skipped: it printed
+  as a long garbage number over its neighbors on card 1). New weather items start with only the "now" screen.
+- **beta12:** 24-hour chart -> 5 columns (now, +6..+24 h, like the 5 days); rain chance "40%" + drop fits in Jumbo.
+- **beta11:** weather "Screens" checklist (alerts, rain on the way, hours, 5/14 days, details, air, sun & moon);
+  line under the temperature: sky, what matters, FEELS. Card 1 runs every screen. Details in PROJECT-NOTES.
 - **beta10:** alerts (weather.gov). **beta7:** Christmas lights. **beta9:** QR big/small alternating. **beta8:** card remembers the weather town (NVS `wxhome`), page redesign.
 - **Fonts/icons:** crisp Jumbo font and shaded weather icons with hard edges (details in PROJECT-NOTES).
 - **Shuffle:** page Play order In order / Shuffle (`order<TAB>shuffle` in show.txt), never the same item twice.
@@ -26,9 +22,7 @@
   "On new cards" (pack.json `install`), per picture On/Off + dates ("11-15 to 01-06"), and a "What a new card
   gets" list with size vs 4.1 MB. build-install.mjs reads it (`--first-show-only` to check). Tested on a copy of
   the content repo: builder writes the right pack.json, the build makes the same first show as before.
-- **Pack convert settings:** builder details "Phones convert the pictures as" GIF / Auto / Full color (new packs
-  default GIF) and Fill/Fit + GIF/Full color buttons per picture (bold = set on that picture). Saved in pack.json
-  (`format`, `pictures`), passed on by build-packs as manifest `format` / `pics`, used by the phone page.
+- **Pack convert settings:** GIF / Auto / Full color per pack and per picture in the builder (pack.json `format`, `pictures`).
 - Card 1 (FM6124C): 192.168.50.16 / pocketjumbo-eed0 (PC USB COM10). Card 2 (RUL6024): 192.168.50.199 /
   pocketjumbo-5df8. Both reachable, heap ~70 KB playing.
 - Everything else (news removed, app, schedule, stocks, night mode, packs, effects): PROJECT-NOTES.md.
@@ -47,8 +41,13 @@
 - Test uploads with curl: `-H "Content-Type: text/plain"` for /api/show, then POST /api/play.
 
 ## Next (the user can answer with one of these commands)
-000. **"Weather screens look good" / "change X"** - watch card 1's weather: now, then 12 hours, 24 hours,
-   5 days, 16 days, details, air quality, sun & moon (rain on the way only shows when rain is due). Then flash card 2.
+0000. **"Build the radar screen"** - radar probe v2 approved by eye on card 2 (Seattle rain loop over a dim map,
+   home cross + town, 25 MI ring, radar time top-right). Probe + notes: branch `claude/inspiring-perlman-7d2eaa`,
+   `firmware/probes/radar/` (NOTES.md has URLs, memory numbers, makebase.py). Make it a weather screen (`radar`
+   checkbox) that only plays when rain/snow is on the way (same test as rainSoon). The page builds the town's map
+   once (OSM tiles in the browser) and uploads it (~8 KB) when the town is saved; frames in flash, not RAM.
+000. **"Weather screens look good" / "change X"** - card 1: now, 12 hours, 24 hours, 5 days, 14 days, details,
+   air, sun & moon. Then flash card 2 (restart it first: it runs the radar probe until then).
 00. **"QR works close and far" / "change X"** - press S1 on either card; try the phone at 1.5 ft, 4 ft and 7 ft.
 0. **"Lights look good" / "change X"** - run `tools/effects-probe.ps1` (bulb size 2x2, spacing 8, pattern speed).
 1. **"Fonts/icons look good" / "change X"** - weather + forecast and a Jumbo text item ("use the straight rays").

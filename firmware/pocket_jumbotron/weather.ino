@@ -41,7 +41,7 @@ static int jsonHM(const String &s, const char *key, int from) {
   return s.substring(t + 1, t + 3).toInt() * 60 + s.substring(t + 4, t + 6).toInt();
 }
 // it.extra = "F,lat,lon". Refreshes at most every 15 minutes; keeps the last reading if a fetch fails. One request
-// gets everything the extra screens need (~5 KB): now, the next 2 hours by 15 minutes, 24 hours, 16 days.
+// gets everything the extra screens need (~5 KB): now, the next 2 hours by 15 minutes, 25 hours, 14 days.
 static bool weatherFetch(const ShowItem &it) {
   bool cached = wx.ok && wx.key == it.extra;
   if (cached && millis() - wx.at < 15UL * 60 * 1000) return true;
@@ -54,7 +54,7 @@ static bool weatherFetch(const ShowItem &it) {
                "wind_direction_10m,uv_index,dew_point_2m&minutely_15=precipitation,snowfall&forecast_minutely_15=9"
                "&hourly=temperature_2m,weather_code,precipitation_probability,is_day&forecast_hours=25"
                "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset"
-               "&timezone=auto&forecast_days=16" + String(F ? "&temperature_unit=fahrenheit&wind_speed_unit=mph" : "");
+               "&timezone=auto&forecast_days=14" + String(F ? "&temperature_unit=fahrenheit&wind_speed_unit=mph" : "");
   HTTPClient http;
   http.setConnectTimeout(3000);
   http.setTimeout(4000);
@@ -371,15 +371,16 @@ static void drawDays5(const ShowItem &it, uint32_t frame, uint32_t) {
     if (!isnan(wx.fcRain[i]) && wx.fcRain[i] >= 10) wxRainPct(wx.fcRain[i], cx, 54);
   }
 }
-// 16 days: two pages of 8 columns of 16 px (days 1-8, then 9-16 for the second half of the time): 2-letter
+// 14 days: two pages of 7 columns of 18 px (days 1-7, then 8-14 for the second half of the time): 2-letter
 // weekday (today in the accent color), high (item color), low (blue), and on days with a 30% chance or more a drop
-// (or a snowflake) over the chance. Numbers only: icons don't fit 16 px and bars read as noise.
+// (or a snowflake) over the chance. Numbers only: icons don't fit 18 px and bars read as noise.
 static void drawDays16(const ShowItem &it, uint32_t frame, uint32_t ms) {
   static const char *const D2[] = {"SU", "MO", "TU", "WE", "TH", "FR", "SA"};
-  int n = std::min(wx.fcN, 16), total = (it.sec ? it.sec : 10) * 1000;
-  int first = n > 8 && (int)ms >= total / 2 ? 8 : 0, today = wxToday();
-  for (int c = 0; c < 8 && first + c < n; c++) {
-    int i = first + c, cx = c * 16 + 8;
+  int n = std::min(wx.fcN, 14), total = (it.sec ? it.sec : 10) * 1000;
+  int first = n > 7 && (int)ms >= total / 2 ? 7 : 0, today = wxToday();
+  for (int c = 0; c < 7 && first + c < n; c++) {
+    int i = first + c, cx = 1 + c * 18 + 9;
+    if (isnan(wx.fcHi[i]) || isnan(wx.fcLo[i])) continue;   // a far day with no numbers yet would print as a long garbage number
     uint32_t hc = it.rainbow ? hsv((millis() / 8 + c * 200) % 1536) : it.fg;
     auto tc = [](const String &t, int cx, int top, uint32_t col) { tightLabel(t, cx - tightW(t) / 2, top, col); };   // 1 px between letters
     tc(D2[(today + i) % 7], cx, 2, i == 0 ? th().acc : th().dim);

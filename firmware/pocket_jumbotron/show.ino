@@ -21,7 +21,7 @@
 //     forecast         weather: then a 5-day forecast screen
 //     rainsoon hourly chart days16 details air sun   (fw 1.0.0-beta11) more weather screens, played in this order
 //                      around forecast: rain/snow in the next 2 hours (only when some is coming), next 12 hours,
-//                      24-hour chart, [5 days], 16 days, wind/humidity/UV/dew point, air quality, sunrise/sunset + moon
+//                      next 24 hours, [5 days], 14 days, wind/humidity/UV/dew point, air quality, sunrise/sunset + moon
 //     alerts           weather: US weather alerts for the town (weather.gov) before it; warnings also every 3rd item
 //                      (fw 1.0.0-beta10; alerts=demo shows a made-up warning and watch, for testing)
 //   Items with a time rule are skipped until the clock is set. Older firmware ignores the field except as
