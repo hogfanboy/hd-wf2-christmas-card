@@ -57,5 +57,10 @@
 2. **"Re-add the Christmas pack"** - on the phone page, ★ Get the latest pictures, add Christmas 2026, Send; they
    should now come in as GIF and look like the originals. Try Shuffle at the same time.
 3. **Online builder** works (Christmas 2026 published from it). Next there: Holiday starter animations → new cards.
-4. **"Try WiFi only"** - card 1 on USB (close any serial-log tab), Chrome: install.html → Set up WiFi only →
-   pick the same WiFi + password. Then a full install on card 2 (also tests the new first show). Then 1.0.0.
+4. **Installer fixes** - full website install verified 2026-11-22 on the spare (AD:04, now beta20, first show
+   plays, Improv answers over COM12). Two page bugs: (a) after "Done!" the WiFi step says "The screen didn't
+   answer" (page opens the port before the card's USB re-appears after the reset; retry close/reopen), (b) no
+   read-back check (esptool-js 0.7.1 writeFlash without calculateMD5Hash), so a damaged write still says Done.
+   A tester's card (RUL6024) said Done, then blue top line, no USB even holding S1 (S1 is GPIO17, not boot):
+   likely a damaged write. Try: install page, yellow button, cancel, re-plug (connect event); else mail it here
+   for flash-watch. Then "Try WiFi only" on card 1, then 1.0.0.
