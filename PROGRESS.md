@@ -1,17 +1,18 @@
 # PROGRESS
 
-## Working state (fw 1.0.0-beta10 on both cards via WiFi, 2026-11-21)
-- **beta10 (weather extras):** moon phase icon (8 phases from the date, mirrored south of the equator); the line
-  under the temperature turns: sky / FEELS 18 / RAIN 40% (SNOW on snow days) / moon name at night; forecast has a
-  drop + rain % row (days >= 10%). **Weather alerts** (`@alerts`, page checkbox, on for new weather items):
-  weather.gov over HTTPS (SITE_CA works), streamed, every 10 min; alert screens before the weather; a warning
-  also plays after every 2 other items and flashes a sign on the weather screen. Card 1 fetched a real Florida
-  Flood Warning correctly (5 s fetch, heap fine). `@alerts=demo` = fake warning + watch: **card 1 runs it now**.
-- **beta9:** QR big/small alternating. **beta8:** card remembers the weather town (NVS `wxhome`), page redesign.
-- **beta7:** Christmas lights effect; app code split into web/app/*.js; CI runs tools/test.mjs.
+## Working state (fw 1.0.0-beta12 on card 1 via WiFi, card 2 radar probe / beta10, 2026-11-21)
+- **beta12:** 24-hour chart replaced by 5 columns (now, +6..+24 h, like the 5 days); 16 days = numbers on two
+  pages of 8 columns; rain chance shows "40%" with the drop in the Jumbo font (1 px letter spacing). Bottom-row
+  clipping (labels at y 56/57 in the 9 px Jumbo label font) gone with the old screens. Checked in the page preview.
+- **beta11 (weather to the max):** weather item has a "Screens" checklist on the page: alerts, rain on the way
+  (only when rain/snow is due in 2 h, radar-colored 15-min bars), next 12 hours, 24-hour chart, 5 days, 16 days,
+  wind/humidity/UV/dew point, air quality (US AQI), sunrise/sunset + moon. Line under the temperature: sky, then
+  only what matters (rain coming / today's % >= 10, gusts, high UV, bad air), then FEELS; moon name dropped.
+  Moon icons: no gray arc on the dark side. All screens checked in the page preview with real Open-Meteo data.
+  **Card 1 runs every screen now** (Naperville, real alerts instead of the demo). Details in PROJECT-NOTES.
+- **beta10:** alerts (weather.gov). **beta7:** Christmas lights. **beta9:** QR big/small alternating. **beta8:** card remembers the weather town (NVS `wxhome`), page redesign.
 - **Fonts/icons:** crisp Jumbo font and shaded weather icons with hard edges (details in PROJECT-NOTES).
-- **Shuffle:** page "Play order: In order / 🔀 Shuffle" writes `order<TAB>shuffle` into show.txt; card plays a new
-  random order each round, never the same item twice in a row. Tested on the fake card (Send + reload keeps it).
+- **Shuffle:** page Play order In order / Shuffle (`order<TAB>shuffle` in show.txt), never the same item twice.
 - **Border trim (beta4 page):** every picture's plain-color border (all 4 corners the same color) is cut off before
   scaling, so small art in a big square fills the screen (01-35-46 "Merry Christmas": 464x227 art in 512x512, now
   full width). Near-black -> black now for GIF too, not only full color. The "bad full color" picture was this.
@@ -46,9 +47,8 @@
 - Test uploads with curl: `-H "Content-Type: text/plain"` for /api/show, then POST /api/play.
 
 ## Next (the user can answer with one of these commands)
-000. **"Alerts look good" / "change X"** - watch card 1: red flashing WINTER STORM warning + orange WIND CHILL watch
-   before the weather, the warning again between the countdowns, moon icon/name, FEELS, RAIN %. Then on the page
-   (after CI) tick "Weather alerts" on the weather item and Send: that replaces the demo with real alerts.
+000. **"Weather screens look good" / "change X"** - watch card 1's weather: now, then 12 hours, 24 hours,
+   5 days, 16 days, details, air quality, sun & moon (rain on the way only shows when rain is due). Then flash card 2.
 00. **"QR works close and far" / "change X"** - press S1 on either card; try the phone at 1.5 ft, 4 ft and 7 ft.
 0. **"Lights look good" / "change X"** - run `tools/effects-probe.ps1` (bulb size 2x2, spacing 8, pattern speed).
 1. **"Fonts/icons look good" / "change X"** - weather + forecast and a Jumbo text item ("use the straight rays").

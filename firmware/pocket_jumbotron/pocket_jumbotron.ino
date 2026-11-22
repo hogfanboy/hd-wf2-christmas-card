@@ -10,7 +10,7 @@
 //   player.ino    GIF and full-color .pjm players, canvas push
 //   screens.ino   text, clock and countdown items
 //   show.ino      the show list (/show.txt format), schedule, time and night mode
-//   weather.ino   weather and 5-day forecast (Open-Meteo), moon phase, US weather alerts (weather.gov)
+//   weather.ino   weather (Open-Meteo) and its extra pages (hours, days, details, air, sun/moon), US weather alerts
 //   web.ino       web API, the starter page that loads the app, built-in app at /local
 #include <LittleFS.h>
 #include <AnimatedGIF.h>
@@ -37,7 +37,7 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "1.0.0-beta10";
+static const char *FW_VERSION = "1.0.0-beta12";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
@@ -78,15 +78,18 @@ struct ShowItem {
   bool rainbow = false;
   uint8_t font = 2, effect = 0;   // font: 1 tiny, 2-4 classic S/M/B, 8-12 PJ (canvas.ino). effect: FX_NAMES index
   // When it plays (show.ino itemActive): yearly date range MMDD (0 = any), weekdays bit 0 = Sunday,
-  // hours [hFrom, hTo) (-1 = any), countdown only within `lead` days (-1 = always). forecast: weather + 5 days.
+  // hours [hFrom, hTo) (-1 = any), countdown only within `lead` days (-1 = always). wxPages: weather extra screens (WXP_*).
   uint16_t dFrom = 0, dTo = 0;
   uint8_t days = 0x7F;
   int8_t hFrom = -1, hTo = -1;
   int16_t lead = -1;
-  bool forecast = false;
+  uint8_t wxPages = 0;
   uint8_t alerts = 0;             // weather: 1 = show weather alerts (US, weather.gov), 2 = demo alerts (testing)
   bool themed = false;            // color "theme": fg follows the card's theme
 };
+// Weather screens after "now" (show.txt options, checkboxes on the page), in the order they play.
+enum { WXP_RAINSOON = 1, WXP_HOURLY = 2, WXP_CHART = 4, WXP_DAYS5 = 8, WXP_DAYS16 = 16, WXP_DETAILS = 32, WXP_AIR = 64, WXP_SUN = 128 };
+typedef void (*WxDraw)(const ShowItem &, uint32_t frame, uint32_t ms);   // draws one weather screen (weather.ino)
 struct WxAlert { char title[32]; uint8_t level; time_t until; };   // a weather alert (weather.ino): level 1-3
 struct Theme { uint32_t main, acc, dim; };   // color theme: main text, accent, dim (canvas.ino THEMES)
 std::vector<ShowItem> playlist;

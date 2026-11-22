@@ -61,15 +61,15 @@ function sun(S, cx, cy, r, rot) {
   });
 }
 // Moon at phase p (0 new, 0.25 first quarter, 0.5 full, 0.75 last quarter; seen from the north, waxing = lit on the
-// right). Lit part shaded with craters; the dark part is see-through (effects show through) inside a thin dim rim,
-// so the round shape still reads at new moon (a filled gray disc read badly on the panel).
+// right). Lit part shaded with craters; the dark part is left off (black or effects show through). Only the new
+// moon gets a thin dim rim so it is still a round shape (a gray arc around the dark side looked odd on the panel).
 function moon(S, cx, cy, r, p) {
   const lit = hex(0xF4EED4), dark = hex(0xC8C0A0), rim = hex(0x50505C);
   const k = Math.cos(2 * Math.PI * p);
   S.paint((x, y) => {
     const d = Math.hypot(x - cx, y - cy); if (d > r) return null;
     const nx = (x - cx) / r, ny = (y - cy) / r, w = Math.sqrt(Math.max(0, 1 - ny * ny));
-    if (!(p <= 0.5 ? nx > w * k : nx < -w * k)) return d > r - 1.1 ? [...rim, 1] : null;
+    if (!(p <= 0.5 ? nx > w * k : nx < -w * k)) return p === 0 && d > r - 1.1 ? [...rim, 1] : null;
     let c = mix(lit, dark, clamp01((Math.hypot(x - (cx - r * 0.4), y - (cy - r * 0.3)) / r) - 0.2));
     if (Math.hypot(x - (cx - r * 0.45), y - (cy + r * 0.25)) < r * 0.2) c = mix(c, dark, 0.8);
     if (Math.hypot(x - (cx + r * 0.35), y - (cy - r * 0.3)) < r * 0.16) c = mix(c, dark, 0.8);
@@ -129,6 +129,8 @@ const MINI = [
   (S) => { cloud(S, 10, 6, 0.5, 0xC6CCD8, 0x7C8498); },
   (S) => { cloud(S, 10, 6, 0.5, 0xF8FAFF, 0xA8B2C6); },
   (S) => { cloud(S, 10, 6, 0.5, 0x8C92A4, 0x4A5064); },
+  (S) => moon(S, 12, 9, 7, 0.82),                  // 7, 8: night hours (hourly screen): moon, moon behind a cloud
+  (S) => { moon(S, 7, 6, 5.5, 0.8); cloud(S, 11, 10, 0.5, 0xF8FAFF, 0xA8B2C6); },
 ];
 MINI.forEach((d, i) => add(`MINI${i}`, 24, 18, d));
 

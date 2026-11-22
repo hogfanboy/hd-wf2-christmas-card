@@ -19,6 +19,9 @@
 //     hours=H-H        only from the first hour up to (not including) the second; may wrap past midnight
 //     lead=N           countdown: only in the last N days before the date (a reminder)
 //     forecast         weather: then a 5-day forecast screen
+//     rainsoon hourly chart days16 details air sun   (fw 1.0.0-beta11) more weather screens, played in this order
+//                      around forecast: rain/snow in the next 2 hours (only when some is coming), next 12 hours,
+//                      24-hour chart, [5 days], 16 days, wind/humidity/UV/dew point, air quality, sunrise/sunset + moon
 //     alerts           weather: US weather alerts for the town (weather.gov) before it; warnings also every 3rd item
 //                      (fw 1.0.0-beta10; alerts=demo shows a made-up warning and watch, for testing)
 //   Items with a time rule are skipped until the clock is set. Older firmware ignores the field except as
@@ -65,7 +68,14 @@ static void parseOptions(ShowItem &it, const String &opts) {
     else if (k == "days") { it.days = 0; for (char c : v) if (c >= '0' && c <= '6') it.days |= 1 << (c - '0'); if (!it.days) it.days = 0x7F; }
     else if (k == "hours" && dash > 0) { it.hFrom = constrain((int)v.substring(0, dash).toInt(), 0, 23); it.hTo = constrain((int)v.substring(dash + 1).toInt(), 0, 24); }
     else if (k == "lead") it.lead = v.toInt();
-    else if (k == "forecast") it.forecast = true;
+    else if (k == "forecast") it.wxPages |= WXP_DAYS5;
+    else if (k == "rainsoon") it.wxPages |= WXP_RAINSOON;
+    else if (k == "hourly") it.wxPages |= WXP_HOURLY;
+    else if (k == "chart") it.wxPages |= WXP_CHART;
+    else if (k == "days16") it.wxPages |= WXP_DAYS16;
+    else if (k == "details") it.wxPages |= WXP_DETAILS;
+    else if (k == "air") it.wxPages |= WXP_AIR;
+    else if (k == "sun") it.wxPages |= WXP_SUN;
     else if (k == "alerts") it.alerts = v == "demo" ? 2 : 1;
   }
 }

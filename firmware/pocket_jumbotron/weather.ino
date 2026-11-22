@@ -1,16 +1,23 @@
 // ---------- Weather (Open-Meteo: free, no key, plain http so no TLS memory) ----------
 struct Weather {
   bool ok = false; uint32_t at = 0; String key; float temp = 0, feels = 0, hi = 0, lo = 0; int code = 0; bool day = true;
-  int fcN = 0, fcCode[5]; float fcHi[5], fcLo[5], fcRain[5];   // daily forecast, [0] = today at the town; rain = chance %
-  uint32_t failAt = 0;                                       // last failed fetch (back off 5 min)
+  float hum = NAN, wind = NAN, gust = NAN, dew = NAN, uv = NAN; int windDir = -1;   // now (wind in mph or km/h)
+  int fcN = 0, fcCode[16]; float fcHi[16], fcLo[16], fcRain[16];   // daily forecast, [0] = today at the town; rain = chance %
+  int hrN = 0, hr0 = 0; float hrT[25]; uint8_t hrCode[25], hrPop[25]; bool hrDay[25];   // hourly from this hour (hr0 0-23)
+  int mnN = 0, mn0 = 0; float mnRain[9], mnSnow[9];   // 15-minute steps, each the mm / cm in the 15 minutes before it;
+                                                       // mn0 = time of the first step, minutes after midnight
+  int sunrise = -1, sunset = -1;                       // today, minutes after midnight
+  uint32_t failAt = 0;                                 // last failed fetch (back off 5 min)
 };
 static Weather wx;
 static float jsonNum(const String &s, const char *key, int from) {
+  if (from < 0) return NAN;
   int i = s.indexOf(key, from);
   return i < 0 ? NAN : s.substring(i + strlen(key), i + strlen(key) + 16).toFloat();
 }
 // Reads up to n numbers of a JSON array that starts right after key (key ends with '[').
 static int jsonArr(const String &s, const char *key, int from, float *out, int n) {
+  if (from < 0) return 0;
   int i = s.indexOf(key, from);
   if (i < 0) return 0;
   const char *p = s.c_str() + i + strlen(key);
@@ -24,17 +31,30 @@ static int jsonArr(const String &s, const char *key, int from, float *out, int n
   }
   return k;
 }
-// it.extra = "F,lat,lon". Refreshes at most every 15 minutes; keeps the last reading if a fetch fails.
+// The time of the first "YYYY-MM-DDTHH:MM" in the array after key (key ends with '["'), minutes after midnight; -1 = none.
+static int jsonHM(const String &s, const char *key, int from) {
+  if (from < 0) return -1;
+  int i = s.indexOf(key, from);
+  if (i < 0) return -1;
+  int t = i + strlen(key) + 10;
+  if (t + 6 > (int)s.length() || s[t] != 'T') return -1;
+  return s.substring(t + 1, t + 3).toInt() * 60 + s.substring(t + 4, t + 6).toInt();
+}
+// it.extra = "F,lat,lon". Refreshes at most every 15 minutes; keeps the last reading if a fetch fails. One request
+// gets everything the extra screens need (~5 KB): now, the next 2 hours by 15 minutes, 24 hours, 16 days.
 static bool weatherFetch(const ShowItem &it) {
   bool cached = wx.ok && wx.key == it.extra;
   if (cached && millis() - wx.at < 15UL * 60 * 1000) return true;
   if (WiFi.status() != WL_CONNECTED) return cached;
   if (wx.failAt && millis() - wx.failAt < 5UL * 60 * 1000) return cached;   // service down: don't stall the show
   int c1 = it.extra.indexOf(','), c2 = it.extra.indexOf(',', c1 + 1);
+  bool F = it.extra.startsWith("F");
   String url = "http://api.open-meteo.com/v1/forecast?latitude=" + it.extra.substring(c1 + 1, c2) + "&longitude=" + it.extra.substring(c2 + 1) +
-               "&current=temperature_2m,apparent_temperature,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,"
-               "precipitation_probability_max&timezone=auto&forecast_days=5" +
-               (it.extra.startsWith("F") ? "&temperature_unit=fahrenheit" : "");
+               "&current=temperature_2m,apparent_temperature,weather_code,is_day,relative_humidity_2m,wind_speed_10m,wind_gusts_10m,"
+               "wind_direction_10m,uv_index,dew_point_2m&minutely_15=precipitation,snowfall&forecast_minutely_15=9"
+               "&hourly=temperature_2m,weather_code,precipitation_probability,is_day&forecast_hours=25"
+               "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset"
+               "&timezone=auto&forecast_days=16" + String(F ? "&temperature_unit=fahrenheit&wind_speed_unit=mph" : "");
   HTTPClient http;
   http.setConnectTimeout(3000);
   http.setTimeout(4000);
@@ -44,6 +64,7 @@ static bool weatherFetch(const ShowItem &it) {
   String body = code == 200 ? http.getString() : "";
   http.end();
   int cur = body.indexOf("\"current\":{"), day = body.indexOf("\"daily\":{");
+  int hr = body.indexOf("\"hourly\":{"), mn = body.indexOf("\"minutely_15\":{");
   Serial.printf("Weather: HTTP %d, %u bytes, %u ms, free heap %u\n", code, (unsigned)body.length(), (unsigned)(millis() - t0), (unsigned)ESP.getFreeHeap());
   if (cur < 0 || day < 0) { wx.failAt = millis() | 1; return cached; }
   float t = jsonNum(body, "\"temperature_2m\":", cur);
@@ -53,20 +74,71 @@ static bool weatherFetch(const ShowItem &it) {
   if (isnan(wx.feels)) wx.feels = t;
   wx.code = (int)jsonNum(body, "\"weather_code\":", cur);
   wx.day = jsonNum(body, "\"is_day\":", cur) != 0;
+  wx.hum = jsonNum(body, "\"relative_humidity_2m\":", cur);
+  wx.wind = jsonNum(body, "\"wind_speed_10m\":", cur);
+  wx.gust = jsonNum(body, "\"wind_gusts_10m\":", cur);
+  float wd = jsonNum(body, "\"wind_direction_10m\":", cur);
+  wx.windDir = isnan(wd) ? -1 : (int)wd;
+  wx.uv = jsonNum(body, "\"uv_index\":", cur);
+  wx.dew = jsonNum(body, "\"dew_point_2m\":", cur);
   wx.hi = jsonNum(body, "\"temperature_2m_max\":[", day);
   wx.lo = jsonNum(body, "\"temperature_2m_min\":[", day);
-  float codes[5];
-  int n = jsonArr(body, "\"weather_code\":[", day, codes, 5);
-  n = std::min(n, jsonArr(body, "\"temperature_2m_max\":[", day, wx.fcHi, 5));
-  n = std::min(n, jsonArr(body, "\"temperature_2m_min\":[", day, wx.fcLo, 5));
-  for (int i = 0; i < 5; i++) wx.fcRain[i] = NAN;
-  jsonArr(body, "\"precipitation_probability_max\":[", day, wx.fcRain, 5);
-  for (int i = 0; i < n; i++) wx.fcCode[i] = (int)codes[i];
+  float tmp[25];
+  int n = jsonArr(body, "\"weather_code\":[", day, tmp, 16);
+  for (int i = 0; i < n; i++) wx.fcCode[i] = (int)tmp[i];
+  n = std::min(n, jsonArr(body, "\"temperature_2m_max\":[", day, wx.fcHi, 16));
+  n = std::min(n, jsonArr(body, "\"temperature_2m_min\":[", day, wx.fcLo, 16));
+  for (int i = 0; i < 16; i++) wx.fcRain[i] = NAN;
+  jsonArr(body, "\"precipitation_probability_max\":[", day, wx.fcRain, 16);
   wx.fcN = n;
-  Serial.printf("Weather: %.0f now, forecast %d days (today %d, hi %.0f lo %.0f)\n", wx.temp, n, n ? wx.fcCode[0] : -1, n ? wx.fcHi[0] : 0.f, n ? wx.fcLo[0] : 0.f);
+  wx.sunrise = jsonHM(body, "\"sunrise\":[\"", day);
+  wx.sunset = jsonHM(body, "\"sunset\":[\"", day);
+  // hourly (it comes after minutely_15 and before daily, so its keys are the first ones after "hourly")
+  int h0 = jsonHM(body, "\"time\":[\"", hr);
+  n = jsonArr(body, "\"temperature_2m\":[", hr, wx.hrT, 25);
+  int k = jsonArr(body, "\"weather_code\":[", hr, tmp, 25); n = std::min(n, k);
+  for (int i = 0; i < k; i++) wx.hrCode[i] = (uint8_t)tmp[i];
+  k = jsonArr(body, "\"precipitation_probability\":[", hr, tmp, 25); n = std::min(n, k);
+  for (int i = 0; i < k; i++) wx.hrPop[i] = isnan(tmp[i]) ? 0 : (uint8_t)tmp[i];
+  k = jsonArr(body, "\"is_day\":[", hr, tmp, 25); n = std::min(n, k);
+  for (int i = 0; i < k; i++) wx.hrDay[i] = tmp[i] != 0;
+  wx.hr0 = h0 / 60; wx.hrN = h0 < 0 ? 0 : n;
+  // the next 2 hours, 15 minutes at a time
+  wx.mn0 = jsonHM(body, "\"time\":[\"", mn);
+  n = jsonArr(body, "\"precipitation\":[", mn, wx.mnRain, 9);
+  for (int i = 0; i < 9; i++) wx.mnSnow[i] = 0;
+  jsonArr(body, "\"snowfall\":[", mn, wx.mnSnow, 9);
+  wx.mnN = wx.mn0 < 0 ? 0 : n;
+  Serial.printf("Weather: %.0f now, %d days, %d hours, %d quarter hours, sun %d-%d\n", wx.temp, wx.fcN, wx.hrN, wx.mnN, wx.sunrise, wx.sunset);
   wx.key = it.extra; wx.at = millis(); wx.ok = true; wx.failAt = 0;
   return true;
 }
+// Air quality (Open-Meteo's air quality API, also free over plain http): the US AQI, 0-500. Every 30 minutes.
+static struct { String key; uint32_t at = 0, failAt = 0; int aqi = -1; } aq;
+static void airFetch(const String &extra) {
+  int c1 = extra.indexOf(','), c2 = extra.indexOf(',', c1 + 1);
+  String key = extra.substring(c1 + 1);
+  if (aq.key != key) { aq = {}; aq.key = key; }
+  if (aq.at && millis() - aq.at < 30UL * 60 * 1000) return;
+  if (aq.failAt && millis() - aq.failAt < 10UL * 60 * 1000) return;
+  if (WiFi.status() != WL_CONNECTED) return;
+  HTTPClient http;
+  http.setConnectTimeout(3000);
+  http.setTimeout(4000);
+  if (!http.begin("http://air-quality-api.open-meteo.com/v1/air-quality?latitude=" + extra.substring(c1 + 1, c2) + "&longitude=" +
+                  extra.substring(c2 + 1) + "&current=us_aqi")) return;
+  int code = http.GET();
+  String body = code == 200 ? http.getString() : "";
+  http.end();
+  float v = jsonNum(body, "\"us_aqi\":", body.indexOf("\"current\":{"));
+  Serial.printf("Air: HTTP %d, AQI %.0f\n", code, v);
+  if (isnan(v)) { aq.failAt = millis() | 1; return; }
+  aq.aqi = (int)v; aq.at = millis(); aq.failAt = 0;
+}
+static int aqiNow() { return aq.at && millis() - aq.at < 2UL * 3600 * 1000 ? aq.aqi : -1; }   // -1 = not known
+static uint8_t aqiCat(int a) { return a <= 50 ? 0 : a <= 100 ? 1 : a <= 150 ? 2 : a <= 200 ? 3 : a <= 300 ? 4 : 5; }
+static const uint32_t AQI_COLOR[] = {0x00E400, 0xFFE600, 0xFF7E00, 0xFF1E1E, 0xB040FF, 0xC00040};
+static const char *const AQI_WORD[] = {"GOOD", "MODERATE", "BAD FOR SENSITIVE", "UNHEALTHY", "VERY UNHEALTHY", "HAZARDOUS"};
 enum { WX_SUN, WX_PARTLY, WX_CLOUD, WX_FOG, WX_RAIN, WX_SNOW, WX_STORM };
 static int wxKind(int c) {                       // WMO weather codes
   if (c <= 1) return WX_SUN;
@@ -162,8 +234,7 @@ static void wxIcon(int kind, bool day, int moon, uint32_t frame) {
       break;
   }
 }
-// 5-day forecast: 5 columns of 25 px: weekday, small icon, high (item color), low (blue), chance of rain/snow (a drop
-// and the %, only on days with 10% or more).
+// Small icons for the column screens (5 days, next hours), with rain/snow falling and the storm flashing.
 static void wxMini(int kind, int cx, int cy, uint32_t frame) {
   if (kind == WX_RAIN || kind == WX_STORM || kind == WX_SNOW) wxFall(kind == WX_SNOW, cx - 6, 13, cy + 2, 8, 3, frame);
   if (kind == WX_STORM && (frame / 4) % 12 < 2) { cg.rgb(0xFFF07A); cg.drawLine(cx + 1, cy + 2, cx - 2, cy + 6, 0); cg.drawLine(cx - 2, cy + 6, cx + 1, cy + 6, 0); cg.drawLine(cx + 1, cy + 6, cx - 2, cy + 10, 0); }
@@ -174,43 +245,218 @@ static void wxDrop(int x, int y) {                 // 5x5 rain drop, top-left at
   static const uint8_t D[5] = {0x04, 0x0E, 0x1F, 0x1F, 0x0E};
   for (int j = 0; j < 5; j++) for (int i = 0; i < 5; i++) if (D[j] >> (4 - i) & 1) px(x + i, y + j, WX_DROP);
 }
+// The PJ label font leaves 2 px between letters; the chance is drawn with 1 px so the drop and "40%" fit 25 px.
+static int tightW(const String &s) { if (!pjLabels) return labelW(s); int w = 0; for (unsigned i = 0; i < s.length(); i++) w += labelW(String(s[i])); return w - 1; }
+static void tightLabel(const String &s, int x, int top, uint32_t c) {
+  if (!pjLabels) { label(s, x, top, c); return; }
+  for (unsigned i = 0; i < s.length(); i++) { String ch(s[i]); label(ch, x, top, c); x += labelW(ch); }
+}
 static void wxRainPct(float pct, int cx, int top) {
   int p = (int)lroundf(pct);
-  String s = String(p) + "%";                     // the drop and "40%"; in a wide font the drop and "40"
-  if (labelW(s) + 6 > 25) s = String(p);
-  int w = labelW(s), drop = w + 6 <= 25 ? 6 : 0, x = cx - (w + drop) / 2;
+  String s = String(p) + "%";                     // the drop and "40%"; "100%" without the drop
+  if (tightW(s) > 25) s = String(p);
+  int w = tightW(s), drop = w + 6 <= 25 ? 6 : 0, x = cx - (w + drop) / 2;
   if (drop) wxDrop(x, top + (pjLabels ? 3 : 1));
-  label(s, x + drop, top, WX_PCT);
+  tightLabel(s, x + drop, top, WX_PCT);
 }
-static void playForecast(const ShowItem &it, uint32_t frame) {
+// ---------- The extra screens (each plays for the item's seconds; the background effect carries on) ----------
+static bool wxF() { return wx.key.startsWith("F"); }            // °F: mph and 12-hour times; °C: km/h and 24-hour
+static int nowMin() { time_t t = time(nullptr); struct tm lt; localtime_r(&t, &lt); return lt.tm_hour * 60 + lt.tm_min; }
+static int wxToday() { if (!timeValid()) return 0; time_t t = time(nullptr); struct tm lt; localtime_r(&t, &lt); return lt.tm_wday; }
+static String hhmm(int mins) {                                   // "6:52 AM" or "16:33"
+  int h = (mins / 60) % 24, m = mins % 60;
+  String mm = String(m < 10 ? ":0" : ":") + String(m);
+  if (!wxF()) return String(h) + mm;
+  return String(h % 12 ? h % 12 : 12) + mm + (h < 12 ? " AM" : " PM");
+}
+static String hourName(int h) {                                  // "3PM" or "15H"
+  h %= 24;
+  if (!wxF()) return String(h) + "H";
+  return String(h % 12 ? h % 12 : 12) + (h < 12 ? "AM" : "PM");
+}
+static uint32_t mix(uint32_t a, uint32_t b, float f) {
+  uint32_t r = 0;
+  for (int s = 0; s < 24; s += 8) r |= (uint32_t)(((a >> s) & 255) * (1 - f) + ((b >> s) & 255) * f + 0.5f) << s;
+  return r;
+}
+// A color for a temperature, the same in °F and °C: lavender very cold, blue near freezing, teal and green mild,
+// yellow warm, orange and red hot.
+static uint32_t tempColor(float t) {
+  float c = wxF() ? (t - 32) / 1.8f : t;
+  static const float T[] = {-10, 0, 10, 18, 25, 32, 40};
+  static const uint32_t K[] = {0xC8A0FF, 0x5096FF, 0x3CDCC8, 0x8CF050, 0xFFD23C, 0xFF7832, 0xFF2828};
+  if (c <= T[0]) return K[0];
+  for (int i = 1; i < 7; i++) if (c < T[i]) return mix(K[i - 1], K[i], (c - T[i - 1]) / (T[i] - T[i - 1]));
+  return K[6];
+}
+static const char *uvWord(float u) { return u < 3 ? "LOW" : u < 6 ? "MODERATE" : u < 8 ? "HIGH" : u < 11 ? "VERY HIGH" : "EXTREME"; }
+static uint32_t uvColor(float u) { return u < 3 ? 0x00E400 : u < 6 ? 0xFFE600 : u < 8 ? 0xFF7E00 : u < 11 ? 0xFF1E1E : 0xB040FF; }
+// Rain or snow in the next 2 hours (15-minute steps): minutes until it starts (0 = now), -1 = none coming.
+// *snow = it is snow; *ends = minutes until it stops (-1 = not within the 2 hours).
+static int rainSoon(bool *snow, int *ends) {
+  *snow = false; *ends = -1;
+  if (!wx.mnN || !timeValid() || millis() - wx.at > 45UL * 60 * 1000) return -1;
+  int now = nowMin(), start = -1;
+  for (int i = 0; i < wx.mnN; i++) {
+    int end = wx.mn0 + 15 * i - now;             // each step is the 15 minutes before its time
+    if (end < -720) end += 1440; else if (end > 720) end -= 1440;
+    if (end <= 0) continue;                       // already over
+    bool wet = wx.mnRain[i] >= 0.1f;
+    if (start < 0) { if (wet) { start = std::max(0, end - 15); *snow = wx.mnSnow[i] > 0; } }
+    else if (!wet) { *ends = std::max(0, end - 15); break; }
+  }
+  return start;
+}
+static String rainSoonText(int m, bool snow, int ends) {
+  String w = snow ? "SNOW" : "RAIN";
+  auto r5 = [](int v) { return String(std::max(5, (v + 2) / 5 * 5)); };
+  if (m > 0) return w + " IN " + r5(m) + " MIN";
+  if (ends > 0) return w + " STOPS IN " + r5(ends) + " MIN";
+  return snow ? "SNOWING NOW" : "RAINING NOW";
+}
+// Rain or snow coming: a radar-colored bar for every 15 minutes of the next 2 hours (height = how hard).
+static void drawRainSoon(const ShowItem &it, uint32_t frame, uint32_t ms) {
+  bool snow; int ends, m = rainSoon(&snow, &ends);
+  labelC(rainSoonText(m, snow, ends), W / 2, 1, snow ? 0xFFFFFF : WX_PCT);
+  const int base = 51;
+  float grow = std::min(1.f, ms / 600.f);
+  for (int i = 0; i < wx.mnN; i++) {
+    float rate = wx.mnRain[i] * 4;               // mm per hour
+    int h = wx.mnRain[i] >= 0.05f ? constrain((int)lroundf(18 * (log10f(rate) + 1)), 3, 36) : 0;
+    h = (int)(h * grow);
+    uint32_t c = wx.mnSnow[i] > 0 ? 0xDCF0FF : rate < 2.5f ? 0x32D250 : rate < 7.6f ? 0xFFD200 : rate < 25 ? 0xFF8C00 : 0xFF1E1E;
+    for (int y = base - h; y < base; y++) for (int dx = 0; dx < 12; dx++) px(1 + i * 14 + dx, y, c);
+  }
+  for (int x = 1; x < W - 1; x++) px(x, base, 0x505A6E);
+  label("NOW", 1, 55, th().acc);
+  labelC("1H", 70, 55, th().dim);
+  label("2H", W - 1 - labelW("2H"), 55, th().dim);
+}
+// Next 12 hours: now and every 3 hours, columns like the 5-day screen (moon icons at night).
+static void wxMiniDN(int kind, bool day, int cx, int cy, uint32_t frame) {
+  if (!day && (kind == WX_SUN || kind == WX_PARTLY)) wxSprite(kind == WX_SUN ? WXS_MINI7 : WXS_MINI8, cx, cy + 1);
+  else wxMini(kind, cx, cy, frame);
+}
+static void hourCols(const ShowItem &it, uint32_t frame, int step) {
+  for (int c = 0; c < 5 && c * step < wx.hrN; c++) {
+    int i = c * step, cx = 2 + c * 25 + 12;
+    String hn = c ? hourName(wx.hr0 + i) : String("NOW");
+    if (labelW(hn) > 23) hn.remove(hn.length() - 1);   // "11AM" is too wide for the column: "11A"
+    labelC(hn, cx, 3, th().acc);
+    wxMiniDN(wxKind(wx.hrCode[i]), wx.hrDay[i], cx, 21, frame + c * 7);
+    String t = String((int)lroundf(wx.hrT[i]));
+    uint32_t hc = it.rainbow ? hsv((millis() / 8 + c * 300) % 1536) : it.fg;
+    if (pjLabels) { setFont(9); printAt(t, cx - textWidth(t) / 2, 35 + pjf->cap, hc); }
+    else labelC(t, cx, 35, hc);
+    if (wx.hrPop[i] >= 10) wxRainPct(wx.hrPop[i], cx, 49);
+  }
+}
+static void drawHourly(const ShowItem &it, uint32_t frame, uint32_t) { hourCols(it, frame, 3); }
+// Next 24 hours: now and every 6 hours, the same columns (was a line chart: too busy on the LEDs).
+static void drawChart(const ShowItem &it, uint32_t frame, uint32_t) { hourCols(it, frame, 6); }
+// 5 days: 5 columns of 25 px: weekday, small icon, high (item color), low (blue), chance of rain/snow (a drop and
+// the %, only on days with 10% or more).
+static void drawDays5(const ShowItem &it, uint32_t frame, uint32_t) {
   static const char *const DOW[] = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
-  int today = 0;
-  if (timeValid()) { time_t t = time(nullptr); struct tm lt; localtime_r(&t, &lt); today = lt.tm_wday; }
+  int today = wxToday();
+  for (int i = 0; i < std::min(wx.fcN, 5); i++) {
+    int cx = 2 + i * 25 + 12;
+    String hi = String((int)lroundf(wx.fcHi[i])), lo = String((int)lroundf(wx.fcLo[i]));
+    labelC(DOW[(today + i) % 7], cx, 1, th().acc);
+    wxMini(wxKind(wx.fcCode[i]), cx, 18, frame + i * 7);
+    uint32_t hc = it.rainbow ? hsv((millis() / 8 + i * 300) % 1536) : it.fg;
+    if (pjLabels) { setFont(9); printAt(hi, cx - textWidth(hi) / 2, 29 + 11, hc); }
+    else labelC(hi, cx, 31, hc);
+    labelC(lo, cx, 42, WX_LO);                   // lows in the same cool blue as the "L"
+    if (!isnan(wx.fcRain[i]) && wx.fcRain[i] >= 10) wxRainPct(wx.fcRain[i], cx, 54);
+  }
+}
+// 16 days: two pages of 8 columns of 16 px (days 1-8, then 9-16 for the second half of the time): 2-letter
+// weekday (today in the accent color), high (item color), low (blue), and on days with a 30% chance or more a drop
+// (or a snowflake) over the chance. Numbers only: icons don't fit 16 px and bars read as noise.
+static void drawDays16(const ShowItem &it, uint32_t frame, uint32_t ms) {
+  static const char *const D2[] = {"SU", "MO", "TU", "WE", "TH", "FR", "SA"};
+  int n = std::min(wx.fcN, 16), total = (it.sec ? it.sec : 10) * 1000;
+  int first = n > 8 && (int)ms >= total / 2 ? 8 : 0, today = wxToday();
+  for (int c = 0; c < 8 && first + c < n; c++) {
+    int i = first + c, cx = c * 16 + 8;
+    uint32_t hc = it.rainbow ? hsv((millis() / 8 + c * 200) % 1536) : it.fg;
+    auto tc = [](const String &t, int cx, int top, uint32_t col) { tightLabel(t, cx - tightW(t) / 2, top, col); };   // 1 px between letters
+    tc(D2[(today + i) % 7], cx, 2, i == 0 ? th().acc : th().dim);
+    tc(String((int)lroundf(wx.fcHi[i])), cx, 16, hc);
+    tc(String((int)lroundf(wx.fcLo[i])), cx, 29, WX_LO);
+    if (isnan(wx.fcRain[i]) || wx.fcRain[i] < 30) continue;
+    if (wxKind(wx.fcCode[i]) == WX_SNOW) { for (int d = -2; d <= 2; d++) { px(cx - 1 + d, 45, 0xFFFFFF); px(cx - 1, 45 + d, 0xFFFFFF); } }
+    else wxDrop(cx - 3, 43);
+    tc(String((int)lroundf(wx.fcRain[i])), cx, 52, WX_PCT);
+  }
+}
+// Details: wind (direction it comes from), gusts, humidity, UV index (colored by level), dew point.
+static void drawDetails(const ShowItem &it, uint32_t frame, uint32_t) {
+  static const char *const DIR[] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
+  String unit = wxF() ? " MPH" : " KM/H";
+  auto num = [](float v) { return isnan(v) ? String("-") : String((int)lroundf(v)); };
+  String rows[5][2] = {
+    {"WIND", (wx.windDir >= 0 ? String(DIR[((wx.windDir + 22) / 45) % 8]) + " " : String("")) + num(wx.wind) + unit},
+    {"GUSTS", num(wx.gust) + unit},
+    {"HUMIDITY", num(wx.hum) + "%"},
+    {"UV INDEX", num(wx.uv) + (isnan(wx.uv) ? "" : String(" ") + uvWord(wx.uv))},
+    {"DEW POINT", num(wx.dew) + (pjLabels ? "\x7f" : "")},
+  };
+  for (int r = 0; r < 5; r++) {
+    int y = 2 + r * 12;
+    label(rows[r][0], 2, y, th().acc);
+    label(rows[r][1], W - 2 - labelW(rows[r][1]), y, r == 3 && !isnan(wx.uv) ? uvColor(wx.uv) : th().main);
+  }
+}
+// Air quality: the US AQI in big numbers in its color, the level, and the color scale with a marker.
+static void drawAir(const ShowItem &it, uint32_t frame, uint32_t) {
+  int a = aqiNow();
+  if (a < 0) return;
+  uint8_t c = aqiCat(a);
+  labelC("AIR QUALITY", W / 2, 1, th().acc);
+  String s(a);
+  uint8_t f = fitBig(std::min<uint8_t>(it.font, isPJ(it.font) ? 11 : 3), s, 90, 0);   // not the huge size: it would reach the title
+  printAt(s, (W - textWidth(s)) / 2, textBaseline(f, 11, 28), AQI_COLOR[c]);
+  labelC(AQI_WORD[c], W / 2, 42, AQI_COLOR[c]);
+  static const int B[] = {0, 50, 100, 150, 200, 300, 500};
+  for (int k = 0; k < 6; k++) for (int x = 4 + k * 20; x < 4 + k * 20 + 19; x++) for (int y = 58; y < 61; y++) px(x, y, AQI_COLOR[k]);
+  int p = 4 + c * 20 + constrain((a - B[c]) * 19 / (B[c + 1] - B[c]), 0, 18);
+  for (int r = 0; r < 3; r++) for (int x = p - 2 + r; x <= p + 2 - r; x++) px(x, 53 + r, 0xFFFFFF);
+}
+// Sun and moon: the moon tonight (big, its phase name below), sunrise and sunset, and how long the day is.
+static void sunGlyph(int x, int y, bool rise) {  // 11 x 9: an arrow (up for sunrise) over half a sun on the horizon
+  uint32_t c = rise ? 0xFFC83C : 0xFF8C32;
+  for (int r = 0; r < 3; r++) { int half = rise ? r : 2 - r; for (int d = -half; d <= half; d++) px(x + 5 + d, y + r, c); }
+  for (int j = 0; j < 4; j++) { int dy = 4 - j; for (int i = -4; i <= 4; i++) if (i * i + dy * dy <= 20) px(x + 5 + i, y + 4 + j, c); }
+  for (int i = -5; i <= 5; i++) px(x + 5 + i, y + 8, c);
+}
+static float wxLatNow = 0;                        // latitude of the weather item playing (moon icon side)
+static void drawSun(const ShowItem &it, uint32_t frame, uint32_t) {
+  int phase = moonPhase();
+  wxStars(23, 24, frame);
+  wxSprite(WXS_MOON0 + moonIcon(phase, wxLatNow), 23, 24);
+  if (wx.sunrise >= 0) { sunGlyph(52, 4, true); label(hhmm(wx.sunrise), 67, 5, th().main); }
+  if (wx.sunset >= 0) { sunGlyph(52, 20, false); label(hhmm(wx.sunset), 67, 21, th().main); }
+  if (wx.sunrise >= 0 && wx.sunset > wx.sunrise) {
+    int d = wx.sunset - wx.sunrise;
+    label("DAY " + String(d / 60) + "H " + String(d % 60) + "M", 52, 37, th().dim);
+  }
+  labelC(MOON_NAME[phase], W / 2, 55, th().acc);
+}
+static bool wxScreen(const ShowItem &it, uint32_t &frame, WxDraw draw) {   // true = interrupted (button, new show)
   uint32_t total = (it.sec ? it.sec : 10) * 1000UL, start = millis();
-  pjLabels = isPJ(it.font);
   shownValid = false;
   while (millis() - start < total) {
     uint32_t t0 = millis();
     paintBackground(it, frame);
-    int n = wx.fcN, cw = 25, x0 = 2;
-    for (int i = 0; i < n; i++) {
-      int cx = x0 + i * cw + cw / 2;
-      String d = DOW[(today + i) % 7];
-      String hi = String((int)lroundf(wx.fcHi[i])), lo = String((int)lroundf(wx.fcLo[i]));
-      // day name, icon, high (bold small Jumbo when the item uses Jumbo), low; the town is on the first screen
-      labelC(d, cx, 1, th().acc);
-      wxMini(wxKind(wx.fcCode[i]), cx, 18, frame + i * 7);
-      uint32_t hc = it.rainbow ? hsv((millis() / 8 + i * 300) % 1536) : it.fg;
-      if (pjLabels) { setFont(9); printAt(hi, cx - textWidth(hi) / 2, 29 + 11, hc); }
-      else labelC(hi, cx, 31, hc);
-      labelC(lo, cx, 42, WX_LO);                // lows in the same cool blue as the "L"
-      if (!isnan(wx.fcRain[i]) && wx.fcRain[i] >= 10) wxRainPct(wx.fcRain[i], cx, 54);
-    }
+    draw(it, frame, millis() - start);
     pushCanvas();
     frame++;
     int32_t wait = 40 - (int32_t)(millis() - t0);
-    if (waitMs(wait > 0 ? wait : 1)) return;
+    if (waitMs(wait > 0 ? wait : 1)) return true;
   }
+  return false;
 }
 // ---------- Weather alerts (US only: the National Weather Service, api.weather.gov, free, no key) ----------
 // HTTPS (same Let's Encrypt root as the website, so SITE_CA works), and the answer can be 50+ KB of text, so it is
@@ -429,6 +675,7 @@ static void playWeather(const ShowItem &item) {
     if (alertsTop() && playAlerts(1, 4500)) return;
   }
   if (!weatherFetch(it)) return;
+  airFetch(it.extra);
   if (it.effect == FX_AUTO) {                     // "match the weather": snow or rain when it does, else nothing
     int k = wxKind(wx.code);
     it.effect = k == WX_SNOW ? FX_SNOW : (k == WX_RAIN || k == WX_STORM) ? FX_RAIN : FX_NONE;
@@ -439,19 +686,29 @@ static void playWeather(const ShowItem &item) {
   if (line2.length() > 21) line2 = line2.substring(0, 21);
   int lPos = line2.indexOf(" L") + 1;              // the "L" (the "H" is at 0)
   int townPos = line2.indexOf(' ', lPos); if (townPos < 0) townPos = line2.length();
-  int kind = wxKind(wx.code), phase = moonPhase();
+  int kind = wxKind(wx.code);
+  wxLatNow = wxLat(it);
   pjLabels = isPJ(it.font);
   if (pjLabels) temp += '\x7f';                    // the PJ font has a degree sign
-  // The line under the temperature takes turns: the sky ("PARTLY CLOUDY"), feels like, today's chance of rain or
-  // snow, and at night under a clear or partly cloudy sky the moon's phase.
-  std::vector<String> say;
-  say.push_back(wxWord(wx.code));
-  say.push_back("FEELS " + String((int)lroundf(wx.feels)) + (pjLabels ? "\x7f" : ""));
-  if (wx.fcN && !isnan(wx.fcRain[0])) say.push_back(String(wxKind(wx.fcCode[0]) == WX_SNOW ? "SNOW " : "RAIN ") + String((int)lroundf(wx.fcRain[0])) + "%");
-  if (!wx.day && (kind == WX_SUN || kind == WX_PARTLY)) say.push_back(MOON_NAME[phase]);
-  int moon = moonIcon(phase, wxLat(it));
-  uint32_t total = (it.sec ? it.sec : 10) * 1000UL, start = millis(), frame = 0;
-  uint32_t per = std::max<uint32_t>(2500, total / say.size());
+  // The line under the temperature takes turns: the sky ("PARTLY CLOUDY"), then only what matters today: rain/snow
+  // on the way in the next 2 hours (or today's chance when 10% or more), strong gusts, a high UV index in the daytime,
+  // unhealthy air; then feels like. Each in its own color where the color means something. The screen stays long
+  // enough to show every line for 2.5 s.
+  struct Say { String s; uint32_t c; };
+  std::vector<Say> say;
+  say.push_back({wxWord(wx.code), th().acc});
+  bool snow; int ends, soon = rainSoon(&snow, &ends);
+  if (soon >= 0) say.push_back({rainSoonText(soon, snow, ends), snow ? 0xFFFFFF : WX_PCT});
+  else if (wx.fcN && !isnan(wx.fcRain[0]) && wx.fcRain[0] >= 10)
+    say.push_back({String(wxKind(wx.fcCode[0]) == WX_SNOW ? "SNOW " : "RAIN ") + String((int)lroundf(wx.fcRain[0])) + "%", th().acc});
+  if (!isnan(wx.gust) && wx.gust >= (wxF() ? 30 : 50)) say.push_back({"GUSTS " + String((int)lroundf(wx.gust)) + (wxF() ? " MPH" : " KM/H"), th().acc});
+  if (wx.day && !isnan(wx.uv) && wx.uv >= 6) say.push_back({"UV " + String((int)lroundf(wx.uv)) + " " + uvWord(wx.uv), uvColor(wx.uv)});
+  int aqi = aqiNow();
+  if (aqi > 100) say.push_back({"AIR " + String(aqi) + " " + (aqiCat(aqi) == 2 ? "POOR" : AQI_WORD[aqiCat(aqi)]), AQI_COLOR[aqiCat(aqi)]});
+  say.push_back({"FEELS " + String((int)lroundf(wx.feels)) + (pjLabels ? "\x7f" : ""), th().acc});
+  int moon = moonIcon(moonPhase(), wxLatNow);
+  uint32_t total = std::max<uint32_t>((it.sec ? it.sec : 10) * 1000UL, say.size() * 2500), start = millis(), frame = 0;
+  uint32_t per = total / say.size();
   bool warn = alertsTop() >= 3;
   shownValid = false;
   while (millis() - start < total) {
@@ -465,10 +722,10 @@ static void playWeather(const ShowItem &item) {
     int y1 = digitTop(base);
     drawText(temp, x, base, it, millis());
     if (!pjLabels) { cg.rgb(it.rainbow ? 0xFFFFFF : it.fg); cg.drawCircle(x + tw + 4, y1 + 3, 2, 0); cg.drawCircle(x + tw + 4, y1 + 3, 1, 0); }
-    {   // centered under the temperature; a long one (moon phase) slides left so it fits (the icon ends above it)
-      const String &w = say[((millis() - start) / per) % say.size()];
-      int ww = labelW(w), wx0 = std::max(0, std::min(48 + 40 - ww / 2, W - 1 - ww));
-      label(w, wx0, 44, th().acc);
+    {   // centered under the temperature; a long one slides left so it fits (the icon ends above it)
+      const Say &w = say[std::min<size_t>(say.size() - 1, (millis() - start) / per)];
+      int ww = labelW(w.s), wx0 = std::max(0, std::min(48 + 40 - ww / 2, W - 1 - ww));
+      label(w.s, wx0, 44, w.c);
     }
     {   // "H" warm and "L" cool with 1 px after each, the numbers in the theme's main color, the town dim
       labelFont();
@@ -484,5 +741,14 @@ static void playWeather(const ShowItem &item) {
     int32_t wait = 40 - (int32_t)(millis() - t0);
     if (waitMs(wait > 0 ? wait : 1)) return;
   }
-  if (it.forecast && wx.fcN) playForecast(it, frame);   // same background effect carries on
+  // the extra screens the item asks for, in this order; each only when there is something to show
+  uint8_t pg = it.wxPages;
+  if ((pg & WXP_RAINSOON) && rainSoon(&snow, &ends) >= 0 && wxScreen(it, frame, drawRainSoon)) return;
+  if ((pg & WXP_HOURLY) && wx.hrN && wxScreen(it, frame, drawHourly)) return;
+  if ((pg & WXP_CHART) && wx.hrN >= 2 && wxScreen(it, frame, drawChart)) return;
+  if ((pg & WXP_DAYS5) && wx.fcN && wxScreen(it, frame, drawDays5)) return;
+  if ((pg & WXP_DAYS16) && wx.fcN >= 2 && wxScreen(it, frame, drawDays16)) return;
+  if ((pg & WXP_DETAILS) && wxScreen(it, frame, drawDetails)) return;
+  if ((pg & WXP_AIR) && aqiNow() >= 0 && wxScreen(it, frame, drawAir)) return;
+  if ((pg & WXP_SUN) && wxScreen(it, frame, drawSun)) return;
 }

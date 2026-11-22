@@ -74,7 +74,7 @@ async function loadShow(auto) {
         const r = await fetch('/api/file?name=' + encodeURIComponent(f[2]));
         if (r.ok) await addFile(new File([await r.blob()], f[2]), secs, true);
       } else {
-        const o = { lead: op.lead, fc: op.fc, alerts: op.alerts, secs, fg: f[2] === 'rainbow' ? '#ffffff' : f[2] === 'theme' ? TH().main : '#' + f[2], useTheme: f[2] === 'theme', rainbow: f[2] === 'rainbow', bg: '#' + f[3], font: +f[4] >= 8 && +f[4] <= 12 ? +f[4] : +f[4] >= 5 && +f[4] <= 7 ? +f[4] - 3 : Math.max(1, Math.min(4, +f[4] || 3)), effect: FX[f[5]] ? f[5] : 'none' };
+        const o = { lead: op.lead, alerts: op.alerts, ...Object.fromEntries(WX_PAGES.map(([, k]) => [k, !!op[k]])), secs, fg: f[2] === 'rainbow' ? '#ffffff' : f[2] === 'theme' ? TH().main : '#' + f[2], useTheme: f[2] === 'theme', rainbow: f[2] === 'rainbow', bg: '#' + f[3], font: +f[4] >= 8 && +f[4] <= 12 ? +f[4] : +f[4] >= 5 && +f[4] <= 7 ? +f[4] - 3 : Math.max(1, Math.min(4, +f[4] || 3)), effect: FX[f[5]] ? f[5] : 'none' };
         if (f[0] === 'text') addDrawn('text', { ...o, text: f[6] });
         if (f[0] === 'clock') addDrawn('clock', { ...o, h24: f[6] === '24' });
         if (f[0] === 'countdown') addDrawn('countdown', { ...o, date: f[6], text: f[7] || '' });

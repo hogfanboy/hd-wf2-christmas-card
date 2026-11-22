@@ -114,19 +114,19 @@ function optsField(it) {
   if (w.days.length < 7) o.push('days=' + w.days);
   if (w.h1 !== '' && w.h2 !== '' && w.h1 !== w.h2) o.push(`hours=${w.h1}-${w.h2}`);
   if (it.kind === 'countdown' && it.lead !== '' && it.lead != null) o.push('lead=' + it.lead);
-  if (it.kind === 'weather' && it.fc) o.push('forecast');
+  if (it.kind === 'weather') for (const [opt, k] of WX_PAGES) if (it[k]) o.push(opt);
   if (it.kind === 'weather' && it.alerts) o.push('alerts');
   return '@' + o.join(' ');
 }
 function parseOpts(field) {
-  const o = { when: { from: '', to: '', days: '0123456', h1: '', h2: '' }, lead: '', fc: false, alerts: false };
+  const o = { when: { from: '', to: '', days: '0123456', h1: '', h2: '' }, lead: '', alerts: false };
   for (const t of field.slice(1).split(' ').filter(Boolean)) {
     const [k, v = ''] = t.split('=');
     if (k === 'dates') [o.when.from, o.when.to] = v.split('-');
     if (k === 'days') o.when.days = v;
     if (k === 'hours') [o.when.h1, o.when.h2] = v.split('-');
     if (k === 'lead') o.lead = v;
-    if (k === 'forecast') o.fc = true;
+    const pg = WX_PAGES.find(p => p[0] === k); if (pg) o[pg[1]] = true;
     if (k === 'alerts') o.alerts = true;
   }
   return o;
@@ -192,7 +192,7 @@ function addDrawn(kind, o = {}) {
   const it = Object.assign({ kind, secs: 0, useTheme: !('fg' in o), fg: TH().main, bg: COLORS.bg, rainbow: false,
     font: kind === 'text' || kind === 'stocks' ? 11 : 12, syms: '^GSPC,^DJI,^IXIC', effect: kind === 'countdown' ? 'snow' : kind === 'fx' ? 'fireworks' : 'none',
     text: kind === 'text' ? 'Happy Birthday!' : kind === 'countdown' ? 'Christmas' : '', date: '12-25',
-    unit: usesF() ? 'F' : 'C', lat: '', lon: '', place: '', lead: '', fc: kind === 'weather', alerts: kind === 'weather',
+    unit: usesF() ? 'F' : 'C', lat: '', lon: '', place: '', lead: '', fc: kind === 'weather', rainsoon: kind === 'weather', alerts: kind === 'weather',
     h24: !new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12 }, o);
   const el = baseEl(it);
   it.metaEl.textContent = META[kind]; it.metaEl.classList.add('desc');
@@ -216,9 +216,10 @@ function addDrawn(kind, o = {}) {
     ${kind === 'weather' ? `<div class="flex"><input type="text" class="wq" placeholder="Your town" style="flex:1;min-width:0"><button class="chip wfind">Find</button></div>
       <button class="chip wauto">📍 Where the screen is</button>
       <div class="row wres"></div>
-      <label>Units <select data-k="unit"><option value="F">°F</option><option value="C">°C</option><option value="A">Auto</option></select>
-        &nbsp; <input type="checkbox" data-k="fc"> Then a 5-day forecast</label>
-      <label><input type="checkbox" data-k="alerts"> Weather alerts (US only): watches and warnings play before the weather; a warning also comes back every few items</label>
+      <label>Units <select data-k="unit"><option value="F">°F</option><option value="C">°C</option><option value="A">Auto</option></select></label>
+      <div class="wpages"><div><b>Screens</b> (tick what you want; each plays for the item's seconds)</div>
+        <label><input type="checkbox" data-k="alerts"> Weather alerts (US only): watches and warnings before the weather; a warning also comes back every few items</label>
+        ${WX_PAGES.map(([, k, t]) => `<label><input type="checkbox" data-k="${k}"> ${t}</label>`).join('')}</div>
       <button class="chip walert" type="button">⚠ See a sample alert</button>` : ''}
     ${colors}
     <label>Size <select data-k="font">${sizes}</select>
@@ -237,6 +238,7 @@ function addDrawn(kind, o = {}) {
       el.querySelector('.name').textContent = label(it);
       if (k === 'unit') wxFetch(it);
       if (k === 'alerts') alertsFetch(it);
+      if (WX_PAGES.some(p => p[1] === k)) it.focusPage = it[k] ? k : null;   // the preview jumps to a screen just ticked
       it.t0 = performance.now(); updateSpace();
     };
   });
