@@ -1,12 +1,12 @@
 # PROGRESS
 
-## Working state (fw 1.0.0-beta14 on card 1 via WiFi, card 2 radar probe v2 / beta10 on restart, 2026-11-22)
-- **beta14:** one "Hourly forecast" checkbox with a 12 hours / 24 hours choice (`hourly` / `chart`) and one "Daily
-  forecast" checkbox with 5 days / 10 days (`forecast` / `days10`). 10 days = two 5-day screens, each for the item's
-  seconds, with a page bar on the top row (left half lit = days 1-5, right half = days 6-10). 14 days removed; old
-  `days16` plays as 10 days. Card 1's show: alerts rainsoon hourly days10 details air sun.
-- **beta11-13:** weather "Screens" checklist; line under the temperature: sky, what matters, FEELS (PROJECT-NOTES).
-- **beta10:** alerts (weather.gov). **beta7:** Christmas lights. **beta9:** QR big/small alternating. **beta8:** card remembers the weather town (NVS `wxhome`), page redesign.
+## Working state (fw 1.0.0-beta15 on card 1 via WiFi, card 2 radar probe v2 / beta10 on restart, 2026-11-22)
+- **beta15:** hourly and daily forecasts slide. Hourly = one 32-px column per hour (12 or 24 h + now), temperature
+  in its temperature color, at midnight the new weekday in white + dotted line. 10 days = the 5-day columns sliding.
+  Strips hold 3 s, slide 40 px/s, hold 2 s (screen lasts max(item secs, strip)). Card 1: 24 hours + 10 days.
+- **beta14:** one "Hourly forecast" checkbox (12 / 24 hours = `hourly` / `chart`) and one "Daily forecast" (5 / 10
+  days = `forecast` / `days10`). 14 days removed; old `days16` plays as 10 days.
+- **beta11-13:** weather "Screens" checklist; line under the temperature: sky, what matters, FEELS. **beta10:** alerts (weather.gov). **beta7:** Christmas lights. **beta9:** QR big/small alternating. **beta8:** card remembers the weather town (NVS `wxhome`), page redesign.
 - **Fonts/icons:** crisp Jumbo font and shaded weather icons with hard edges (details in PROJECT-NOTES).
 - **Shuffle:** page Play order In order / Shuffle (`order<TAB>shuffle` in show.txt), never the same item twice.
 - **Border trim (beta4 page):** every picture's plain-color border (all 4 corners the same color) is cut off before
@@ -48,8 +48,8 @@
    once (OSM tiles in the browser) and uploads it (~8 KB) when the town is saved; frames in flash, not RAM.
    Data: RainViewer over plain HTTP (zoom 7). Needs PNGdec 1.1.6 in CI libs; its 45 KB block fits only after
    playerFree(), so allocate it first and skip the round if it fails. Details in NOTES.md (merge only the notes).
-000. **"Weather screens look good" / "change X"** - card 1: now, 12 hours, 10 days (watch the top-row page bar:
-   left half = days 1-5, right half = 6-10), details, air, sun & moon. Then flash card 2 (restart it first: it runs the radar probe until then).
+000. **"Weather screens look good" / "change X"** - card 1: now, 24 hours sliding, 10 days sliding, details, air,
+   sun & moon. Speed, hold times, column width and temperature colors are easy to change. Then flash card 2 (restart it first: it runs the radar probe until then).
 00. **"QR works close and far" / "change X"** - press S1 on either card; try the phone at 1.5 ft, 4 ft and 7 ft.
 0. **"Lights look good" / "change X"** - run `tools/effects-probe.ps1` (bulb size 2x2, spacing 8, pattern speed).
 1. **"Fonts/icons look good" / "change X"** - weather + forecast and a Jumbo text item ("use the straight rays").
