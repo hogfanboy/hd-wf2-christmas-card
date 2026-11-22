@@ -22,9 +22,10 @@ const jpegjs = fs.readFileSync(path.join(nm, 'jpeg-js/lib/encoder.js'), 'utf8');
 const convert = fs.readFileSync(path.join(root, 'web/convert.js'), 'utf8');   // decoding/encoding pictures
 const pjfont = fs.readFileSync(path.join(root, 'web/pjfont.js'), 'utf8');   // our font: same pixels as the card
 const wxicons = fs.readFileSync(path.join(root, 'web/wxicons.js'), 'utf8');   // weather icon sprites (tools/make-wxicons.mjs)
+const fxsprites = fs.readFileSync(path.join(root, 'web/fxsprites.js'), 'utf8');   // effect sprites (tools/make-fxsprites.mjs)
 const vendor = `<script>/* omggif (MIT) */${omggif}</script>\n<script>/* gifenc (MIT, Matt DesLauriers) */(function(){${gifenc}})();</script>\n<script>/* jpeg-js encoder (BSD, Adobe / Andreas Ritter) */(function(){var module;${jpegjs}})();</script>
 <script>${convert}</script>
-<script>${pjfont}</script>\n<script>${wxicons}</script>`;
+<script>${pjfont}</script>\n<script>${wxicons}</script>\n<script>${fxsprites}</script>`;
 
 // Build stamp shown on the page ("app 2026-11-20 abc1234"); the website copy is what cards normally run.
 let rev = ''; try { rev = (await import('node:child_process')).execSync('git rev-parse --short HEAD', { cwd: root }).toString().trim(); } catch (e) {}

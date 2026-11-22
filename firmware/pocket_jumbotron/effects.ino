@@ -23,7 +23,7 @@ static void effectInit(const ShowItem &it) {
   for (auto &r : rockets) r.on = false;
   for (int c = 0; c < 22; c++) { mHead[c] = rnd(40); mLen[c] = 3 + rnd(5); mSpd[c] = 1 + rnd(3); for (int r = 0; r < 8; r++) mGlyph[c][r] = MGLYPHS[rnd(sizeof(MGLYPHS) - 1)]; }
   if (it.effect == FX_FIRE && !heat) heat = (uint8_t *)calloc(W, H);
-  sleighX = it.effect == FX_SLEIGH && it.type == 'f' ? -84 * 16 : it.effect == FX_TURKEY || it.effect == FX_BUNNY ? -32 * 16 : -46 * 16;
+  sleighX = it.effect == FX_SLEIGH && it.type == 'f' ? -94 * 16 : it.effect == FX_TURKEY ? -36 * 16 : it.effect == FX_BUNNY ? -32 * 16 : -50 * 16;
   sleighWait = 0;
 }
 static void effectEnd() { free(heat); heat = nullptr; }
@@ -111,94 +111,81 @@ static void fxMatrix(uint32_t frame) {
 }
 
 
-// ---------- Sprite effects (1.0): sleigh, balloons, fish, rain ----------
-// Sprites are rows of letters, one per pixel; the page's preview (web/index.html SPR) has the same rows.
-// X main color, D darker main, T main a bit dimmer, L main toward white, H/W/E white, R red, S skin, G gold,
-// B brown, b dark brown, N nose (red on the lead reindeer, brown on the others), O orange, Y yellow, P pink,
-// K black, g green.
-static const char *const SLEIGH[] = {
-  "...WRR.........", "....RRR........", "....WWWW.......", "....SSSS.......", "R...WWWW......R", "RR..RWWR.....RR",
-  "RRRRRRRRRRRRRR.", "RGGGGGGGGGGGGR.", ".RRRRRRRRRRRR..", "..G.......G...G", "GGGGGGGGGGGGGG."};
-static const char *const DEER_A[] = {
-  ".......b.b.", "........bb.", ".......BBBN", ".BBBBBBBB..", "BBBBBBBB...", ".b.b..b.b..", "b...b.b...b"};
-static const char *const DEER_B[] = {
-  ".......b.b.", "........bb.", ".......BBBN", ".BBBBBBBB..", "BBBBBBBB...", "..bb..bb...", "..bb..bb..."};
-static const char *const BALLOON[] = {"..XXX..", ".XXXXX.", "XHXXXXX", "XXXXXXX", "XXXXXXD", ".XXXXD.", "..XXD..", "...X..."};
-static const char *const FISH[] = {"...XXX..", "T.XXLXX.", "TTXXLXEX", "T.XXLXX.", "...XXX.."};
+// ---------- Sprite effects: sleigh, balloons, fish, rain, holidays ----------
+// The pictures are shaded sprites with hard edges drawn by tools/make-fxsprites.mjs (fx_sprites.h, 24-bit color);
+// the page preview (web/fxsprites.js + web/app/2-effects.js) uses the same pixels.
 static const uint32_t PARTY[7] = {0xFF2030, 0xFFC020, 0x3070FF, 0x30D060, 0xFF50B0, 0xA050FF, 0xFF8020};
 static uint32_t mixC(uint32_t a, uint32_t b, int num, int den) {     // a toward b by num/den
   uint32_t o = 0;
   for (int s = 0; s <= 16; s += 8) { int ca = (a >> s) & 255, cb = (b >> s) & 255; o |= (uint32_t)(ca + (cb - ca) * num / den) << s; }
   return o;
 }
-static void sprite(const char *const *rows, int n, int x, int y, uint32_t main, bool flip, bool nose, int sc) {   // sc: 1 or 2 px per letter
-  for (int r = 0; r < n; r++) {
-    int w = strlen(rows[r]);
-    for (int i = 0; i < w; i++) {
-      uint32_t c;
-      switch (rows[r][flip ? w - 1 - i : i]) {
-        case 'X': c = main; break;
-        case 'D': c = mixC(main, 0, 2, 5); break;
-        case 'T': c = mixC(main, 0, 1, 4); break;
-        case 'L': c = mixC(main, 0xFFFFFF, 1, 2); break;
-        case 'H': case 'W': case 'E': c = 0xFFFFFF; break;
-        case 'R': c = 0xE01020; break;
-        case 'S': c = 0xFFB48C; break;
-        case 'G': c = 0xFFC830; break;
-        case 'B': c = 0xA0602C; break;
-        case 'b': c = 0x6A3A18; break;
-        case 'N': c = nose ? 0xFF1010 : 0xA0602C; break;
-        case 'O': c = 0xFF7A18; break;
-        case 'Y': c = 0xFFE040; break;
-        case 'P': c = 0xFF8CB4; break;
-        case 'K': c = 0; break;
-        case 'g': c = 0x30C040; break;
-        default: continue;
-      }
-      for (int a = 0; a < sc; a++) for (int b = 0; b < sc; b++) px(x + i * sc + a, y + r * sc + b, c);
-    }
+// Draws sprite id with its top left at x, y. flip = mirror left-right. col = the color of a tint sprite, or of a
+// color sprite's glow pixels.
+static void fxSpr(int id, int x, int y, bool flip, uint32_t col) {
+  const FxSprite &s = FX_SPR[id];
+  const uint8_t *ix = s.px;
+  int cr = col >> 16 & 255, cgg = col >> 8 & 255, cb = col & 255;
+  for (int j = 0; j < s.h; j++) for (int i = 0; i < s.w; i++, ix++) {
+    if (!*ix) continue;
+    const uint8_t *p = s.pal + (*ix - 1) * 3 - 1;   // p[1..3] = the palette color, as in the old 4-byte layout
+    int X = x + (flip ? s.w - 1 - i : i), Y = y + j;
+    if ((unsigned)X >= (unsigned)W || (unsigned)Y >= (unsigned)H) continue;
+    uint8_t *q = canvas[Y][X];
+    if (s.tint) {
+      int sh = p[1], wt = p[2], r = cr * sh / 255, g = cgg * sh / 255, b = cb * sh / 255;
+      q[0] = r + (255 - r) * wt / 255; q[1] = g + (255 - g) * wt / 255; q[2] = b + (255 - b) * wt / 255;
+    } else if (p[1] == 255 && p[2] == 0 && p[3] == 255) { q[0] = cr; q[1] = cgg; q[2] = cb; }
+    else { q[0] = p[1]; q[1] = p[2]; q[2] = p[3]; }
   }
 }
-
-// Santa's sleigh and two reindeer crossing with a glitter trail. Full screen it is a night scene: twinkling stars,
-// a full moon, snowy rooftops with lit windows, falling snow, and the sleigh at double size crossing the moon.
-static void disc(int cx, int cy, int r2, uint32_t c) {           // filled circle, r2 = radius squared (r <= 8)
-  for (int dy = -8; dy <= 8; dy++) for (int dx = -8; dx <= 8; dx++) if (dx * dx + dy * dy <= r2) px(cx + dx, cy + dy, c);
-}
-static const int8_t HOUSES[][4] = {{-3, 26, 11, 0}, {25, 20, 16, 1}, {47, 28, 10, 0}, {77, 22, 14, 1}, {101, 30, 12, 0}};   // x, width, wall height, chimney
-static void fxTown(uint32_t frame) {
-  disc(110, 11, 56, 0xFFF0C0);                                   // moon, two soft craters
-  px(107, 9, 0xE0D0A0); px(108, 9, 0xE0D0A0); px(112, 14, 0xE0D0A0); px(113, 13, 0xE0D0A0);
-  for (int h = 0; h < 5; h++) {
-    int x0 = HOUSES[h][0], w = HOUSES[h][1], wall = H - HOUSES[h][2], half = w / 2;
-    if (HOUSES[h][3]) for (int y = wall - half + 2; y < wall; y++) for (int x = x0 + w - 7; x < x0 + w - 4; x++) px(x, y, 0x5A2A2A);   // chimney
-    for (int x = x0; x < x0 + w; x++) {
-      int d = x - x0 < half ? x - x0 : x0 + w - 1 - x, top = wall - d - 1;   // 45-degree roof
-      px(x, top, 0xE8F0FF);                                       // snow on the roof
-      for (int y = top + 1; y < wall; y++) px(x, y, 0x5A2030);
-      for (int y = wall; y < H; y++) px(x, y, 0x3C2A5A);
-    }
-    for (int k = 0; k < 2; k++) {                                // two windows, now and then one goes dark
-      int wx = k ? x0 + w - 8 : x0 + 5, wy = wall + 3;
-      if ((frame / 150 + h * 3 + k) % 7 == 0) continue;
-      for (int y = wy; y < wy + 3; y++) for (int x = wx; x < wx + 3; x++) px(x, y, 0xFFB030);
-    }
+static void fxLine(int x0, int y0, int x1, int y1, uint32_t c) {     // reins
+  int dx = abs(x1 - x0), dy = -abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1, e = dx + dy;
+  for (;;) {
+    px(x0, y0, c);
+    if (x0 == x1 && y0 == y1) break;
+    int e2 = 2 * e;
+    if (e2 >= dy) { e += dy; x0 += sx; }
+    if (e2 <= dx) { e += dx; y0 += sy; }
   }
 }
-static void fxSleigh(uint32_t frame, bool behind) {
-  int sc = behind ? 1 : 2;
-  for (int i = 0; !behind && i < 24; i++) {                      // stars in the top half of the sky
+// Night sky: deep blue fading lighter toward the horizon, with twinkling stars (flakes 0..n-1).
+static void fxNightSky(uint32_t frame, int n) {
+  for (int y = 0; y < H; y++) {
+    uint32_t c = mixC(0x00020C, 0x0E1434, y < 44 ? y : 44, 44);
+    for (int x = 0; x < W; x++) px(x, y, c);
+  }
+  for (int i = 0; i < n; i++) {
     Flake &f = flakes[i];
     pxAdd(f.x / 16, f.y / 32, 0xDCE6FF, (sin8(frame * (f.spd / 4 + 1) + i * 41) * f.bri) >> 9);
   }
-  if (!behind) fxTown(frame);
+}
+
+// Santa's sleigh and two reindeer crossing with a glitter trail. Full screen it is a night scene: stars, the moon,
+// a snowy town with lit windows (now and then one goes dark), falling snow, and a big sleigh crossing the moon.
+static void fxSleigh(uint32_t frame, bool behind) {
+  if (!behind) {
+    fxNightSky(frame, 24);
+    fxSpr(FXS_MOON, 99, 2, false, 0);
+    fxSpr(FXS_TOWN, 0, H - 30, false, 0);
+    int nw = sizeof(FX_WINDOWS) / sizeof(FX_WINDOWS[0]);
+    for (int k = 0; k < nw; k++) {
+      const uint8_t *w = FX_WINDOWS[k];
+      bool dark = (frame / 150 + k * 3) % 9 == 0;
+      for (int y = 0; y < w[3]; y++) for (int x = 0; x < w[2]; x++)
+        px(w[0] + x, H - 30 + w[1] + y, dark ? 0x241810 : (y == 0 || x == w[2] - 1) ? 0xD88A28 : 0xFFC860);
+    }
+  }
+  // sizes in design units (make-fxsprites.mjs): big sprites are 0.8 px per unit, small ones 0.42
+  int team = behind ? 50 : 94;                                    // whole team's width + gap, in px
   if (sleighWait) sleighWait--;
-  else if ((sleighX += behind ? 9 : 16) > (W + 4) * 16) { sleighX = (behind ? -46 : -84) * 16; sleighWait = 20 + rnd(60); }
-  int x = sleighX / 16, y = (behind ? 2 : 9) + ((int)sin8(frame * 2) - 128) / (behind ? 40 : 26);
-  for (int k = 0; !sleighWait && k < 3; k++)                     // glitter from the back of the sleigh
+  else if ((sleighX += behind ? 9 : 16) > (W + 4) * 16) { sleighX = -team * 16; sleighWait = 20 + rnd(60); }
+  float k = behind ? 0.42f : 0.8f;
+  int x = sleighX / 16, y = (behind ? 1 : 5) + ((int)sin8(frame * 2) - 128) / (behind ? 40 : 26);
+  for (int n = 0; !sleighWait && n < 3; n++)                      // glitter from the back of the sleigh
     for (auto &s : sparks)
       if (!s.life) {
-        s = {(int16_t)((x + sc) * 16 + rnd(32 * sc)), (int16_t)((y + 6 * sc + rnd(5 * sc)) * 16), (int16_t)-(2 + rnd(8)), (int16_t)((int)rnd(5) - 2), (uint8_t)(14 + rnd(18)), 0, 0};
+        s = {(int16_t)((x + (int)(4 * k)) * 16 + rnd((int)(80 * k))), (int16_t)((y + (int)(14 * k) + rnd((int)(10 * k) + 1)) * 16), (int16_t)-(2 + rnd(8)), (int16_t)((int)rnd(5) - 2), (uint8_t)(14 + rnd(18)), 0, 0};
         s.max = s.life; break;
       }
   for (auto &s : sparks) {
@@ -207,12 +194,15 @@ static void fxSleigh(uint32_t frame, bool behind) {
     pxAdd(s.x / 16, s.y / 16, s.life > s.max - 3 ? 0xFFFFFF : 0xFFD060, 255 * s.life / s.max);
   }
   if (!sleighWait) {
-    for (int i = x + 8 * sc; i < x + 37 * sc; i++)               // reins
-      for (int t = 0; t < sc; t++) px(i, y + (4 + (i > x + 22 * sc)) * sc + t, 0xB08020);
     bool step = (frame / 4) & 1;
-    sprite(step ? DEER_A : DEER_B, 7, x + 17 * sc, y + step * sc, 0, false, false, sc);
-    sprite(step ? DEER_B : DEER_A, 7, x + 30 * sc, y + ((int)!step - 1) * sc, 0, false, true, sc);
-    sprite(SLEIGH, 11, x, y, 0, false, false, sc);
+    int d1 = x + (int)(50 * k), d2 = x + (int)(83 * k), dy = y - (int)(3 * k);
+    int hx = (int)(20.5f * k), hy = (int)(13 * k);                // harness on a deer sprite
+    uint32_t rein = 0xC89030;
+    fxLine(x + (int)(30.5f * k), y + (int)(15 * k), d1 + hx, dy + step + hy, rein);
+    fxLine(d1 + hx, dy + step + hy, d2 + hx, dy + !step + hy, rein);
+    fxSpr(behind ? (step ? FXS_DEER0_S : FXS_DEER1_S) : (step ? FXS_DEER0 : FXS_DEER1), d1, dy + step, false, 0);
+    fxSpr(behind ? (step ? FXS_DEER1R_S : FXS_DEER0R_S) : (step ? FXS_DEER1R : FXS_DEER0R), d2, dy + !step, false, 0);
+    fxSpr(behind ? FXS_SLEIGH_S : FXS_SLEIGH, x, y, false, 0);
   }
   for (int i = 24; !behind && i < 44; i++) {                     // gentle snow in front
     Flake &f = flakes[i];
@@ -226,10 +216,10 @@ static void fxBalloons(uint32_t frame, bool behind) {
   for (int i = 0; i < (behind ? 6 : 10); i++) {
     Flake &f = flakes[i];
     f.y -= f.spd / 3 + 2;
-    if (f.y < -15 * 16) { f.y = H * 16 + rnd(320); f.x = rnd(W - 8) * 16; f.bri = rnd(7); }
+    if (f.y < -21 * 16) { f.y = H * 16 + rnd(320); f.x = rnd(W - 10) * 16; f.bri = rnd(7); }
     int x = f.x / 16 + ((int)sin8(frame * 2 + i * 50) - 128) / 48, y = f.y / 16;
-    for (int r = 0; r < 6; r++) px(x + 3 + (((frame / 6 + r + i) & 2) ? 1 : 0), y + 8 + r, 0x8C8C8C);   // string
-    sprite(BALLOON, 8, x, y, PARTY[f.bri % 7], false, false, 1);
+    for (int r = 0; r < 7; r++) px(x + 5 + (((frame / 6 + r + i) & 2) ? 1 : 0), y + 14 + r, 0x8C8C8C);   // string
+    fxSpr(FXS_BALLOON, x, y, false, PARTY[f.bri % 7]);
   }
 }
 
@@ -247,12 +237,12 @@ static void fxFish(uint32_t frame, bool behind) {
     Flake &f = flakes[i];
     bool left = f.bri & 128;
     f.x += left ? -(f.spd / 3 + 2) : f.spd / 3 + 2;
-    if (f.x < -12 * 16 || f.x > (W + 4) * 16) {
+    if (f.x < -16 * 16 || f.x > (W + 4) * 16) {
       f.bri = (rnd(2) ? 128 : 0) | rnd(7); f.spd = 4 + rnd(10);
-      f.x = (f.bri & 128) ? (W + 2) * 16 : -10 * 16; f.y = (3 + rnd(H - 10)) * 16;
+      f.x = (f.bri & 128) ? (W + 2) * 16 : -16 * 16; f.y = (2 + rnd(H - 12)) * 16;
     }
     int y = f.y / 16 + ((int)sin8(frame * 3 + i * 70) - 128) / 64;
-    sprite(FISH, 5, f.x / 16, y, PARTY[(f.bri & 7) % 7], left, false, 1);
+    fxSpr(FXS_FISH, f.x / 16, y, left, PARTY[(f.bri & 7) % 7]);
   }
 }
 
@@ -303,21 +293,7 @@ static void fxLights(uint32_t frame, bool behind) {
   }
 }
 
-// ---------- Holiday effects (1.0.0-beta19): turkey, bunny, bats, shamrocks, flag ----------
-// Same rows and colors in the page preview (web/app/2-effects.js SPR).
-static const char *const TURKEY[] = {
-  "....RRRRRRR....", "..RRROOOOORRR..", ".RROOOYYYOOORR.", ".ROOYYYBYYYOOR.", "RROYYYBBBYYYORR", "ROOYYBWBWBYYOOR",
-  "ROYYYBBOBBYYYOR", "ROYYBBBRBBBYYOR", "ROYBBBBRBBBBYOR", ".OYBBbBBBbBBYO.", "..YBBBbBbBBBY..", "...BBBBBBBBB...",
-  "....BBBBBBB....", ".....O...O.....", "....OO....O....", ".....O...O.....", ".....O...OO...."};   // feet: rows 13-14 or 15-16
-static const char *const BUNNY[] = {
-  ".....WW.WW...", ".....WP.WP...", ".....WP.WP...", ".....WW.WW...", "......WWWW...", ".....WWWKWW..", "....WWWWWWP..",
-  ".WWWWWWWWW...", "WWWWWWWWWW...", "WWWWWWWWWW...", ".WWWWWWWW....", "..WW...WW...."};
-static const char *const EGG[] = {".XX.", "XXXX", "LLLL", "XXXX", ".XX."};
-static const char *const BAT_A[] = {"X.........X", "XX.......XX", "XXX.X.X.XXX", ".XXXYXYXXX.", "....XXX...."};
-static const char *const BAT_B[] = {"....X.X....", "...XYXYX...", ".XXXXXXXXX.", "XXX.XXX.XXX", "X.........X"};
-static const char *const PUMPKIN[] = {"....g....", "..OOgOO..", ".OOOOOOO.", "OOXOOOXOO", "OOOOXOOOO", "OXOXOXOXO", "OOXXXXXOO", ".OOOOOOO."};
-static const char *const CLOVER[] = {"..XXX..", "..XXX..", "XX.X.XX", "XXXXXXX", "XX.X.XX", "...D...", "..D...."};
-static const char *const CLOVER_S[] = {".X.", "XXX", ".D."};
+// ---------- Holiday effects: turkey, bunny, bats, shamrocks, flag ----------
 static const uint32_t LEAF[4] = {0xE04010, 0xFF9020, 0xF0C030, 0x9A4A18};
 static const uint32_t PASTEL[5] = {0xFF90C0, 0xB090FF, 0x80E8A0, 0xFFE070, 0x80C0FF};
 static const uint32_t GREENS[3] = {0x20C040, 0x40E060, 0x109030};
@@ -337,11 +313,9 @@ static void fxTurkey(uint32_t frame, bool behind) {
   if (behind) return;
   for (int x = 0; x < W; x++) { px(x, H - 1, 0x4A2810); px(x, H - 2, mixC(LEAF[(x * 7 + x / 3) & 3], 0, 1, 2)); }   // leafy ground
   if (sleighWait) { sleighWait--; return; }
-  if ((sleighX += 9) > (W + 2) * 16) { sleighX = -32 * 16; sleighWait = 40 + rnd(60); return; }
+  if ((sleighX += 9) > (W + 2) * 16) { sleighX = -36 * 16; sleighWait = 40 + rnd(60); return; }
   bool step = (frame / 6) & 1;
-  int x = sleighX / 16, y = H - 2 - 30 - step;                 // double size
-  sprite(TURKEY, 13, x, y, 0, false, false, 2);
-  sprite(TURKEY + (step ? 15 : 13), 2, x, y + 26, 0, false, false, 2);
+  fxSpr(step ? FXS_TURKEY1 : FXS_TURKEY0, sleighX / 16, H - 2 - 34 + 1 - step, false, 0);
 }
 
 // Easter: a bunny hops across the grass past painted eggs; behind a message, eggs float up.
@@ -350,48 +324,47 @@ static void fxBunny(uint32_t frame, bool behind) {
     for (int i = 0; i < 7; i++) {
       Flake &f = flakes[i];
       f.y -= f.spd / 4 + 1;
-      if (f.y < -6 * 16) { f.y = H * 16 + rnd(320); f.x = rnd(W - 4) * 16; }
-      sprite(EGG, 5, f.x / 16 + ((int)sin8(frame * 2 + i * 50) - 128) / 60, f.y / 16, PASTEL[i % 5], false, false, 1);
+      if (f.y < -11 * 16) { f.y = H * 16 + rnd(320); f.x = rnd(W - 8) * 16; }
+      fxSpr(FXS_EGG, f.x / 16 + ((int)sin8(frame * 2 + i * 50) - 128) / 60, f.y / 16, false, PASTEL[i % 5]);
     }
     return;
   }
   for (int i = 0; i < 16; i++) { Flake &f = flakes[i]; pxAdd(f.x / 16, f.y / 32, 0xFFFFFF, (sin8(frame * 2 + i * 41) * f.bri) >> 10); }   // faint stars
   for (int x = 0; x < W; x++) {                                  // grass with blades and a few flowers
-    for (int y = H - 3; y < H; y++) px(x, y, 0x1E7A28);
+    for (int y = H - 3; y < H; y++) px(x, y, y == H - 3 ? 0x28922F : 0x1E7A28);
     int k = (x * 37) % 11;
     if (k < 4) px(x, H - 4, 0x30B040);
     if (k == 0 && (x & 1)) px(x, H - 5, 0x30B040);
     if (x % 19 == 7) px(x, H - 5, x % 38 == 7 ? 0xFF8CB4 : 0xFFE040);
   }
-  static const uint8_t EGG_X[5] = {9, 33, 61, 87, 113};
-  for (int e = 0; e < 5; e++) sprite(EGG, 5, EGG_X[e], H - 7, PASTEL[e], false, false, 1);
+  static const uint8_t EGG_X[5] = {8, 32, 60, 86, 112};
+  for (int e = 0; e < 5; e++) fxSpr(FXS_EGG, EGG_X[e], H - 11, false, PASTEL[e]);
   if (sleighWait) { sleighWait--; return; }
   int ph = frame % 30, hop = 0;
   if (ph < 20) { hop = ((int)sin8(ph * 128 / 20) - 128) * 14 / 127; sleighX += 28; }   // in the air: moving
-  if (sleighX > (W + 2) * 16) { sleighX = -28 * 16; sleighWait = 30 + rnd(50); return; }
-  sprite(BUNNY, 12, sleighX / 16, H - 3 - 24 - hop, 0, false, false, 2);   // double size
+  if (sleighX > (W + 2) * 16) { sleighX = -32 * 16; sleighWait = 30 + rnd(50); return; }
+  fxSpr(hop > 3 ? FXS_BUNNY1 : FXS_BUNNY0, sleighX / 16, H - 3 - 26 - hop, false, 0);
 }
 
-// Halloween: bats flapping across; full screen with an orange moon and two glowing jack-o-lanterns.
+// Halloween: bats flapping across; full screen with an orange moon and two flickering jack-o-lanterns.
 static void fxBats(uint32_t frame, bool behind) {
   if (!behind) {
     for (int i = 0; i < 16; i++) { Flake &f = flakes[i]; pxAdd(f.x / 16, f.y / 32, 0xFFFFFF, (sin8(frame * 2 + i * 41) * f.bri) >> 10); }
-    disc(108, 13, 72, 0xFF9A28);
-    px(104, 10, 0xE07A18); px(105, 10, 0xE07A18); px(111, 17, 0xE07A18); px(110, 8, 0xE07A18);
+    fxSpr(FXS_MOON_O, 98, 3, false, 0);
     uint32_t glow = mixC(0xFFE040, 0xFF8000, sin8(frame * 5) / 2 + rnd(40), 255);
-    sprite(PUMPKIN, 8, 10, H - 8, glow, false, false, 1);
-    sprite(PUMPKIN, 8, 96, H - 8, mixC(glow, 0xFF8000, 1, 3), false, false, 1);
+    fxSpr(FXS_PUMPKIN, 8, H - 14, false, glow);
+    fxSpr(FXS_PUMPKIN, 102, H - 14, true, mixC(glow, 0xFF8000, 1, 3));
   }
   for (int i = 0; i < (behind ? 4 : 6); i++) {
     Flake &f = flakes[40 + i];                                   // bri bit 7: flies left
     bool left = f.bri & 128;
     f.x += left ? -(f.spd / 3 + 4) : f.spd / 3 + 4;
-    if (f.x < -14 * 16 || f.x > (W + 3) * 16) {
+    if (f.x < -22 * 16 || f.x > (W + 3) * 16) {
       f.bri = rnd(2) ? 128 : 0; f.spd = 4 + rnd(10);
-      f.x = (f.bri & 128) ? (W + 2) * 16 : -12 * 16; f.y = (2 + rnd(behind ? 20 : 34)) * 16;
+      f.x = (f.bri & 128) ? (W + 2) * 16 : -21 * 16; f.y = (2 + rnd(behind ? 20 : 34)) * 16;
     }
     int y = f.y / 16 + ((int)sin8(frame * 4 + i * 60) - 128) / 32;
-    sprite(((frame / 5 + i) & 1) ? BAT_A : BAT_B, 5, f.x / 16, y, 0x9050D0, false, false, 1);
+    fxSpr(((frame / 5 + i) & 1) ? FXS_BAT0 : FXS_BAT1, f.x / 16, y, false, 0);
   }
 }
 
@@ -400,10 +373,9 @@ static void fxShamrocks(uint32_t frame, bool behind) {
   for (int i = 0; i < (behind ? 10 : 18); i++) {
     Flake &f = flakes[i];
     f.y += f.spd / 4 + 1;
-    if (f.y >= H * 16) { f.y = -8 * 16; f.x = rnd(W) * 16; }
+    if (f.y >= H * 16) { f.y = -14 * 16; f.x = rnd(W) * 16; }
     int x = f.x / 16 + ((int)sin8(frame * 3 + i * 40) - 128) / 40, y = f.y / 16;
-    if (f.spd > 8) sprite(CLOVER, 7, x, y, GREENS[i % 3], false, false, 1);
-    else sprite(CLOVER_S, 3, x, y, GREENS[i % 3], false, false, 1);
+    fxSpr(f.spd > 8 ? FXS_CLOVER : FXS_CLOVER_S, x, y, false, GREENS[i % 3]);
   }
   for (int i = 30; !behind && i < 42; i++) {
     Flake &f = flakes[i];
@@ -462,21 +434,16 @@ static void paintBackground(const ShowItem &it, uint32_t frame) {
         pxAdd(f.x / 16, f.y / 16, hsv((i * 200) % 1536), v);
       }
       break;
-    case FX_HEARTS: {                            // hearts floating up, big and small
-      static const uint8_t BIG[6] = {0x36, 0x7F, 0x7F, 0x3E, 0x1C, 0x08}, SMALL[3] = {0x5, 0x7, 0x2};
+    case FX_HEARTS:                              // hearts floating up, big and small
       for (int i = 0; i < (behind ? 10 : 18); i++) {
         Flake &f = flakes[i];
         f.y -= f.spd / 2 + 1;
-        if (f.y < -8 * 16) { f.y = H * 16 + random(64); f.x = random(W * 16); }
+        if (f.y < -9 * 16) { f.y = H * 16 + random(64); f.x = random(W * 16); }
         int x = f.x / 16 + (sin8(frame * 3 + i * 40) - 128) / 40, y = f.y / 16;
         uint32_t c = (255UL << 16) | ((uint32_t)(30 + i * 37 % 90) << 8) | (90 + i * 53 % 120);
-        bool big = f.spd > 8;
-        for (int r = 0; r < (big ? 6 : 3); r++)
-          for (int b = 0; b < (big ? 7 : 3); b++)
-            if (((big ? BIG[r] : SMALL[r]) >> (big ? 6 - b : 2 - b)) & 1) px(x + b, y + r, c);
+        fxSpr(f.spd > 8 ? FXS_HEART : FXS_HEART_S, x, y, false, c);
       }
       break;
-    }
     case FX_CONFETTI:
       for (int i = 0; i < 48; i++) {
         Flake &f = flakes[i];

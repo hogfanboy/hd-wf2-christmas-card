@@ -45,16 +45,23 @@ static int countPictures() {
 }
 static void handleInfo() {
   if (!touch()) return;
-  char buf[1024];
+  char buf[1400], cardId[8];
+  static uint32_t appSize = 0, appMax = 0;       // reading the app size scans the whole image: once is enough
+  if (!appSize) { appSize = ESP.getSketchSize(); appMax = ESP.getFreeSketchSpace(); }   // = the app slot size
+  uint8_t mac[6]; WiFi.macAddress(mac); snprintf(cardId, sizeof(cardId), "%02x%02x", mac[4], mac[5]);   // e.g. eed0
   snprintf(buf, sizeof(buf), "{\"api\":1,\"fw\":\"%s\",\"name\":\"%s\",\"total\":%u,\"used\":%u,\"files\":%d,\"items\":%u,\"brightness\":%u,\"heap\":%u,"
            "\"up\":%u,\"minHeap\":%u,\"block\":%u,\"boot\":\"%s\",\"bootWhy\":\"%s\",\"quietRestarts\":%u,\"crashes\":%u,"
-           "\"tz\":\"%s\",\"nightFrom\":%d,\"nightTo\":%d,\"nightLevel\":%u,\"night\":%s,\"time\":%lu,\"place\":\"%s\",\"tzAuto\":%s,\"autoUpdate\":%s,\"theme\":%u,\"wxHome\":\"%s\"}",
+           "\"tz\":\"%s\",\"nightFrom\":%d,\"nightTo\":%d,\"nightLevel\":%u,\"night\":%s,\"time\":%lu,\"place\":\"%s\",\"tzAuto\":%s,\"autoUpdate\":%s,\"theme\":%u,\"wxHome\":\"%s\","
+           "\"id\":\"%s\",\"rssi\":%d,\"chip\":\"%s rev %u\",\"app\":%u,\"appMax\":%u,\"boots\":%u,\"lifeCrashes\":%u,\"lastCrash\":\"%s\"}",
            FW_VERSION, hostName.c_str(), (unsigned)LittleFS.totalBytes(), (unsigned)LittleFS.usedBytes(), countPictures(),
            (unsigned)playlist.size(), brightnessPct, (unsigned)ESP.getFreeHeap(),
            (unsigned)upSec(), (unsigned)ESP.getMinFreeHeap(), (unsigned)ESP.getMaxAllocHeap(), BOOT_NAME[bootKind], bootDetail,
            (unsigned)rtcQuietN, (unsigned)rtcCrashN, jsonEsc(tzString).c_str(), nightFrom, nightTo, nightLevel,
            nightNow ? "true" : "false", timeValid() ? (unsigned long)time(nullptr) : 0UL,
-           geoOk ? jsonEsc(geoCity.substring(0, 40)).c_str() : "", tzAuto ? "true" : "false", autoUpdate ? "true" : "false", themeIx, jsonEsc(wxHome).c_str());
+           geoOk ? jsonEsc(geoCity.substring(0, 40)).c_str() : "", tzAuto ? "true" : "false", autoUpdate ? "true" : "false", themeIx, jsonEsc(wxHome).c_str(),
+           cardId, WiFi.status() == WL_CONNECTED ? (int)WiFi.RSSI() : 0, ESP.getChipModel(), (unsigned)ESP.getChipRevision(),
+           (unsigned)appSize, (unsigned)appMax, (unsigned)lifeBoots,
+           (unsigned)lifeCrashes, lifeLast);
   sendJson(buf);
 }
 

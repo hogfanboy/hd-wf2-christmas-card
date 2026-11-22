@@ -25,7 +25,7 @@ http.createServer((req, res) => {
   if (url.pathname === '/api/wifi' || url.pathname === '/api/forget-wifi') { let b = ''; req.on('data', c => b += c); req.on('end', () => { log(b); json(res, { ok: true }); }); return; }
   if (url.pathname === '/api/info') {
     const used = files().reduce((s, f) => s + fs.statSync(path.join(store, f)).size, 0);
-    return json(res, { fw: '0.0.1', name: 'pocketjumbo-fake', place: 'Springfield', tzAuto: true, total: TOTAL, used, files: files().length, items: fs.existsSync(showFile) ? fs.readFileSync(showFile, 'utf8').split(String.fromCharCode(10)).filter(Boolean).length : files().length, brightness, ...settings, night: false, time: Math.floor(Date.now() / 1000) });
+    return json(res, { fw: '0.0.1', name: 'pocketjumbo-fake', place: 'Springfield', tzAuto: true, total: TOTAL, used, files: files().length, items: fs.existsSync(showFile) ? fs.readFileSync(showFile, 'utf8').split(String.fromCharCode(10)).filter(Boolean).length : files().length, brightness, ...settings, night: false, time: Math.floor(Date.now() / 1000), id: 'fa4e', rssi: -58, chip: 'ESP32-S3 rev 2', app: 1640000, appMax: 1835008, up: Math.floor(process.uptime()), boot: 'power', bootWhy: 'power on', crashes: 0, quietRestarts: 0, boots: 7, lifeCrashes: 1, lastCrash: 'watchdog, 1.0.0-beta18', heap: 120000, block: 31700, minHeap: 18000 });
   }
   if (url.pathname === '/api/clear' && (globalThis.busy = !globalThis.busy)) { log('503 busy'); res.writeHead(503); return res.end('busy'); }
   if (url.pathname === '/api/clear') { files().forEach(f => fs.unlinkSync(path.join(store, f))); fs.rmSync(showFile, { force: true }); log(); return json(res, { ok: true }); }

@@ -18,7 +18,7 @@ function setConn(ok, name) {
 async function loadInfo() {
   try {
     card = await api('/api/info');
-    $('diag').textContent = JSON.stringify(card) + '\napp ' + (location.pathname === '/local' ? 'built-in' : APP_BUILD) + ' · ' + navigator.userAgent + ' · ' + new Date().toString();
+    $('diag').textContent = cardReport(card);
     setConn(true, card.name || 'your screen');
     const n = card.items ?? card.files;
     $('about').innerHTML = [['Name', card.name], ['Playing', n + ' item' + (n === 1 ? '' : 's')], ['Location', card.place || 'not found yet'],
@@ -36,6 +36,40 @@ async function loadInfo() {
   updateSpace();
 }
 loadInfo();
+
+// Card report: the numbers someone helping a tester needs, readable, then the raw /api/info for anything else.
+// Older firmware leaves the newer fields out; those lines are just skipped.
+function cardReport(c) {
+  const dur = (s) => s >= 86400 ? Math.floor(s / 86400) + ' d ' + Math.floor(s % 86400 / 3600) + ' h'
+    : s >= 3600 ? Math.floor(s / 3600) + ' h ' + Math.floor(s % 3600 / 60) + ' min' : Math.floor(s / 60) + ' min';
+  const sig = (r) => r + ' dBm (' + (r >= -60 ? 'strong' : r >= -70 ? 'good' : r >= -80 ? 'weak' : 'very weak') + ')';
+  const rows = [
+    ['Card', [c.name, c.id && 'id ' + c.id].filter(Boolean).join(', ')],
+    ['Software', c.fw + ' · app ' + (location.pathname === '/local' ? 'built-in' : APP_BUILD)],
+    ['Chip', c.chip],
+    ['App size', c.app && kb(c.app) + ' of ' + kb(c.appMax)],
+    ['Up', c.up !== undefined && dur(c.up) + ', started by ' + c.boot + (c.bootWhy ? ' (' + c.bootWhy + ')' : '')],
+    ['Since power-on', c.crashes !== undefined && c.crashes + ' crashes, ' + c.quietRestarts + ' quiet restarts'],
+    ['Whole life', c.boots && c.boots + ' starts, ' + c.lifeCrashes + ' crashes' + (c.lastCrash ? ' (last: ' + c.lastCrash + ')' : '')],
+    ['Memory', c.block && 'free ' + kb(c.heap) + ', biggest piece ' + kb(c.block) + ', lowest ' + kb(c.minHeap)],
+    ['WiFi', c.rssi ? sig(c.rssi) : ''],
+    ['Show', (c.items ?? c.files) + ' items, ' + kb(c.used) + ' of ' + kb(c.total) + ' used'],
+    ['Place', [c.place, c.tz].filter(Boolean).join(' · ')],
+    ['Clock', c.time ? new Date(c.time * 1000).toISOString().replace('T', ' ').slice(0, 16) + ' UTC' + (c.night ? ', night mode on' : '') : 'not set'],
+    ['Phone', navigator.userAgent],
+    ['Report made', new Date().toString()],
+  ].filter((r) => r[1]);
+  return 'Pocket Jumbotron card report\n' + rows.map(([k, v]) => k + ': ' + v).join('\n') + '\n\nraw: ' + JSON.stringify(c);
+}
+$('diagCopy').onclick = async () => {
+  try { await navigator.clipboard.writeText($('diag').textContent); $('diagCopy').textContent = 'Copied'; }
+  catch { getSelection().selectAllChildren($('diag')); $('diagCopy').textContent = 'Selected: copy it'; }
+  setTimeout(() => { $('diagCopy').textContent = 'Copy report'; }, 2500);
+};
+if (navigator.share) {
+  $('diagShare').hidden = false;
+  $('diagShare').onclick = () => navigator.share({ title: 'Pocket Jumbotron card report', text: $('diag').textContent }).catch(() => {});
+}
 
 // Load the current show back from the screen, so it can be changed instead of rebuilt.
 // showState: start, loading, ok (loaded or the screen is empty), failed. Send warns unless it's ok.

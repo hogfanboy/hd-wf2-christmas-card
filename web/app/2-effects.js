@@ -21,7 +21,7 @@ const GLYPHS = '0123456789ABCDEFXZ$#@%&*+=<>';
 function starReset(f) { f.x = rand(1024) - 512; f.y = rand(512) - 256; f.bri = 200 + rand(56); f.spd = 1 + rand(3); }
 function fxNew(effect, behind) {
   const s = { effect, frame: 0, sparks: [], rockets: [{}, {}, {}], glyphs: [], sleighWait: 0,
-    sleighX: (effect === 'sleigh' && !behind ? -84 : effect === 'turkey' || effect === 'bunny' ? -32 : -46) * 16,
+    sleighX: (effect === 'sleigh' && !behind ? -94 : effect === 'turkey' ? -36 : effect === 'bunny' ? -32 : -50) * 16,
     flakes: Array.from({ length: 48 }, () => ({ x: rand(W * 16), y: rand(H * 16), spd: 4 + rand(10), bri: 90 + rand(166) })),
     heat: effect === 'fire' ? new Uint8Array(W * H) : null,
     cols: Array.from({ length: 21 }, () => ({ head: rand(40), len: 3 + rand(5), spd: 1 + rand(3), g: Array.from({ length: 8 }, () => GLYPHS[rand(GLYPHS.length)]) })) };
@@ -31,13 +31,13 @@ function fxNew(effect, behind) {
 }
 const COS = [64,63,59,53,45,36,24,12,0,-12,-24,-36,-45,-53,-59,-63,-64,-63,-59,-53,-45,-36,-24,-12,0,12,24,36,45,53,59,63];
 const BULB = [[255, 16, 32], [255, 176, 32], [32, 224, 64], [32, 80, 255]];   // Christmas lights: red, gold, green, blue
-const HEART_BIG = [0x36, 0x7F, 0x7F, 0x3E, 0x1C, 0x08], HEART_SMALL = [0x5, 0x7, 0x2];
 // One step of the effect. d = RGBA pixels to draw into, or null to only move things along.
 function fxStep(s, d, behind) {
   const frame = s.frame++;
   const px = (x, y, c) => { x = tr(x); y = tr(y); if (!d || x < 0 || y < 0 || x >= W || y >= H) return; const i = (y * W + x) * 4; d[i] = c[0]; d[i + 1] = c[1]; d[i + 2] = c[2]; };
   const add = (x, y, c, v) => { x = tr(x); y = tr(y); if (!d || x < 0 || y < 0 || x >= W || y >= H) return; const i = (y * W + x) * 4; d[i] += c[0] * v / 255; d[i + 1] += c[1] * v / 255; d[i + 2] += c[2] * v / 255; };
   const WHITE = [255, 255, 255];
+  const spr = (n, x, y, flip, col) => fxSpr(d, n, x, y, flip, col);
   s.glyphs = [];
   switch (s.effect) {
     case 'snow':
@@ -60,10 +60,9 @@ function fxStep(s, d, behind) {
       for (let i = 0; i < (behind ? 10 : 18); i++) {
         const f = s.flakes[i];
         f.y -= tr(f.spd / 2) + 1;
-        if (f.y < -8 * 16) { f.y = H * 16 + rand(64); f.x = rand(W * 16); }
+        if (f.y < -9 * 16) { f.y = H * 16 + rand(64); f.x = rand(W * 16); }
         const x = tr(f.x / 16) + tr((sin8(frame * 3 + i * 40) - 128) / 40), y = tr(f.y / 16);
-        const c = [255, 30 + (i * 37) % 90, 90 + (i * 53) % 120], big = f.spd > 8, rows = big ? HEART_BIG : HEART_SMALL, w = big ? 7 : 3;
-        rows.forEach((bits, r) => { for (let b = 0; b < w; b++) if ((bits >> (w - 1 - b)) & 1) px(x + b, y + r, c); });
+        spr(f.spd > 8 ? 'HEART' : 'HEART_S', x, y, false, [255, 30 + (i * 37) % 90, 90 + (i * 53) % 120]);
       }
       break;
     case 'confetti':
@@ -131,21 +130,29 @@ function fxStep(s, d, behind) {
       }
       break;
     }
-    case 'sleigh': {                       // full screen: night town scene and a double-size sleigh (effects.ino)
-      const sc = behind ? 1 : 2;
-      if (!behind) { s.flakes.slice(0, 24).forEach((f, i) => add(f.x / 16, f.y / 32, [220, 230, 255], (sin8(frame * (tr(f.spd / 4) + 1) + i * 41) * f.bri) / 512)); town(px, frame); }
+    case 'sleigh': {                       // same as fxSleigh in effects.ino
+      if (!behind) {
+        nightSky(px, add, s, frame, 24);
+        spr('MOON', 99, 2); spr('TOWN', 0, H - 30);
+        FXS.win.forEach(([wx, wy, ww, wh], k) => {
+          const dark = (tr(frame / 150) + k * 3) % 9 === 0;
+          for (let y = 0; y < wh; y++) for (let x = 0; x < ww; x++) px(wx + x, H - 30 + wy + y, hx(dark ? 0x241810 : (y === 0 || x === ww - 1) ? 0xD88A28 : 0xFFC860));
+        });
+      }
+      const team = behind ? 50 : 94, k = behind ? 0.42 : 0.8;
       if (s.sleighWait) s.sleighWait--;
-      else if ((s.sleighX += behind ? 9 : 16) > (W + 4) * 16) { s.sleighX = (behind ? -46 : -84) * 16; s.sleighWait = 20 + rand(60); }
-      const x = tr(s.sleighX / 16), y = (behind ? 2 : 9) + tr((sin8(frame * 2) - 128) / (behind ? 40 : 26));
-      if (!s.sleighWait) for (let k = 0; k < 3; k++) { const life = 14 + rand(18); s.sparks.push({ x: (x + sc) * 16 + rand(32 * sc), y: (y + 6 * sc + rand(5 * sc)) * 16, vx: -(2 + rand(8)), vy: rand(5) - 2, life, max: life }); }
+      else if ((s.sleighX += behind ? 9 : 16) > (W + 4) * 16) { s.sleighX = -team * 16; s.sleighWait = 20 + rand(60); }
+      const x = tr(s.sleighX / 16), y = (behind ? 1 : 5) + tr((sin8(frame * 2) - 128) / (behind ? 40 : 26));
+      if (!s.sleighWait) for (let n = 0; n < 3; n++) { const life = 14 + rand(18); s.sparks.push({ x: (x + tr(4 * k)) * 16 + rand(tr(80 * k)), y: (y + tr(14 * k) + rand(tr(10 * k) + 1)) * 16, vx: -(2 + rand(8)), vy: rand(5) - 2, life, max: life }); }
       for (const p of s.sparks) { p.x += p.vx; p.y += p.vy; p.life--; add(p.x / 16, p.y / 16, p.life > p.max - 3 ? WHITE : [255, 208, 96], 255 * p.life / p.max); }
       s.sparks = s.sparks.filter(p => p.life > 0).slice(-96);
       if (!s.sleighWait) {
-        for (let i = x + 8 * sc; i < x + 37 * sc; i++) for (let t = 0; t < sc; t++) px(i, y + (4 + (i > x + 22 * sc ? 1 : 0)) * sc + t, [176, 128, 32]);
-        const step = tr(frame / 4) & 1;
-        sprite(px, step ? SPR.deerA : SPR.deerB, x + 17 * sc, y + step * sc, null, false, false, sc);
-        sprite(px, step ? SPR.deerB : SPR.deerA, x + 30 * sc, y + ((step ? 0 : 1) - 1) * sc, null, false, true, sc);
-        sprite(px, SPR.sleigh, x, y, null, false, false, sc);
+        const step = tr(frame / 4) & 1, ns = step ? 0 : 1, d1 = x + tr(50 * k), d2 = x + tr(83 * k), dy = y - tr(3 * k), hx0 = tr(20.5 * k), hy = tr(13 * k), sm = behind ? '_S' : '';
+        line(px, x + tr(30.5 * k), y + tr(15 * k), d1 + hx0, dy + step + hy, hx(0xC89030));
+        line(px, d1 + hx0, dy + step + hy, d2 + hx0, dy + ns + hy, hx(0xC89030));
+        spr((step ? 'DEER0' : 'DEER1') + sm, d1, dy + step);
+        spr((step ? 'DEER1R' : 'DEER0R') + sm, d2, dy + ns);
+        spr('SLEIGH' + sm, x, y);
       }
       if (!behind) for (let i = 24; i < 44; i++) {
         const f = s.flakes[i]; f.y += tr(f.spd / 3) + 2;
@@ -154,15 +161,15 @@ function fxStep(s, d, behind) {
       }
       break;
     }
-    case 'turkey': case 'bunny': case 'bats': case 'shamrocks': case 'flag': fxHoliday(s, frame, px, add, behind); break;
+    case 'turkey': case 'bunny': case 'bats': case 'shamrocks': case 'flag': fxHoliday(s, frame, px, add, spr, behind); break;
     case 'balloons':
       for (let i = 0; i < (behind ? 6 : 10); i++) {
         const f = s.flakes[i];
         f.y -= tr(f.spd / 3) + 2;
-        if (f.y < -15 * 16) { f.y = H * 16 + rand(320); f.x = rand(W - 8) * 16; f.bri = rand(7); }
+        if (f.y < -21 * 16) { f.y = H * 16 + rand(320); f.x = rand(W - 10) * 16; f.bri = rand(7); }
         const x = tr(f.x / 16) + tr((sin8(frame * 2 + i * 50) - 128) / 48), y = tr(f.y / 16);
-        for (let r = 0; r < 6; r++) px(x + 3 + (((tr(frame / 6) + r + i) & 2) ? 1 : 0), y + 8 + r, [140, 140, 140]);
-        sprite(px, SPR.balloon, x, y, PARTY[f.bri % 7]);
+        for (let r = 0; r < 7; r++) px(x + 5 + (((tr(frame / 6) + r + i) & 2) ? 1 : 0), y + 14 + r, [140, 140, 140]);
+        spr('BALLOON', x, y, false, PARTY[f.bri % 7]);
       }
       break;
     case 'fish': {
@@ -177,11 +184,11 @@ function fxStep(s, d, behind) {
       for (let i = 0; i < (behind ? 4 : 7); i++) {
         const f = s.flakes[i], left = !!(f.bri & 128);
         f.x += left ? -(tr(f.spd / 3) + 2) : tr(f.spd / 3) + 2;
-        if (f.x < -12 * 16 || f.x > (W + 4) * 16) {
+        if (f.x < -16 * 16 || f.x > (W + 4) * 16) {
           f.bri = (rand(2) ? 128 : 0) | rand(7); f.spd = 4 + rand(10);
-          f.x = (f.bri & 128) ? (W + 2) * 16 : -10 * 16; f.y = (3 + rand(H - 10)) * 16;
+          f.x = (f.bri & 128) ? (W + 2) * 16 : -16 * 16; f.y = (2 + rand(H - 12)) * 16;
         }
-        sprite(px, SPR.fish, tr(f.x / 16), tr(f.y / 16) + tr((sin8(frame * 3 + i * 70) - 128) / 64), PARTY[(f.bri & 7) % 7], left);
+        spr('FISH', tr(f.x / 16), tr(f.y / 16) + tr((sin8(frame * 3 + i * 70) - 128) / 64), left, PARTY[(f.bri & 7) % 7]);
       }
       break;
     }
@@ -236,63 +243,33 @@ function fxStep(s, d, behind) {
       break;
   }
 }
-// Sprite effects (1.0): same rows and colors as the card (effects.ino).
-const SPR = {
-  sleigh: ['...WRR.........', '....RRR........', '....WWWW.......', '....SSSS.......', 'R...WWWW......R', 'RR..RWWR.....RR',
-    'RRRRRRRRRRRRRR.', 'RGGGGGGGGGGGGR.', '.RRRRRRRRRRRR..', '..G.......G...G', 'GGGGGGGGGGGGGG.'],
-  deerA: ['.......b.b.', '........bb.', '.......BBBN', '.BBBBBBBB..', 'BBBBBBBB...', '.b.b..b.b..', 'b...b.b...b'],
-  deerB: ['.......b.b.', '........bb.', '.......BBBN', '.BBBBBBBB..', 'BBBBBBBB...', '..bb..bb...', '..bb..bb...'],
-  balloon: ['..XXX..', '.XXXXX.', 'XHXXXXX', 'XXXXXXX', 'XXXXXXD', '.XXXXD.', '..XXD..', '...X...'],
-  fish: ['...XXX..', 'T.XXLXX.', 'TTXXLXEX', 'T.XXLXX.', '...XXX..'],
-  turkey: ['....RRRRRRR....', '..RRROOOOORRR..', '.RROOOYYYOOORR.', '.ROOYYYBYYYOOR.', 'RROYYYBBBYYYORR', 'ROOYYBWBWBYYOOR',
-    'ROYYYBBOBBYYYOR', 'ROYYBBBRBBBYYOR', 'ROYBBBBRBBBBYOR', '.OYBBbBBBbBBYO.', '..YBBBbBbBBBY..', '...BBBBBBBBB...',
-    '....BBBBBBB....', '.....O...O.....', '....OO....O....', '.....O...O.....', '.....O...OO....'],
-  bunny: ['.....WW.WW...', '.....WP.WP...', '.....WP.WP...', '.....WW.WW...', '......WWWW...', '.....WWWKWW..', '....WWWWWWP..',
-    '.WWWWWWWWW...', 'WWWWWWWWWW...', 'WWWWWWWWWW...', '.WWWWWWWW....', '..WW...WW....'],
-  egg: ['.XX.', 'XXXX', 'LLLL', 'XXXX', '.XX.'],
-  batA: ['X.........X', 'XX.......XX', 'XXX.X.X.XXX', '.XXXYXYXXX.', '....XXX....'],
-  batB: ['....X.X....', '...XYXYX...', '.XXXXXXXXX.', 'XXX.XXX.XXX', 'X.........X'],
-  pumpkin: ['....g....', '..OOgOO..', '.OOOOOOO.', 'OOXOOOXOO', 'OOOOXOOOO', 'OXOXOXOXO', 'OOXXXXXOO', '.OOOOOOO.'],
-  clover: ['..XXX..', '..XXX..', 'XX.X.XX', 'XXXXXXX', 'XX.X.XX', '...D...', '..D....'],
-  cloverS: ['.X.', 'XXX', '.D.'],
-};
+// Sprite effects: shaded sprites from tools/make-fxsprites.mjs (web/fxsprites.js), the same pixels as the card.
 const PARTY = [[255, 32, 48], [255, 192, 32], [48, 112, 255], [48, 208, 96], [255, 80, 176], [160, 80, 255], [255, 128, 32]];
 const mixRGB = (a, b, n) => a.map((v, i) => tr(v + (b[i] - v) * n));
-function sprite(px, rows, x, y, main, flip = false, nose = false, sc = 1) {
-  const FIX = { H: [255, 255, 255], W: [255, 255, 255], E: [255, 255, 255], R: [224, 16, 32], S: [255, 180, 140], G: [255, 200, 48],
-    B: [160, 96, 44], b: [106, 58, 24], N: nose ? [255, 16, 16] : [160, 96, 44], O: [255, 122, 24], Y: [255, 224, 64], P: [255, 140, 180],
-    K: [0, 0, 0], g: [48, 192, 64] };
-  rows.forEach((row, r) => { for (let i = 0; i < row.length; i++) {
-    const ch = row[flip ? row.length - 1 - i : i];
-    const c = ch === 'X' ? main : ch === 'D' ? mixRGB(main, [0, 0, 0], 2 / 5) : ch === 'T' ? mixRGB(main, [0, 0, 0], 1 / 4) : ch === 'L' ? mixRGB(main, [255, 255, 255], 1 / 2) : FIX[ch];
-    if (c) for (let a = 0; a < sc; a++) for (let b = 0; b < sc; b++) px(x + i * sc + a, y + r * sc + b, c);
-  } });
+function fxSpr(d, name, x, y, flip = false, col = [0, 0, 0]) {     // same as fxSpr in effects.ino
+  const r = FXS.spr[name], p = FXS.px; if (!d || !r || !p) return;
+  const [sx, sy, w, h, tint] = r; x = tr(x); y = tr(y);
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+    const o = ((sy + j) * FXS.sw + sx + i) * 4; if (!p[o + 3]) continue;
+    const X = x + (flip ? w - 1 - i : i), Y = y + j; if (X < 0 || Y < 0 || X >= W || Y >= H) continue;
+    const q = (Y * W + X) * 4;
+    if (tint) for (let c = 0; c < 3; c++) { const v = tr(col[c] * p[o] / 255); d[q + c] = v + tr((255 - v) * p[o + 1] / 255); }
+    else if (p[o] === 255 && p[o + 1] === 0 && p[o + 2] === 255) { d[q] = col[0]; d[q + 1] = col[1]; d[q + 2] = col[2]; }
+    else { d[q] = p[o]; d[q + 1] = p[o + 1]; d[q + 2] = p[o + 2]; }
+  }
 }
-// Holiday effects (1.0.0-beta19) and the full-screen sleigh scene: same as effects.ino.
+function line(px, x0, y0, x1, y1, c) {
+  const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1; let e = dx + dy;
+  for (;;) { px(x0, y0, c); if (x0 === x1 && y0 === y1) break; const e2 = 2 * e; if (e2 >= dy) { e += dy; x0 += sx; } if (e2 <= dx) { e += dx; y0 += sy; } }
+}
+function nightSky(px, add, s, frame, n) {
+  for (let y = 0; y < H; y++) { const c = mixRGB([0, 2, 12], [14, 20, 52], Math.min(y, 44) / 44); for (let x = 0; x < W; x++) px(x, y, c); }
+  for (let i = 0; i < n; i++) { const f = s.flakes[i]; add(f.x / 16, f.y / 32, [220, 230, 255], (sin8(frame * (tr(f.spd / 4) + 1) + i * 41) * f.bri) / 512); }
+}
+// Holiday effects: same as effects.ino.
 const hx = (h) => [(h >> 16) & 255, (h >> 8) & 255, h & 255];
 const LEAF = [0xE04010, 0xFF9020, 0xF0C030, 0x9A4A18], PASTEL = [0xFF90C0, 0xB090FF, 0x80E8A0, 0xFFE070, 0x80C0FF], GREENS = [0x20C040, 0x40E060, 0x109030];
-const HOUSES = [[-3, 26, 11, 0], [25, 20, 16, 1], [47, 28, 10, 0], [77, 22, 14, 1], [101, 30, 12, 0]];   // x, width, wall height, chimney
-function fxDisc(px, cx, cy, r2, c) { for (let dy = -8; dy <= 8; dy++) for (let dx = -8; dx <= 8; dx++) if (dx * dx + dy * dy <= r2) px(cx + dx, cy + dy, c); }
-function town(px, frame) {
-  fxDisc(px, 110, 11, 56, hx(0xFFF0C0));
-  const cr = hx(0xE0D0A0); px(107, 9, cr); px(108, 9, cr); px(112, 14, cr); px(113, 13, cr);
-  HOUSES.forEach(([x0, w, wh, ch], h) => {
-    const wall = H - wh, half = tr(w / 2);
-    if (ch) for (let y = wall - half + 2; y < wall; y++) for (let x = x0 + w - 7; x < x0 + w - 4; x++) px(x, y, hx(0x5A2A2A));
-    for (let x = x0; x < x0 + w; x++) {
-      const d = x - x0 < half ? x - x0 : x0 + w - 1 - x, top = wall - d - 1;
-      px(x, top, hx(0xE8F0FF));
-      for (let y = top + 1; y < wall; y++) px(x, y, hx(0x5A2030));
-      for (let y = wall; y < H; y++) px(x, y, hx(0x3C2A5A));
-    }
-    for (let k = 0; k < 2; k++) {
-      const wx = k ? x0 + w - 8 : x0 + 5, wy = wall + 3;
-      if ((tr(frame / 150) + h * 3 + k) % 7 === 0) continue;
-      for (let y = wy; y < wy + 3; y++) for (let x = wx; x < wx + 3; x++) px(x, y, hx(0xFFB030));
-    }
-  });
-}
-function fxHoliday(s, frame, px, add, behind) {
+function fxHoliday(s, frame, px, add, spr, behind) {
   const WHITE = [255, 255, 255];
   const faintStars = (n) => { for (let i = 0; i < n; i++) { const f = s.flakes[i]; add(f.x / 16, f.y / 32, WHITE, (sin8(frame * 2 + i * 41) * f.bri) / 1024); } };
   switch (s.effect) {
@@ -306,58 +283,56 @@ function fxHoliday(s, frame, px, add, behind) {
       if (behind) return;
       for (let x = 0; x < W; x++) { px(x, H - 1, hx(0x4A2810)); px(x, H - 2, hx(LEAF[(x * 7 + tr(x / 3)) & 3]).map(v => v - tr(v / 2))); }
       if (s.sleighWait) { s.sleighWait--; return; }
-      if ((s.sleighX += 9) > (W + 2) * 16) { s.sleighX = -32 * 16; s.sleighWait = 40 + rand(60); return; }
-      const step = tr(frame / 6) & 1, x = tr(s.sleighX / 16), y = H - 2 - 30 - step;
-      sprite(px, SPR.turkey.slice(0, 13), x, y, null, false, false, 2);
-      sprite(px, SPR.turkey.slice(step ? 15 : 13, step ? 17 : 15), x, y + 26, null, false, false, 2);
+      if ((s.sleighX += 9) > (W + 2) * 16) { s.sleighX = -36 * 16; s.sleighWait = 40 + rand(60); return; }
+      const step = tr(frame / 6) & 1;
+      spr(step ? 'TURKEY1' : 'TURKEY0', tr(s.sleighX / 16), H - 2 - 34 + 1 - step);
       return;
     }
     case 'bunny': {
       if (behind) {
         for (let i = 0; i < 7; i++) {
           const f = s.flakes[i]; f.y -= tr(f.spd / 4) + 1;
-          if (f.y < -6 * 16) { f.y = H * 16 + rand(320); f.x = rand(W - 4) * 16; }
-          sprite(px, SPR.egg, tr(f.x / 16) + tr((sin8(frame * 2 + i * 50) - 128) / 60), tr(f.y / 16), hx(PASTEL[i % 5]));
+          if (f.y < -11 * 16) { f.y = H * 16 + rand(320); f.x = rand(W - 8) * 16; }
+          spr('EGG', tr(f.x / 16) + tr((sin8(frame * 2 + i * 50) - 128) / 60), tr(f.y / 16), false, hx(PASTEL[i % 5]));
         }
         return;
       }
       faintStars(16);
       for (let x = 0; x < W; x++) {
-        for (let y = H - 3; y < H; y++) px(x, y, hx(0x1E7A28));
+        for (let y = H - 3; y < H; y++) px(x, y, hx(y === H - 3 ? 0x28922F : 0x1E7A28));
         const k = (x * 37) % 11;
         if (k < 4) px(x, H - 4, hx(0x30B040));
         if (k === 0 && (x & 1)) px(x, H - 5, hx(0x30B040));
         if (x % 19 === 7) px(x, H - 5, hx(x % 38 === 7 ? 0xFF8CB4 : 0xFFE040));
       }
-      [9, 33, 61, 87, 113].forEach((ex, e) => sprite(px, SPR.egg, ex, H - 7, hx(PASTEL[e])));
+      [8, 32, 60, 86, 112].forEach((ex, e) => spr('EGG', ex, H - 11, false, hx(PASTEL[e])));
       if (s.sleighWait) { s.sleighWait--; return; }
       const ph = frame % 30; let hop = 0;
       if (ph < 20) { hop = tr((sin8(tr(ph * 128 / 20)) - 128) * 14 / 127); s.sleighX += 28; }
-      if (s.sleighX > (W + 2) * 16) { s.sleighX = -28 * 16; s.sleighWait = 30 + rand(50); return; }
-      sprite(px, SPR.bunny, tr(s.sleighX / 16), H - 3 - 24 - hop, null, false, false, 2);
+      if (s.sleighX > (W + 2) * 16) { s.sleighX = -32 * 16; s.sleighWait = 30 + rand(50); return; }
+      spr(hop > 3 ? 'BUNNY1' : 'BUNNY0', tr(s.sleighX / 16), H - 3 - 26 - hop);
       return;
     }
     case 'bats': {
       if (!behind) {
         faintStars(16);
-        fxDisc(px, 108, 13, 72, hx(0xFF9A28));
-        const cr = hx(0xE07A18); px(104, 10, cr); px(105, 10, cr); px(111, 17, cr); px(110, 8, cr);
+        spr('MOON_O', 98, 3);
         const glow = mixRGB(hx(0xFFE040), hx(0xFF8000), (tr(sin8(frame * 5) / 2) + rand(40)) / 255);
-        sprite(px, SPR.pumpkin, 10, H - 8, glow); sprite(px, SPR.pumpkin, 96, H - 8, mixRGB(glow, hx(0xFF8000), 1 / 3));
+        spr('PUMPKIN', 8, H - 14, false, glow); spr('PUMPKIN', 102, H - 14, true, mixRGB(glow, hx(0xFF8000), 1 / 3));
       }
       for (let i = 0; i < (behind ? 4 : 6); i++) {
         const f = s.flakes[40 + i], left = f.bri & 128;
         f.x += left ? -(tr(f.spd / 3) + 4) : tr(f.spd / 3) + 4;
-        if (f.x < -14 * 16 || f.x > (W + 3) * 16) { f.bri = rand(2) ? 128 : 0; f.spd = 4 + rand(10); f.x = (f.bri & 128) ? (W + 2) * 16 : -12 * 16; f.y = (2 + rand(behind ? 20 : 34)) * 16; }
-        sprite(px, (tr(frame / 5) + i) & 1 ? SPR.batA : SPR.batB, tr(f.x / 16), tr(f.y / 16) + tr((sin8(frame * 4 + i * 60) - 128) / 32), hx(0x9050D0));
+        if (f.x < -22 * 16 || f.x > (W + 3) * 16) { f.bri = rand(2) ? 128 : 0; f.spd = 4 + rand(10); f.x = (f.bri & 128) ? (W + 2) * 16 : -21 * 16; f.y = (2 + rand(behind ? 20 : 34)) * 16; }
+        spr((tr(frame / 5) + i) & 1 ? 'BAT0' : 'BAT1', tr(f.x / 16), tr(f.y / 16) + tr((sin8(frame * 4 + i * 60) - 128) / 32));
       }
       return;
     }
     case 'shamrocks':
       for (let i = 0; i < (behind ? 10 : 18); i++) {
         const f = s.flakes[i]; f.y += tr(f.spd / 4) + 1;
-        if (f.y >= H * 16) { f.y = -8 * 16; f.x = rand(W) * 16; }
-        sprite(px, f.spd > 8 ? SPR.clover : SPR.cloverS, tr(f.x / 16) + tr((sin8(frame * 3 + i * 40) - 128) / 40), tr(f.y / 16), hx(GREENS[i % 3]));
+        if (f.y >= H * 16) { f.y = -14 * 16; f.x = rand(W) * 16; }
+        spr(f.spd > 8 ? 'CLOVER' : 'CLOVER_S', tr(f.x / 16) + tr((sin8(frame * 3 + i * 40) - 128) / 40), tr(f.y / 16), false, hx(GREENS[i % 3]));
       }
       if (!behind) for (let i = 30; i < 42; i++) {
         const f = s.flakes[i], ph = (frame * 2 + i * 23) % 80;

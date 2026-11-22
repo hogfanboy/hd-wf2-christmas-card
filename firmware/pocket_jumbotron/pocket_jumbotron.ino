@@ -26,11 +26,14 @@
 #include <esp_system.h>
 #include <esp_timer.h>
 #include <HTTPClient.h>
+#include <Preferences.h>
+#include <WiFi.h>
 #include <Fonts/FreeSansBold12pt7b.h>
 #include <Fonts/FreeSansBold18pt7b.h>
 #include <Fonts/FreeSansBold24pt7b.h>
 #include "pj_font.h"
 #include "wx_icons.h"
+#include "fx_sprites.h"
 
 // ---- Hardware (confirmed on WF2 V7.2, see PROJECT-NOTES.md) ----
 static const HUB75_I2S_CFG::i2s_pins PINS = {
@@ -40,7 +43,7 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "1.0.0-beta19";
+static const char *FW_VERSION = "1.0.0-beta20";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
@@ -134,6 +137,10 @@ static const char *const BOOT_NAME[] = {"power", "restart", "crash", "nightly", 
 static uint8_t bootKind = BOOT_POWER;
 static const char *bootDetail = "";            // esp_reset_reason in words
 bool quietBoot = false;                        // this start was a quiet restart: no intro, no address screen
+// Card report (for helping a tester): starts and crashes over the card's whole life, kept in NVS so they survive
+// unplugging. lifeLast = reason and software of the last crash ("" = never).
+static uint32_t lifeBoots = 0, lifeCrashes = 0;
+static char lifeLast[48] = "";
 
 static uint32_t upSec() { return (uint32_t)(esp_timer_get_time() / 1000000); }
 static void quietArm(uint8_t why) {             // the next software restart is a quiet one
@@ -162,6 +169,16 @@ static void healthBoot() {                     // setup(), after settingsLoad (n
     }
   } else if (r != ESP_RST_POWERON) bootKind = BOOT_SOFT;
   rtcQuiet = 0;
+  Preferences life;                            // its own namespace: one small write per start
+  if (life.begin("pjlife", false)) {
+    lifeBoots = life.getUInt("boots", 0) + 1; life.putUInt("boots", lifeBoots);
+    lifeCrashes = life.getUInt("crashes", 0);
+    if (crash) {
+      lifeCrashes++; life.putUInt("crashes", lifeCrashes);
+      snprintf(lifeLast, sizeof(lifeLast), "%s, %s", bootDetail, FW_VERSION); life.putString("last", lifeLast);
+    } else life.getString("last", lifeLast, sizeof(lifeLast));
+    life.end();
+  }
   Serial.printf("Start: %s (%s), quiet restarts %u, crashes %u since power-on\n", BOOT_NAME[bootKind], bootDetail,
                 (unsigned)rtcQuietN, (unsigned)rtcCrashN);
 }

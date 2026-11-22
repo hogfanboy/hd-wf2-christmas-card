@@ -1,22 +1,20 @@
 # PROGRESS
 
-## Working state (2026-11-22: card 1 = dev card on USB at the desk, beta19; card 2 = soak, beta18)
-- **beta19 (holidays):** countdown date can be MM-DD, a US holiday key or `next` (screens.ino HOLIDAYS; page
-  3-weather.js has the same list; dates checked 2026-28). Effect `auto` on a countdown = the holiday's own effect.
-  New effects (flash only, no RAM): turkey, bunny, bats, shamrocks, flag; full-screen sleigh = night town + moon +
-  double-size sleigh; turkey and bunny double size. Page: Holiday picker in the countdown editor. Probe:
-  `tools/effects-probe.ps1` (about 2 min). Older firmware shows a holiday-key countdown wrong (auto-update fixes).
+## Working state (2026-11-22: card 1 = dev card on USB at the desk, beta20; card 2 = soak, beta18)
+- **beta20 (better effect art + card report), on card 1:** sleigh scene, turkey, bunny + eggs, bats + pumpkins +
+  moon, shamrocks, balloons, fish, hearts use shaded sprites from `tools/make-fxsprites.mjs` (1 byte/pixel + palette
+  per sprite: 21 KB flash, no RAM; web/fxsprites.js for the page). App 1.64 of 1.75 MB (195 KB free). Art not
+  judged by eye yet. Card report: app → "Something wrong? Card report" (Copy / Share); /api/info adds id, rssi,
+  chip, app, appMax, boots, lifeCrashes, lastCrash (lifetime, NVS "pjlife"). Verified on card 1.
+- **beta19 (holidays):** countdown date can be MM-DD, a US holiday key or `next` (screens.ino HOLIDAYS = page
+  3-weather.js list); effect `auto` on a countdown = the holiday's effect; turkey, bunny, bats, shamrocks, flag.
 - **beta18 (memory safety):** quiet restart every night at 4 am (after 20 h up; every 3 days with no clock) and at
   once if the biggest free block drops under 12 KB (normal ~32 KB). Quiet = no intro, no address screen, clock kept
   through RTC memory so night mode stays dark. `/api/info` adds up, minHeap, block, boot (power/restart/crash/
   nightly/lowmem), bootWhy, quietRestarts, crashes (since power-on). `POST /api/restart?quiet=1` tests it (verified
   on card 1: boot nightly, count 1). Soak: `tools/soak-log.ps1` (CSV in `soak/`, git-ignored; `-Summary`). Card 1 ran 8.9 h clean (block 31.7 KB,
   0 crashes), then the soak moved to card 2 (family room, 20 items, flash full) on 2026-11-22 10:45, 32 h, tab
-  "soak card 2". Memory on a loaded card (measured on card 1 with 4 .pjm + 3 big GIFs + weather/clock/countdown):
-  between items block 27.6 KB (31.7 empty; 12 KB line is checked only here); while a .pjm plays ~17 KB (JPEGDEC +
-  frame buffer, freed after); lowest ~18 KB right after uploads. Player freed: block 59 KB, so radar's 45 KB fits.
-- **beta7-17:** forecast strips and messages move 1 px per 40-ms frame; moons (full on clear nights); Screens
-  checklist, alerts, Christmas lights, QR big/small, wxhome, shuffle, border trim, crisp Jumbo font + icons.
+  "soak card 2". Loaded card: block 27.6 KB between items, ~17 KB while a .pjm plays; player freed 59 KB.
 - **Pack builder hosted** at /builder/ (GitHub token, one-commit Publish); new cards' first show = `Holiday Starter/`
   pack (`install`, per-picture dates). Details in PROJECT-NOTES.
 - Card 1 (FM6124C): 192.168.50.16 / eed0 (USB COM10). Card 2 (RUL6024): 192.168.50.199 / 5df8. Rest: PROJECT-NOTES.md.
@@ -50,8 +48,10 @@
 00a. **"Weather screens look good" / "change X"** - card 1: now, 24 hours sliding, 10 days sliding, details, air,
    sun & moon. Speed, hold times, column width and temperature colors are easy to change. Card 2 already has beta18.
 00. **"QR works close and far" / "change X"** - press S1 on either card; try the phone at 1.5 ft, 4 ft and 7 ft.
-0. **"Holiday effects look good" / "change X"** - run `tools/effects-probe.ps1` on card 1: sleigh scene, turkey,
-   bunny, bats, shamrocks, flag, 3 holiday countdowns, text over the flag. (Christmas lights still to judge too.)
+0. **"New effects look good" / "change X"** - run `tools/effects-probe.ps1` on card 1 (beta20): sleigh scene, turkey,
+   bunny, bats, shamrocks, flag, 3 holiday countdowns, text over the flag, balloons, fish, hearts, text over the
+   small sleigh. Not redone yet (procedural, already full color): snow, sparkle, confetti, fireworks, stars, fire,
+   code rain, rain, lights, flag.
 1. **"Fonts/icons look good" / "change X"** - weather + forecast and a Jumbo text item ("use the straight rays").
 2. **"Re-add the Christmas pack"** - on the phone page, ★ Get the latest pictures, add Christmas 2026, Send; they
    should now come in as GIF and look like the originals. Try Shuffle at the same time.

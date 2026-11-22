@@ -46,4 +46,5 @@ cd firmware && "$A" compile -b "esp32:esp32:esp32s3:FlashMode=dio,FlashSize=8M,C
 ## Media and testing without a card
 - `node tools/make-gifs.mjs <outDir> <inputs> [--fit=auto|cover|contain]` converts to the card's 128x64 format (output in `media/`).
 - `.claude/launch.json`: `fake-card` (port 8090, fake API), `site` (`docs/` on 8080) and `pack-builder` (8095, edits the real content repo; Publish commits + pushes it; the same page is hosted at `/builder/` and uses the GitHub API). Test the builder on a copy: `node tools/pack-builder.mjs <copy folder>`.
+- Effect sprites: `node tools/make-fxsprites.mjs [preview.png]` writes `fx_sprites.h` + `web/fxsprites.js` (then build-web, recompile). `node tools/fx-render.mjs out.png [frames] [effects]` renders the page's effect code to a PNG.
 - Picture conversion (decode, GIF/full-color choice, encoders) is `web/convert.js`, shared by the card app and the pack builder.
