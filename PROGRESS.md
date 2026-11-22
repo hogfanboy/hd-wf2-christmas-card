@@ -1,6 +1,6 @@
 # PROGRESS
 
-## Working state (2026-11-22: card 1 = dev card on USB at the desk, beta20; card 2 = soak, beta18)
+## Working state (2026-11-22: 1.0.0 released; card 1 = dev card, beta20 until its 3 am update; card 2 = soak, beta18, au off)
 - **beta20 (better effect art + card report), on card 1:** sleigh scene, turkey, bunny + eggs, bats + pumpkins +
   moon, shamrocks, balloons, fish, hearts use shaded sprites from `tools/make-fxsprites.mjs` (1 byte/pixel + palette
   per sprite: 21 KB flash, no RAM; web/fxsprites.js for the page). App 1.64 of 1.75 MB (195 KB free). Art not
@@ -56,4 +56,4 @@
    should now come in as GIF and look like the originals. Try Shuffle at the same time.
 3. **Online builder** works (Christmas 2026 published from it). Next there: Holiday starter animations → new cards.
 4. **Installer is solid** - spare 2026-11-22: 10/10 verified writes, 0 retries; mid-write unplug recovered on re-plug
-   by itself (details PROJECT-NOTES). WiFi only worked on card 1 (install steps now hide). Next: 1.0.0.
+   by itself (details PROJECT-NOTES). WiFi only worked on card 1 (install steps now hide). 1.0.0 released 2026-11-22.
