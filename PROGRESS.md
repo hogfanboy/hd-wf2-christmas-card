@@ -43,7 +43,8 @@
    playerFree(), so allocate it first and skip the round if it fails. Details in NOTES.md (merge only the notes).
 000. **"Soak results"** - after 11-23 08:00 run `tools/soak-log.ps1 -Cards 192.168.50.199 -Summary`: want crashes 0,
    no lowmem restarts, one nightly restart. If card 2's block keeps sinking, find what holds it (20 items). Don't
-   flash/restart card 2 till then; card 1 is free for firmware work. Radar waits on this.
+   flash/restart card 2 till then; card 1 is free for firmware work. Radar waits on this. Card 2's auto-update
+   is OFF for the soak (`POST /api/settings?au=0`); turn it back on after (`?au=1`).
 00. **Judge beta17 by eye** - message scrolling and the moons (sun & moon screen).
 00a. **"Weather screens look good" / "change X"** - card 1: now, 24 hours sliding, 10 days sliding, details, air,
    sun & moon. Speed, hold times, column width and temperature colors are easy to change. Card 2 already has beta18.
