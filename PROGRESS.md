@@ -46,6 +46,8 @@
    `firmware/probes/radar_probe/` (NOTES.md has URLs, memory numbers, makebase.py). Make it a weather screen (`radar`
    checkbox) that only plays when rain/snow is on the way (same test as rainSoon). The page builds the town's map
    once (OSM tiles in the browser) and uploads it (~8 KB) when the town is saved; frames in flash, not RAM.
+   Data: RainViewer over plain HTTP (zoom 7). Needs PNGdec 1.1.6 in CI libs; its 45 KB block fits only after
+   playerFree(), so allocate it first and skip the round if it fails. Details in NOTES.md (merge only the notes).
 000. **"Weather screens look good" / "change X"** - card 1: now, 12 hours, 24 hours, 5 days, 14 days, details,
    air, sun & moon. Then flash card 2 (restart it first: it runs the radar probe until then).
 00. **"QR works close and far" / "change X"** - press S1 on either card; try the phone at 1.5 ft, 4 ft and 7 ft.
