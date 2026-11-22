@@ -340,7 +340,7 @@ function wxRemember(it) {
   card.wxHome = v;
   api('/api/settings?wx=' + encodeURIComponent(v), { method: 'POST' }).catch(() => {});
 }
-$('addWx').onclick = () => addDrawn('weather', wxDefault());
+$('addWx').onclick = () => addDrawn('weather', { hourly: true, fc: true, ...wxDefault() });   // new: 12 hours + 5 days on
 $('addStocks').onclick = () => addDrawn('stocks');
 
 const ready = () => items.filter(i => i.kind === 'pic' ? i.blob && !i.failed : i.kind === 'weather' ? i.lat : i.kind === 'stocks' ? i.syms : true);

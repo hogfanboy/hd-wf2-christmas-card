@@ -58,9 +58,9 @@ function wxMini(kind, cx, cy, f) {
   if (kind === 'storm' && tr(f / 4) % 12 < 2) { tctx.strokeStyle = '#fff07a'; tctx.lineWidth = 1; tctx.beginPath(); tctx.moveTo(cx + 1.5, cy + 2.5); tctx.lineTo(cx - 1.5, cy + 6.5); tctx.lineTo(cx + 1.5, cy + 6.5); tctx.lineTo(cx - 1.5, cy + 10.5); tctx.stroke(); }
   wxSpr('MINI' + MINI_IX[kind], ['sun', 'partly', 'cloud'].includes(kind) ? cx : cx + 2, cy + 1);
 }
-// Hourly and daily strips (copies of the card's stripMs/stripOff): hold 3 s, slide left at 40 px/s, hold 2 s.
-const stripMs = (w) => { const m = Math.max(0, w - W); return m ? 3000 + m * 25 + 2000 : 0; };
-const stripOff = (ms, w) => ms < 3000 ? 0 : Math.min(Math.max(0, w - W), Math.trunc((ms - 3000) / 25));
+// Hourly and daily strips (copies of the card's stripMs/stripOff): hold 3 s, slide left at 25 px/s, hold 2 s.
+const stripMs = (w) => { const m = Math.max(0, w - W); return m ? 3000 + m * 40 + 2000 : 0; };
+const stripOff = (ms, w) => ms < 3000 ? 0 : Math.min(Math.max(0, w - W), Math.trunc((ms - 3000) / 40));
 const dayN = (it, w) => Math.min(it.days10 ? 10 : 5, w.fc.length);
 function drawForecast(it, w, t, ms = 0) {   // copy of the card's drawDays5: 25-px day columns, 10 days slide
   const f = Math.floor(t / 40), dow = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'], today = new Date().getDay(), n = dayN(it, w), off = stripOff(ms, 3 + n * 25);

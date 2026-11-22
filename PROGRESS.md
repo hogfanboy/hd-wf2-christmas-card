@@ -1,9 +1,11 @@
 # PROGRESS
 
-## Working state (fw 1.0.0-beta15 on card 1 via WiFi, card 2 radar probe v2 / beta10 on restart, 2026-11-22)
+## Working state (fw 1.0.0-beta16 on card 1 via WiFi, card 2 radar probe v2 / beta10 on restart, 2026-11-22)
+- **beta16:** strips slide 25 px/s = exactly 1 px per 40-ms frame on a fixed clock (was 40 px/s: uneven 1-2 px
+  steps). New weather items on the page start with Hourly (12 h) and Daily (5 days) checked.
 - **beta15:** hourly and daily forecasts slide. Hourly = one 32-px column per hour (12 or 24 h + now), temperature
   in its temperature color, at midnight the new weekday in white + dotted line. 10 days = the 5-day columns sliding.
-  Strips hold 3 s, slide 40 px/s, hold 2 s (screen lasts max(item secs, strip)). Card 1: 24 hours + 10 days.
+  Strips hold 3 s, slide, hold 2 s (screen lasts max(item secs, strip)). Card 1: 24 hours + 10 days.
 - **beta14:** one "Hourly forecast" checkbox (12 / 24 hours = `hourly` / `chart`) and one "Daily forecast" (5 / 10
   days = `forecast` / `days10`). 14 days removed; old `days16` plays as 10 days.
 - **beta11-13:** weather "Screens" checklist; line under the temperature: sky, what matters, FEELS. **beta10:** alerts (weather.gov). **beta7:** Christmas lights. **beta9:** QR big/small alternating. **beta8:** card remembers the weather town (NVS `wxhome`), page redesign.

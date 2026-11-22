@@ -333,8 +333,9 @@ static void drawRainSoon(const ShowItem &it, uint32_t frame, uint32_t ms) {
   label("2H", W - 1 - labelW("2H"), 55, th().dim);
 }
 // Hourly and daily strips (1.0.0-beta15): wider than the screen, so they hold still on their first columns for
-// 3 s, slide left at 40 px/s until the last column is in, and hold 2 s (a strip that fits just stands still).
-static const uint32_t STRIP_HOLD0 = 3000, STRIP_HOLD1 = 2000, STRIP_PXMS = 25;
+// 3 s, slide left at 25 px/s until the last column is in, and hold 2 s (a strip that fits just stands still).
+// 25 px/s = exactly 1 px per 40-ms frame (wxScreen runs on a fixed clock), so every step is the same size.
+static const uint32_t STRIP_HOLD0 = 3000, STRIP_HOLD1 = 2000, STRIP_PXMS = 40;
 static int stripMax(int w) { return std::max(0, w - W); }                     // how far a strip w px wide slides
 static uint32_t stripMs(int w) { int m = stripMax(w); return m ? STRIP_HOLD0 + m * STRIP_PXMS + STRIP_HOLD1 : 0; }
 static int stripOff(uint32_t ms, int w) { return ms < STRIP_HOLD0 ? 0 : std::min(stripMax(w), (int)((ms - STRIP_HOLD0) / STRIP_PXMS)); }
@@ -441,13 +442,12 @@ static bool wxScreen(const ShowItem &it, uint32_t &frame, WxDraw draw) {   // tr
   uint32_t total = std::max((it.sec ? it.sec : 10) * 1000UL, wxMinMs), start = millis();
   wxMinMs = 0;
   shownValid = false;
-  while (millis() - start < total) {
-    uint32_t t0 = millis();
+  for (uint32_t k = 0; k * 40 < total; k++) {   // fixed 40-ms clock; draw gets the frame's ideal time, so slides step evenly
     paintBackground(it, frame);
-    draw(it, frame, millis() - start);
+    draw(it, frame, k * 40);
     pushCanvas();
     frame++;
-    int32_t wait = 40 - (int32_t)(millis() - t0);
+    int32_t wait = (int32_t)(start + (k + 1) * 40 - millis());
     if (waitMs(wait > 0 ? wait : 1)) return true;
   }
   return false;
