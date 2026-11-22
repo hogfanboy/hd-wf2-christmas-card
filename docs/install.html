@@ -44,6 +44,8 @@
   .wifi input, .wifi select { width:100%; font:17px Inter,system-ui,sans-serif; padding:11px 12px; border-radius:10px; border:1px solid var(--line); background:#0a0a10; color:var(--text); }
   .wifi .row { display:flex; gap:10px; margin-top:14px; } .wifi .row button { flex:1; }
   button.ghost { background:none; border:1px solid var(--line); color:var(--muted); font-size:15px; padding:10px 14px; width:auto; }
+  button.second { background:none; border:2px solid var(--cyan); color:var(--cyan); }
+  ol.mini { margin:12px 0 16px; padding-left:22px; } ol.mini li { margin-bottom:6px; }
   #wstat { margin-top:12px; font-weight:600; min-height:27px; }
   .tag { display:inline-block; font-size:13px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--gold); margin-bottom:8px; }
   .tag.done { color:var(--green); }
@@ -64,7 +66,8 @@
   </header>
 
   <h1>Switch your screen to the new software</h1>
-  <p class="lede">A one-time job, about 2 minutes. After this, updates and new pictures arrive over WiFi.</p>
+  <p class="lede">A one-time job, about 2 minutes. After this, updates and new pictures arrive over WiFi.
+    <span id="wjump">Already switched and only need new WiFi? <a href="#wonly">Change the WiFi only</a>.</span></p>
 
   <div class="box err" id="unsupported" hidden>
     <b>This needs Google Chrome or Microsoft Edge on a computer</b> (Windows, Mac or Chromebook). Phones and Safari/Firefox can't talk to the screen over USB.
@@ -116,12 +119,6 @@
     <b>Didn't catch the screen?</b> No problem. Unplug the cable from the computer (leave it in the board), click the yellow button again, then <b>hold the button and plug it back into the computer</b>. If you've connected once before, the page notices by itself and no window is needed.
   </div>
 
-  <div class="box" id="wonly">
-    <b>Already switched, and only need to change the WiFi?</b> <span class="muted">(new router, new house)</span> Plug the
-    screen's controller board into the computer with the USB cable (no button needed; the panel can stay connected and
-    the screen's own power on), then click below and pick <b>"USB JTAG/serial debug unit"</b>.
-    <button id="wbtn" class="ghost" style="margin-top:10px">Set up WiFi only</button>
-  </div>
 
   <div class="box" id="done" hidden>
     <div class="ok" style="font-size:22px;font-weight:800">All set! 🎉 Last thing: put it back together</div>
@@ -138,6 +135,18 @@
       <li>Hold the button for 2 seconds and follow the screen: join its WiFi on your phone and pick your home WiFi.</li>
       <li>Then the screen shows its web address. Open it on any phone or computer on your WiFi to add your own pictures.</li>
     </ol>
+  </div>
+
+  <div class="box" id="wonly">
+    <div class="tag" style="color:var(--cyan)">Already switched?</div>
+    <b style="font-size:21px;display:block">Change its WiFi only</b>
+    <div style="color:var(--muted);font-size:15px">For a new router or a move. Nothing is reinstalled and your pictures stay.</div>
+    <ol class="mini">
+      <li>Leave the screen put together and switched on, as normal.</li>
+      <li>Plug the USB cable into the controller board and into the computer. <span style="color:var(--muted)">No button needed.</span></li>
+      <li>Click the button below and pick <b>USB JTAG/serial debug unit</b>, then Connect.</li>
+    </ol>
+    <button id="wbtn" class="second">Change the WiFi</button>
   </div>
 
   <footer>Problems? The old software can always be put back, and the screen can't be damaged by trying again.</footer>
@@ -163,7 +172,7 @@ function showStep2() {
   status('Software installed ✓', 'ok');
   $('go').hidden = true; $('bar').parentNode.hidden = true;
   $('tag1').textContent = 'Step 1 of 2 · Done ✓'; $('tag1').classList.add('done');
-  $('isteps').hidden = true; $('wonly').hidden = true; $('retry').hidden = true;
+  $('isteps').hidden = true; $('wonly').hidden = true; $('wjump').hidden = true; $('retry').hidden = true;
   $('next1').hidden = false;
   $('wifi').classList.add('next');
   $('wifi').hidden = false;
@@ -350,7 +359,7 @@ $('wbtn').onclick = async () => {
   if (!('serial' in navigator) || busy) return;
   let port;
   try { port = await navigator.serial.requestPort({ filters: [{ usbVendorId: ESPRESSIF_VID }] }); } catch { return; }
-  $('wonly').hidden = true; busy = true; wifiOnly = true;
+  $('wonly').hidden = true; $('wjump').hidden = true; busy = true; wifiOnly = true;
   $('tag2').textContent = 'Change the WiFi';
   await improvSetup(port);
   busy = false;

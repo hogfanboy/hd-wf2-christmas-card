@@ -55,6 +55,5 @@
 2. **"Re-add the Christmas pack"** - on the phone page, ★ Get the latest pictures, add Christmas 2026, Send; they
    should now come in as GIF and look like the originals. Try Shuffle at the same time.
 3. **Online builder** works (Christmas 2026 published from it). Next there: Holiday starter animations → new cards.
-4. **"Installer stress test"** (top priority) - spare on USB, Chrome: install.html?soak=10 (install + 9 more verified
-   writes; want 10/10, 0 retries), then an install with one mid-write unplug (must catch it on re-plug and finish).
-   Page now rewrites on an MD5 mismatch (3 tries) and shows a pulsing Step 2 (WiFi) after Done. Then 1.0.0.
+4. **Installer is solid** - spare 2026-11-22: 10/10 verified writes, 0 retries; mid-write unplug recovered on re-plug
+   by itself (details PROJECT-NOTES). Next: "Try WiFi only" on card 1 (new layout at the page bottom), then 1.0.0.
