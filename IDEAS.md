@@ -23,7 +23,7 @@ At the end of a session: promote what was built and verified to PROJECT-NOTES.md
 
 ## Smaller improvements
 - Explain the Android "Nearby devices" permission in the website help and on the setup screens.
-- **VBUS check**: does the board back-feed the PC port? Mostly moot with the new unplug-the-panel install steps.
+- **VBUS check**: does the board back-feed the PC port? The install steps unplug the power supply, so it only matters for "Change the WiFi only" (screen stays powered).
 - Dark grays weak at the very dark end at 60 Hz. Color depth A/B (8 vs 10/12-bit). Text-heavy GIF cleanup. People with no home WiFi.
 
 ## Owners with no computer
