@@ -55,6 +55,14 @@
   .next { border:2px solid var(--gold); animation:pulse 1.6s ease-out 6; }
   @keyframes pulse { 0% { box-shadow:0 0 0 0 rgba(255,190,60,.6); } 100% { box-shadow:0 0 0 18px rgba(255,190,60,0); } }
   @keyframes bob { 50% { transform:translateY(6px); } }
+  ol.steps > li.now { outline:2px solid rgba(255,190,60,.6); outline-offset:6px; border-radius:12px; background:rgba(255,190,60,.06); }
+  ol.steps > li.now + li.now { margin-top:14px; }
+  ol.steps > li.now::before { background:var(--gold); color:#1a1300; }
+  details.help { margin:12px 0 4px; font-size:15px; color:var(--text); }
+  details.help summary { color:var(--cyan); cursor:pointer; font-weight:600; }
+  details.help ul { margin:8px 0 0; padding-left:20px; } details.help li { margin-bottom:6px; }
+  .hint { color:var(--muted); font-size:14px; margin-top:6px; }
+  .small-btn { font-size:15px; padding:9px 14px; width:auto; margin-top:10px; }
   /* Step drawings: 5 s loops. Each is drawn so that 60% of the loop is the step's "goal" picture; reduced motion
      freezes it there. */
   .fig { display:block; width:100%; max-width:360px; height:auto; margin:10px 0 2px; background:#0d0d16; border:1px solid var(--line); border-radius:10px; }
@@ -107,10 +115,13 @@
 
   <div class="box err" id="unsupported" hidden>
     <b>This needs Google Chrome or Microsoft Edge on a computer</b> (Windows, Mac or Chromebook). Phones and Safari/Firefox can't talk to the screen over USB.
+    <div style="margin-top:8px">Open this page there: <b id="here"></b></div>
+    <button class="second small-btn" id="sendme">Send this page to my computer</button>
   </div>
 
   <div class="box" id="needs">
     <b>You need:</b> your screen, the <b>USB cable with the same flat plug on both ends</b> (USB-A to USB-A), and a computer with Chrome or Edge.
+    <div class="hint">Computer only has the small oval USB-C ports? A USB-C to USB-A adapter works fine.</div>
   </div>
 
   <div class="box" id="installbox">
@@ -150,7 +161,7 @@
           <rect x="54" y="56" width="28" height="26" rx="3" fill="#111" stroke="#444"/>
           <g class="ok"><text x="178" y="140" text-anchor="middle" class="tok">Only the power supply comes out &#10003;</text></g>
         </svg></li>
-      <li><b>Plug the USB cable into the controller board first.</b> <span class="muted">That end is the tight one, so get it done now.</span> Leave the other end unplugged.
+      <li><b>Plug the USB cable into the blue board first</b>, in the USB socket next to the two screws. <span class="muted">That end is the tight one, so get it done now.</span> Leave the other end unplugged.
         <svg class="fig f2" viewBox="0 0 320 150" role="img" aria-label="The USB cable goes up into the USB socket next to the power screws; the other end stays unplugged.">
           <g class="in"><path d="M182 120 V170" stroke="#444" stroke-width="6"/><rect x="171" y="98" width="22" height="22" rx="3" fill="#2a2a33" stroke="#666"/>
             <rect x="175" y="84" width="14" height="14" fill="#b9c0cc"/></g>
@@ -161,7 +172,7 @@
           <g class="glow"><rect x="165" y="60" width="34" height="40" rx="7" fill="none" stroke="#ffbe3c" stroke-width="2"/>
             <text x="160" y="118" text-anchor="end" class="tg">tight end first</text></g>
         </svg></li>
-      <li><b>Click the yellow button below.</b> A small window opens listing devices. It's empty for now; leave it open.
+      <li><b>Click the yellow button just below.</b> A small window opens at the top of the browser, listing devices. It's empty for now; leave it open.
         <svg class="fig f3" viewBox="0 0 320 150" role="img" aria-label="Clicking the yellow button opens an empty device window.">
           <rect x="16" y="10" width="288" height="130" rx="8" fill="#15151f" stroke="#33334a"/>
           <path d="M16 18 a8 8 0 0 1 8 -8 H296 a8 8 0 0 1 8 8 V28 H16 Z" fill="#22222f"/>
@@ -174,7 +185,19 @@
             <rect x="186" y="98" width="46" height="14" rx="3" fill="#c9c9d4"/><text x="209" y="108.5" text-anchor="middle" style="font-size:9px;fill:#666">Connect</text></g>
           <g transform="translate(160,104)"><g class="cur"><use href="#cur"/></g></g>
         </svg></li>
-      <li><b>Press and hold the button on the board</b> (marked <b>S1</b>) and, <b>still holding it, plug the other end of the cable into the computer.</b>
+    </ol>
+    <button id="go" disabled>Loading software…</button>
+    <div class="bar"><i id="bar"></i></div>
+    <div id="status"></div>
+    <details class="help" id="trouble"><summary>Nothing shows up in the window?</summary><ul>
+      <li>Unplug the cable from the computer, <b>hold S1</b> and plug it in again. Without S1 held, the screen only shows up for a moment.</li>
+      <li>Plug straight into the computer, not into a USB hub or keyboard, and try another USB port.</li>
+      <li>Some cables can only charge. Try another USB-A to USB-A cable.</li>
+      <li>Windows, the first time: give it a few seconds to set up the USB connection.</li>
+      <li>Still nothing? Close the window, reload this page and start again at step 3. Trying again can't hurt the screen.</li>
+    </ul></details>
+    <ol class="steps" id="isteps2" style="counter-reset:s 3;margin-top:18px">
+      <li><b>Press and hold S1</b>, the small button on the top edge of the blue board, and <b>still holding it, plug the other end of the cable into the computer.</b>
         <svg class="fig f4" viewBox="0 0 320 150" role="img" aria-label="A finger holds S1 down while the cable's other end goes into the computer.">
           <path d="M103 128 C103 160 120 170 140 170" stroke="#444" stroke-width="6" fill="none"/>
           <use href="#wf2" x="16" y="44"/>
@@ -209,9 +232,6 @@
           <g class="letgo"><text x="96" y="122" class="tg">let go of S1</text></g>
         </svg></li>
     </ol>
-    <button id="go" disabled>Loading software…</button>
-    <div class="bar"><i id="bar"></i></div>
-    <div id="status"></div>
     <div class="callout" id="next1" hidden>
       <b>Step 1 is done. Don't unplug yet!</b>
       Now step 2: connect the screen to your home WiFi, just below. Leave the USB cable plugged in for it.
@@ -228,6 +248,7 @@
       <label for="wssid">WiFi network</label>
       <select id="wssid"><option value="">Looking for networks…</option></select>
       <input id="wssid2" placeholder="Network name" hidden autocomplete="off" style="margin-top:8px">
+      <div class="hint">Don't see your network? The screen can only use 2.4 GHz WiFi. Pick "Other network…" to type a hidden one.</div>
       <label for="wpass">Password</label>
       <input id="wpass" type="password" autocomplete="off" placeholder="WiFi password">
       <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="wshow" style="width:auto"> Show password</label>
@@ -257,6 +278,8 @@
       <li>Hold the button for 2 seconds and follow the screen: join its WiFi on your phone and pick your home WiFi.</li>
       <li>Then the screen shows its web address. Open it on any phone or computer on your WiFi to add your own pictures.</li>
     </ol>
+    <p class="hint" style="font-size:15px">Tip: press the screen's button once any time to show its address as a QR code for your phone's camera.
+      <a href="go.html">Open my screen</a> also finds it again later.</p>
   </div>
 
   <div class="box" id="wonly">
@@ -289,12 +312,21 @@ const WRITE_TRIES = 3;
 // install.html?soak=10 (testing only): after the install, write + verify the image again until 10 verified writes.
 const SOAK = Math.min(50, Math.max(0, parseInt(new URLSearchParams(location.search).get('soak'), 10) || 0));
 
+// Outline the step the person should be doing right now (numbers as shown on the page).
+function nowStep(...ns) { document.querySelectorAll('#isteps > li, #isteps2 > li').forEach((li, i) => li.classList.toggle('now', ns.includes(i + 1))); }
+// Keep the computer from sleeping mid-install, and warn before the tab is closed while it works.
+let wake = null;
+async function keepAwake(on) {
+  try { if (on && !wake) wake = await navigator.wakeLock?.request('screen'); else if (!on && wake) { await wake.release(); wake = null; } } catch {}
+}
+addEventListener('beforeunload', (e) => { if (busy) { e.preventDefault(); e.returnValue = ''; } });
+
 // Install finished and checked: say so loudly and walk the person on to the WiFi step.
 function showStep2() {
   status('Software installed ✓', 'ok');
   $('go').hidden = true; $('bar').parentNode.hidden = true;
   $('tag1').textContent = 'Step 1 of 2 · Done ✓'; $('tag1').classList.add('done');
-  $('isteps').hidden = true; $('wonly').hidden = true; $('wjump').hidden = true; $('retry').hidden = true;
+  $('isteps').hidden = true; $('isteps2').hidden = true; $('trouble').hidden = true; nowStep(); $('wonly').hidden = true; $('wjump').hidden = true; $('retry').hidden = true;
   $('next1').hidden = false;
   $('wifi').classList.add('next');
   $('wifi').hidden = false;
@@ -336,6 +368,11 @@ function md5hex(data) {
 
 if (!('serial' in navigator)) {
   $('unsupported').hidden = false;
+  $('here').textContent = location.host + location.pathname;
+  $('sendme').onclick = async () => {
+    try { if (navigator.share) { await navigator.share({ title: 'Install Pocket Jumbotron', url: location.href }); return; } } catch { return; }
+    try { await navigator.clipboard.writeText(location.href); $('sendme').textContent = 'Link copied ✓'; } catch {}
+  };
   $('go').textContent = 'Use Chrome or Edge on a computer';
 } else {
   loadImage();
@@ -372,10 +409,13 @@ async function loadImage() {
 
 $('go').onclick = async () => {
   armed = true;
+  nowStep(4, 5);
+  status('Window open. Now hold S1 and plug the cable into the computer (step 4).');
   let port;
   try {
     port = await navigator.serial.requestPort({ filters: [{ usbVendorId: ESPRESSIF_VID }] });
   } catch {
+    nowStep(3);
     status('The window closed before the screen was chosen. Click the yellow button first, then hold the screen\'s button and plug it in.', 'bad');
     $('retry').hidden = false;
     return;
@@ -393,6 +433,7 @@ async function install(port) {
   if (busy || !image) return;
   busy = true;
   $('go').disabled = true; $('retry').hidden = true;
+  keepAwake(true);
   let transport;
   try {
     status('Connecting to the screen…');
@@ -402,6 +443,7 @@ async function install(port) {
     log(`\nChip: ${chip}\n`);
     if (!/ESP32-S3/i.test(chip)) throw new Error(`this doesn't look like a Pocket Jumbotron (found ${chip})`);
     status('Installing… you can let go of the button now. Don\'t unplug anything.');
+    nowStep(6);
     // Write the whole image, then the screen MD5s its flash and esptool-js compares (throws on a mismatch). The screen
     // stays in install mode after a mismatch, so write it again on the same connection, up to WRITE_TRIES times.
     const writeVerified = async (label) => {
@@ -456,7 +498,9 @@ async function install(port) {
     $('retry').hidden = false;
     $('go').disabled = false;
     $('go').textContent = 'Try again';
+    nowStep(4);
   }
+  keepAwake(false);
   busy = false;
 }
 
