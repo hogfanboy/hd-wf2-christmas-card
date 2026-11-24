@@ -36,10 +36,13 @@
 0000. **1.1.0-beta2 on card 2 (branch `radar`, NOT merged).** 11-24: Regional judged great by eye. Now set to Close +
    "even when dry (test)" (writes `radar=always`; re-sends keep it). Try each range from **http://192.168.50.199/local**
    (the website app doesn't have this code until the merge). Remove the test box before release.
-   - 11-24 too: radar 750 ms/frame (OK by eye); night Off/5/10/25%; new cards start at 50%. Dim panel: row bands at
-     level 4, so the panel stays >= `hwmin` (12 best by eye; 16/24 band green/blue), darker is done in the colors;
-     under level 32 each color is scaled toward `redlow/greenlow/bluelow`% (card 2 now 60/100/75: blue too strong
-     made light blues purple, red cut 50 made tan green). Tune: `POST /api/settings?...` (in /api/info).
+   - 11-24 too: radar 750 ms/frame (OK by eye); night Off/5/10/25%; new cards start at 50%. Dim panel: never under
+     `hwmin` 12 (row bands at 4; 16/24 band green/blue), darker is done in the colors (tune.ino, net.ino applyBrightness).
+   - **Color tune (11-25 morning, with the user):** /local > Settings > Color tune. Table = R/G/B % at 6 panel levels
+     (3.5 7 17.5 35 70 140 of 255 = night 5/10/25% of 50%, normal 25/50/100%), blended between; NVS "cal", `/api/cal`.
+     Defaults = the near-perfect night look (red 64% at night). Plan: for each level, Ramps (banding, which color
+     drifts) -> Grid White, "Use it" on the whitest patch until C4 wins -> Colors (big block vs small text) -> Save.
+     Then make the agreed table the default in CAL_DEFAULT.
    - **Radar:** range picker next to the radar checkbox (`rzoom=`): Close 10-mi ring (zoom-7 tile 1:1), Normal 25,
      Wide 50, Regional 100 (no roads). Home at column 85 (weather comes from the west), labels on the right, no town
      name. US state lines (solid) + county dots (Close/Normal) from Census us-atlas. Old radar.map no longer matches.

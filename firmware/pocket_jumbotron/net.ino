@@ -44,9 +44,8 @@ void settingsLoad() {
   nightFrom = prefs.getChar("nfrom", -1);
   nightTo = prefs.getChar("nto", -1);
   nightLevel = prefs.getUChar("nlevel", 0);
-  redLow = prefs.getUChar("redlow", 50);
-  greenLow = prefs.getUChar("greenlow", 100);
-  blueLow = prefs.getUChar("bluelow", 100);
+  memcpy(calGain, CAL_DEFAULT, sizeof(calGain));
+  if (prefs.getBytesLength("cal") == sizeof(calGain)) prefs.getBytes("cal", calGain, sizeof(calGain));
   hwMin = prefs.getUChar("hwmin", 12);
   if (nightLevel > 25) nightLevel = 25;            // old 50% choice: night levels are now 5, 10, 25
   autoUpdate = prefs.getBool("aupd", true);
@@ -66,29 +65,39 @@ void settingsLoad() {
   hostName = String("pocketjumbo-") + id;
   hostName.toLowerCase();
 }
+// The color balance at panel level E: the table blended in log steps (each level is about double the one before).
+void calAt(float E, float out[3]) {
+  int i = 0;
+  while (i < CAL_N - 2 && E > CAL_LEVEL[i + 1]) i++;
+  float f = E <= CAL_LEVEL[i] ? 0 : E >= CAL_LEVEL[i + 1] ? 1
+          : (log2f(E) - log2f(CAL_LEVEL[i])) / (log2f(CAL_LEVEL[i + 1]) - log2f(CAL_LEVEL[i]));
+  for (int c = 0; c < 3; c++) out[c] = (calGain[i][c] + (calGain[i + 1][c] - calGain[i][c]) * f) / 100.0f;
+}
+float panelLevel() {                               // the panel level (of 255) wanted right now
+  if (tuneUntil && tuneLevel >= 0) return CAL_LEVEL[tuneLevel];
+  return (float)MAX_BRIGHTNESS * brightnessPct * (nightNow ? nightLevel : 100) / 10000.0f;
+}
 void applyBrightness() {
-  // Wanted panel level in 1/10000 steps, so a low night level (5% of 50%) isn't rounded away.
-  uint32_t v = (uint32_t)MAX_BRIGHTNESS * brightnessPct * (nightNow ? nightLevel : 100);
+  float E = panelLevel();
   // The panel dims by shortening each row's on-time; at a few steps out of 255 the rows no longer match and
   // text shows bands. So the panel never goes under hwMin; dimmer than that is done by darkening the colors.
-  uint8_t hw = (v + 5000) / 10000;
+  bool dark = nightNow && !nightLevel && !(tuneUntil && tuneLevel >= 0);   // night = Off
+  uint8_t hw = dark ? 0 : (uint8_t)(E + 0.5f);
   float soft = 1;
-  if (nightNow && !nightLevel) hw = 0;             // night = Off: dark
-  else if (hw < hwMin) { hw = hwMin; soft = v / 10000.0f / hwMin; if (soft < 0.02f) soft = 0.02f; }
+  if (!dark && E < hwMin) { hw = hwMin; soft = E / hwMin; if (soft < 0.02f) soft = 0.02f; }
   panel->setBrightness8(hw);
-  // At short on-times the colors don't keep their balance (red and blue too strong), so below panel level 32
-  // each color is scaled, reaching redLow / greenLow / blueLow percent at level 4 and under. Tuned by eye.
-  float t = hw >= 32 ? 0 : hw <= 4 ? 1 : (32 - hw) / 28.0f;
-  float fr = 1 - (1 - redLow / 100.0f) * t, fg = 1 - (1 - greenLow / 100.0f) * t, fb = 1 - (1 - blueLow / 100.0f) * t;
-  static float lastSoft = -1, lr = -1, lg = -1, lb = -1;
-  if (soft != lastSoft || fr != lr || fg != lg || fb != lb) {
-    lastSoft = soft; lr = fr; lg = fg; lb = fb;
+  // The LEDs don't keep their balance at short on-times, so each color is scaled by the tuned table.
+  float k[3];
+  calAt(E, k);
+  static float last[4] = {-1, -1, -1, -1};
+  if (soft != last[0] || k[0] != last[1] || k[1] != last[2] || k[2] != last[3]) {
+    last[0] = soft; last[1] = k[0]; last[2] = k[1]; last[3] = k[2];
     for (int i = 0; i < 256; i++) {
       float g = powf(i / 255.0f, GAMMA) * 255.0f * soft;
       gammaLut[i] = (uint8_t)(g + 0.5f);
-      gammaLutR[i] = (uint8_t)std::min(255.0f, g * fr + 0.5f);
-      gammaLutG[i] = (uint8_t)std::min(255.0f, g * fg + 0.5f);
-      gammaLutB[i] = (uint8_t)std::min(255.0f, g * fb + 0.5f);
+      gammaLutR[i] = (uint8_t)std::min(255.0f, g * k[0] + 0.5f);
+      gammaLutG[i] = (uint8_t)std::min(255.0f, g * k[1] + 0.5f);
+      gammaLutB[i] = (uint8_t)std::min(255.0f, g * k[2] + 0.5f);
     }
     shownValid = false;                            // redraw everything with the new colors
   }

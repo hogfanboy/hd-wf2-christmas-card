@@ -124,7 +124,7 @@ void playOne(const String &name, uint16_t sec) {
     if (delayMs < 20) delayMs = 100;            // GIFs with 0 delay: browsers use ~100 ms
     int32_t wait = delayMs - (int32_t)(millis() - t0);
     if (waitMs(wait > 0 ? wait : 0)) break;        // button / phone / address screen interrupts
-    if (buttonAction || holdPlayback || addrUntil) break;
+    if (buttonAction || holdPlayback || addrUntil || tuneUntil) break;
     if (sec && millis() - start >= sec * 1000UL) break;
     if (more <= 0) {                             // end of one loop
       loops++;
@@ -237,7 +237,7 @@ void playPjm(const ShowItem &it) {
     if (!limit && el > MAX_SHOW_MS * 2) break;
     int32_t wait = delayMs - (int32_t)(millis() - t0);
     if (waitMs(wait > 0 ? wait : 0)) break;
-    if (buttonAction || holdPlayback || addrUntil) break;
+    if (buttonAction || holdPlayback || addrUntil || tuneUntil) break;
   }
   uint32_t ms = millis() - start;
   Serial.printf("  %-36s jpeg %4u frames %2u loops %5.1f fps\n", it.file.c_str(), (unsigned)frames, (unsigned)loops, frames * 1000.0f / (ms ? ms : 1));

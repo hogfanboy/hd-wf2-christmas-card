@@ -51,12 +51,12 @@ static void handleInfo() {
   uint8_t mac[6]; WiFi.macAddress(mac); snprintf(cardId, sizeof(cardId), "%02x%02x", mac[4], mac[5]);   // e.g. eed0
   snprintf(buf, sizeof(buf), "{\"api\":1,\"fw\":\"%s\",\"name\":\"%s\",\"total\":%u,\"used\":%u,\"files\":%d,\"items\":%u,\"brightness\":%u,\"heap\":%u,"
            "\"up\":%u,\"minHeap\":%u,\"block\":%u,\"boot\":\"%s\",\"bootWhy\":\"%s\",\"quietRestarts\":%u,\"crashes\":%u,"
-           "\"tz\":\"%s\",\"nightFrom\":%d,\"nightTo\":%d,\"nightLevel\":%u,\"redLow\":%u,\"hwMin\":%u,\"greenLow\":%u,\"blueLow\":%u,\"night\":%s,\"time\":%lu,\"place\":\"%s\",\"tzAuto\":%s,\"autoUpdate\":%s,\"theme\":%u,\"wxHome\":\"%s\","
+           "\"tz\":\"%s\",\"nightFrom\":%d,\"nightTo\":%d,\"nightLevel\":%u,\"hwMin\":%u,\"night\":%s,\"time\":%lu,\"place\":\"%s\",\"tzAuto\":%s,\"autoUpdate\":%s,\"theme\":%u,\"wxHome\":\"%s\","
            "\"id\":\"%s\",\"rssi\":%d,\"chip\":\"%s rev %u\",\"app\":%u,\"appMax\":%u,\"boots\":%u,\"lifeCrashes\":%u,\"lastCrash\":\"%s\"}",
            FW_VERSION, hostName.c_str(), (unsigned)LittleFS.totalBytes(), (unsigned)LittleFS.usedBytes(), countPictures(),
            (unsigned)playlist.size(), brightnessPct, (unsigned)ESP.getFreeHeap(),
            (unsigned)upSec(), (unsigned)ESP.getMinFreeHeap(), (unsigned)ESP.getMaxAllocHeap(), BOOT_NAME[bootKind], bootDetail,
-           (unsigned)rtcQuietN, (unsigned)rtcCrashN, jsonEsc(tzString).c_str(), nightFrom, nightTo, nightLevel, (unsigned)redLow, (unsigned)hwMin, (unsigned)greenLow, (unsigned)blueLow,
+           (unsigned)rtcQuietN, (unsigned)rtcCrashN, jsonEsc(tzString).c_str(), nightFrom, nightTo, nightLevel, (unsigned)hwMin,
            nightNow ? "true" : "false", timeValid() ? (unsigned long)time(nullptr) : 0UL,
            geoOk ? jsonEsc(geoCity.substring(0, 40)).c_str() : "", tzAuto ? "true" : "false", autoUpdate ? "true" : "false", themeIx, jsonEsc(wxHome).c_str(),
            cardId, WiFi.status() == WL_CONNECTED ? (int)WiFi.RSSI() : 0, ESP.getChipModel(), (unsigned)ESP.getChipRevision(),
@@ -200,13 +200,57 @@ static void handleSettings() {
   }
   if (web->hasArg("au")) { autoUpdate = web->arg("au") != "0"; prefs.putBool("aupd", autoUpdate); }
   if (web->hasArg("hwmin")) { hwMin = constrain((int)web->arg("hwmin").toInt(), 1, 64); prefs.putUChar("hwmin", hwMin); }
-  if (web->hasArg("greenlow")) { greenLow = constrain((int)web->arg("greenlow").toInt(), 20, 150); prefs.putUChar("greenlow", greenLow); }
-  if (web->hasArg("bluelow")) { blueLow = constrain((int)web->arg("bluelow").toInt(), 20, 150); prefs.putUChar("bluelow", blueLow); }
-  if (web->hasArg("redlow")) { redLow = constrain((int)web->arg("redlow").toInt(), 20, 150); prefs.putUChar("redlow", redLow); }
   if (web->hasArg("nl")) { nightLevel = constrain((int)web->arg("nl").toInt(), 0, 25); prefs.putUChar("nlevel", nightLevel); }
   forceNightCheck();
   applyBrightness();                               // night level may have changed while it's night
   sendJson("{\"ok\":true}");
+}
+
+// Color tune (tune.ino). GET: the table and what the test screen shows. POST (all optional, the screen comes up
+// for 10 minutes): level=0..5 (-1 = the normal level), pattern=1..4 (0 = stop), color=rrggbb, r=&g=&b= (percent,
+// for the level being tuned), pick=<row 0-4><col 0-6> (move the level to that grid patch), hwmin=, reset=1 (this
+// level back to the default), resetall=1, save=1 (keep the table and hwmin).
+static String calJson() {
+  String s = "{\"levels\":[";
+  for (int i = 0; i < CAL_N; i++) s += String(i ? "," : "") + String(CAL_LEVEL[i], 1);
+  s += "],\"gain\":[";
+  for (int i = 0; i < CAL_N; i++) s += String(i ? "," : "") + "[" + calGain[i][0] + "," + calGain[i][1] + "," + calGain[i][2] + "]";
+  char tail[160];
+  uint8_t saved[CAL_N][3];
+  bool same = prefs.getBytesLength("cal") == sizeof(saved) ? (prefs.getBytes("cal", saved, sizeof(saved)), !memcmp(saved, calGain, sizeof(saved)))
+                                                           : !memcmp(CAL_DEFAULT, calGain, sizeof(saved));
+  snprintf(tail, sizeof(tail), "],\"hwMin\":%u,\"level\":%d,\"pattern\":%u,\"color\":\"%06x\",\"on\":%s,\"now\":%.1f,\"saved\":%s}",
+           hwMin, tuneLevel, tuneUntil ? tunePat : 0, (unsigned)tuneCol, tuneUntil ? "true" : "false", panelLevel(), same ? "true" : "false");
+  return s + tail;
+}
+static void handleCalGet() { sendJson(calJson()); }
+static void handleCalPost() {
+  if (!touch()) return;
+  if (web->hasArg("resetall")) memcpy(calGain, CAL_DEFAULT, sizeof(calGain));
+  if (web->hasArg("hwmin")) hwMin = constrain((int)web->arg("hwmin").toInt(), 1, 64);
+  if (web->hasArg("level")) tuneLevel = constrain((int)web->arg("level").toInt(), -1, CAL_N - 1);
+  if (web->hasArg("color")) tuneCol = strtoul(web->arg("color").c_str(), nullptr, 16) & 0xFFFFFF;
+  int8_t L = tuneLevel;
+  if (L >= 0) {
+    uint8_t *g = calGain[L];
+    if (web->hasArg("reset")) memcpy(g, CAL_DEFAULT[L], 3);
+    const char *k[3] = {"r", "g", "b"};
+    for (int c = 0; c < 3; c++) if (web->hasArg(k[c])) g[c] = constrain((int)web->arg(k[c]).toInt(), 20, 200);
+    if (web->hasArg("pick")) {
+      int p = web->arg("pick").toInt(), row = constrain(p / 10, 0, 4), col = constrain(p % 10, 0, 6);
+      g[0] = constrain((int)lroundf(g[0] * TUNE_RED[col]), 20, 200);
+      g[2] = constrain((int)lroundf(g[2] * TUNE_BLUE[row]), 20, 200);
+    }
+  }
+  if (web->hasArg("save")) { prefs.putBytes("cal", calGain, sizeof(calGain)); prefs.putUChar("hwmin", hwMin); }
+  int pat = web->hasArg("pattern") ? web->arg("pattern").toInt() : -1;
+  if (pat == 0 || web->hasArg("stop")) tuneStop();
+  else {
+    if (pat > 0) tunePat = constrain(pat, 1, 4);
+    if (pat > 0 || tuneUntil) { tuneUntil = (millis() + 10UL * 60 * 1000) | 1; tuneDirty = true; }
+    applyBrightness();
+  }
+  sendJson(calJson());
 }
 
 static void handleBrightness() {
@@ -300,6 +344,8 @@ static void startHomeWeb() {
   web->on("/api/dates", HTTP_GET, handleDatesGet);
   web->on("/api/dates", HTTP_POST, handleDatesPost);
   web->on("/api/settings", HTTP_POST, handleSettings);
+  web->on("/api/cal", HTTP_GET, handleCalGet);
+  web->on("/api/cal", HTTP_POST, handleCalPost);
   web->on("/api/file", HTTP_GET, handleFileGet);
   web->onNotFound([]() { web->send(404, "text/plain", "not found"); });
   static const char *HDRS[] = {"Origin"};

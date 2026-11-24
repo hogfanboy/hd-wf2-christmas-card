@@ -286,6 +286,7 @@ $('au').onchange = async () => {
   catch (err) { st.className = 'status err'; st.textContent = 'Couldn\'t save: ' + err.message; }
 };
 function showTime() {
+  if (typeof tuneLoad === 'function') tuneLoad();
   if (card.autoUpdate !== undefined) { $('auBox').hidden = false; $('au').checked = card.autoUpdate; }
   $('nf').value = card.nightFrom ?? -1; $('nt').value = card.nightTo ?? -1; $('nl').value = card.nightLevel ?? 0;
   if (card.time === undefined) { $('timeInfo').textContent = 'Needs newer screen software.'; return; }

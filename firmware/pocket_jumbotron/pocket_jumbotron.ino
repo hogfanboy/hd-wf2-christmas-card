@@ -10,6 +10,7 @@
 //   player.ino    GIF and full-color .pjm players, canvas push
 //   radar.ino     radar weather screen (RainViewer tiles + the page's map)
 //   screens.ino   text, clock and countdown items
+//   tune.ino      Color tune test screens (color balance per brightness)
 //   show.ino      the show list (/show.txt format), schedule, time and night mode
 //   weather.ino   weather (Open-Meteo) and its extra pages (hours, days, details, air, sun/moon), US weather alerts
 //   web.ino       web API, the starter page that loads the app, built-in app at /local
@@ -73,9 +74,15 @@ bool doubleBuffered = false;
 AnimatedGIF *gifp = nullptr;
 #define gif (*gifp)
 uint8_t gammaLut[256];
-uint8_t gammaLutR[256], gammaLutG[256], gammaLutB[256];   // per color: balanced when the panel is dim, see applyBrightness
-uint8_t redLow = 50;                           // red percent at the dimmest panel levels: NVS redlow, set with POST /api/settings?redlow=
-uint8_t greenLow = 100, blueLow = 100;         // the same for green and blue: NVS greenlow, bluelow
+uint8_t gammaLutR[256], gammaLutG[256], gammaLutB[256];   // per color, from the color balance: applyBrightness
+// Color balance per brightness, tuned by eye on the Color tune screens: red, green, blue percent at 6 panel levels
+// out of 255, blended in between. NVS "cal". Levels: night 5% and 10% of 50%, night 25%, normal 25%, 50%, 100%.
+static const uint8_t CAL_N = 6;
+static const float CAL_LEVEL[CAL_N] = {3.5f, 7.0f, 17.5f, 35.0f, 70.0f, 140.0f};
+static const uint8_t CAL_DEFAULT[CAL_N][3] = {{64, 100, 100}, {64, 100, 100}, {75, 100, 100}, {100, 100, 100}, {100, 100, 100}, {100, 100, 100}};
+uint8_t calGain[CAL_N][3];
+uint32_t tuneUntil = 0;                        // a Color tune screen is up until then: tune.ino
+int8_t tuneLevel = -1;                         // the level being tuned, shown on the panel whatever the time of day
 uint8_t hwMin = 12;                            // lowest panel level used; dimmer than that is done in the colors: NVS hwmin
 typedef uint8_t PixRow[W][3];
 static const size_t CANVAS_BYTES = sizeof(PixRow) * H;
@@ -250,7 +257,7 @@ bool waitMs(uint32_t ms) {
     pollButton();
     netService();
     checkNight();
-    if (buttonAction != BTN_NONE || holdPlayback || addrUntil) return true;
+    if (buttonAction != BTN_NONE || holdPlayback || addrUntil || tuneUntil) return true;
     if ((int32_t)(end - millis()) > 0) delay(3);
   } while ((int32_t)(end - millis()) > 0);
   return false;
@@ -272,6 +279,7 @@ void loop() {
     panelSetFast(false);                             // back to full color after the QR screen
     applyBrightness();                               // the QR screen sets its own brightness
   }
+  if (tuneUntil) { tuneTick(); delay(5); return; }   // Color tune screen (tune.ino)
   updateService();                                   // 3 am: newer firmware on the website? (online.ino)
   healthService();                                   // 4 am quiet restart, or at once if memory gets tight
   if (holdPlayback || playlist.empty()) { delay(5); return; }

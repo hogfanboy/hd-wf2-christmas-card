@@ -67,6 +67,9 @@
   .ok { color:var(--green); } .err { color:var(--red); }
   .stack > * + * { margin-top:10px; }
   .flex { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .tuneSl { display:grid; grid-template-columns:52px 1fr 36px; gap:8px; align-items:center; }
+  .tuneLvB { width:auto; padding:8px 12px; }
+  .tuneLvB.on { outline:2px solid var(--gold); }
   .update { border-color:var(--gold); }
   /* Page frame: header with the connection, numbered steps, settings, and the screen's details at the bottom. */
   .top { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:6px 0 2px; }
@@ -175,6 +178,35 @@
       </div>
       <button class="secondary" id="saveTime">Save night mode</button>
       <div class="status" id="timeStatus"></div>
+    </div>
+    <div class="setting stack" id="tuneBox" hidden>
+      <h3>Color tune</h3>
+      <div class="muted">Puts a test screen on the panel at one brightness level, any time of day, so the colors can be
+        balanced by eye. Tune each level, press <b>Save</b>. The show comes back by itself after 10 minutes, or press Stop.</div>
+      <div class="muted"><b>1. Brightness level to tune</b></div>
+      <div class="flex" id="tuneLv"></div>
+      <div class="muted"><b>2. Test screen</b></div>
+      <div class="flex">
+        <select class="s" id="tunePat"><option value="1">Grid (pick the best patch)</option><option value="2">Colors (big and small)</option><option value="3">Ramps (dark to full)</option><option value="4">Solid (one color)</option></select>
+        <select class="s" id="tuneCol"><option value="ffffff">White</option><option value="ffd27a">Soft gold</option><option value="c8e6ff">Light blue</option><option value="b49c78">Tan</option><option value="808080">Gray</option></select>
+      </div>
+      <div class="muted"><b>3. Fix it</b> - on the grid, find the patch that looks most like the color named above
+        (for White: pure white, no pink, green or blue tint). C4 is the setting now.</div>
+      <div class="flex">
+        <span class="muted">Best patch: row</span><select class="s" id="tuneRow"></select>
+        <span class="muted">column</span><select class="s" id="tuneCN"></select>
+        <button class="secondary" id="tunePick">Use it</button>
+      </div>
+      <div class="tuneSl"><span>Red</span><input type="range" id="tuneR" min="20" max="200"><b id="tuneRv"></b></div>
+      <div class="tuneSl"><span>Green</span><input type="range" id="tuneG" min="20" max="200"><b id="tuneGv"></b></div>
+      <div class="tuneSl"><span>Blue</span><input type="range" id="tuneB" min="20" max="200"><b id="tuneBv"></b></div>
+      <div class="flex">
+        <button class="primary" id="tuneSave">Save</button>
+        <button class="secondary" id="tuneReset">Reset this level</button>
+        <button class="secondary" id="tuneStop">Stop test</button>
+      </div>
+      <div class="muted" id="tuneTable"></div>
+      <div class="status" id="tuneStatus"></div>
     </div>
     <div class="setting stack" id="auBox" hidden>
       <h3>Software updates</h3>
