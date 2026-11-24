@@ -37,7 +37,8 @@
    card 2 2026-11-23 (forced with the hidden `radar=always`; card 2 is back on plain `radar`). Test: 0 crashes, min
    heap 18 KB, block back to 31.7 KB. App 1.70 of 1.75 MB. Details: PROJECT-NOTES on the branch. Next: "release
    radar" = merge `radar` into main (CI then publishes 1.1.0-beta1 to every auto-update card) or bump to 1.1.0 first.
-   Still to see: a real rain loop (needs rain at the town).
+   Decision (user, 11-23): release only after card 2 shows a real rain loop by eye ("radar looked good in rain"),
+   then merge as 1.1.0 (not a beta).
 000. **Soak passed (card 2, 32.3 h, 2026-11-23)**: 1427 polls, 0 missed, 0 crashes, 0 lowmem restarts; biggest block
    flat (hourly avg 26-32 KB), one single-poll dip to 9.7 KB (11-22 20:12) that recovered. No nightly restart seen: card 2
    restarted for the radar beta on 11-23 22:24, so the first nightly is due 11-25 04:00 (20 h rule). Card 2's
