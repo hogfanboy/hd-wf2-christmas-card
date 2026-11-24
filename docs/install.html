@@ -67,7 +67,7 @@
   /* Step drawings: 5 s loops. Each is drawn so that 60% of the loop is the step's "goal" picture; reduced motion
      freezes it there. */
   .figcap { display:block; font-size:13px; color:var(--muted); font-style:italic; margin-bottom:4px; }
-  .fig { display:block; width:100%; max-width:360px; height:auto; margin:10px 0 2px; background:#0d0d16; border:1px solid var(--line); border-radius:10px; }
+  .fig { pointer-events:none; user-select:none; display:block; width:100%; max-width:360px; height:auto; margin:10px 0 2px; background:#0d0d16; border:1px solid var(--line); border-radius:10px; }
   .fig text { font:600 11px Inter,system-ui,sans-serif; fill:var(--muted); }
   .fig .tw { fill:var(--text); } .fig .tg { fill:var(--gold); } .fig .tok { fill:var(--green); } .fig .tr { fill:var(--red); } .fig .tk { fill:#222; }
   .fig * { animation-duration:5s; animation-iteration-count:infinite; animation-timing-function:ease-in-out; }
@@ -174,7 +174,7 @@
           <g class="glow"><rect x="165" y="60" width="34" height="40" rx="7" fill="none" stroke="#ffbe3c" stroke-width="2"/>
             <text x="160" y="118" text-anchor="end" class="tg">tight end first</text></g>
         </svg><span class="figcap">Example drawing, it repeats. Your progress shows under the yellow button.</span></li>
-      <li><b>Click the yellow button just below.</b> A small window opens at the top of the browser. It says
+      <li><b>Click the yellow button just below.</b> A small window opens at the top of the browser, titled <b>"hogfanboy.github.io wants to connect to a serial port"</b>. It says
         <b>"No compatible devices found."</b> <b>That's normal</b>: the screen isn't plugged into the computer yet.
         <b>Leave that window open</b> (don't click Cancel) and go on to step 4.
         <svg class="fig f3" viewBox="0 0 320 150" role="img" aria-label="Clicking the yellow button opens an empty device window.">
@@ -184,11 +184,11 @@
           <rect x="40" y="44" width="200" height="6" rx="3" fill="#2a2a3a"/><rect x="40" y="56" width="160" height="6" rx="3" fill="#2a2a3a"/><rect x="40" y="68" width="180" height="6" rx="3" fill="#2a2a3a"/>
           <g class="btn box-c"><rect x="70" y="92" width="180" height="26" rx="6" fill="#ffbe3c"/><text x="160" y="109" text-anchor="middle" class="tk">Open the device window</text></g>
           <g class="dlg box-c"><rect x="76" y="26" width="168" height="94" rx="8" fill="#ececf2" stroke="#999"/>
-            <text x="88" y="43" class="tk">Pick a device</text>
+            <text x="84" y="37" class="tk" style="font-size:8px">hogfanboy.github.io wants to</text><text x="84" y="46" class="tk" style="font-size:8px">connect to a serial port</text>
             <rect x="88" y="50" width="144" height="40" fill="#fff" stroke="#bbb"/><text x="160" y="68" text-anchor="middle" style="fill:#777;font-size:9px">No compatible devices found.</text><text x="160" y="82" text-anchor="middle" style="fill:#2a8a4a;font-size:9px">(normal for now)</text>
             <rect x="186" y="98" width="46" height="14" rx="3" fill="#c9c9d4"/><text x="209" y="108.5" text-anchor="middle" style="font-size:9px;fill:#666">Connect</text></g>
           <g transform="translate(160,104)"><g class="cur"><use href="#cur"/></g></g>
-        </svg><span class="figcap">Example drawing, it repeats. Your progress shows under the yellow button.</span></li>
+        </svg><span class="figcap">Example drawing, it repeats. Not a button: use the real window at the top of the browser.</span></li>
     </ol>
     <button id="go" disabled>Loading software…</button>
     <div class="bar"><i id="bar"></i></div>
@@ -218,14 +218,14 @@
       <li>Within a second or two <b>"USB JTAG/serial debug unit"</b> appears in the window. <b>Click it, then click Connect.</b> <span class="muted">Keep holding the button.</span>
         <svg class="fig f5" viewBox="0 0 320 150" role="img" aria-label="USB JTAG/serial debug unit appears in the window; click it, then Connect, still holding S1.">
           <rect x="30" y="8" width="260" height="112" rx="10" fill="#ececf2" stroke="#999"/>
-          <text x="44" y="28" class="tk" style="font-size:12px">Pick a device</text>
+          <text x="44" y="22" class="tk" style="font-size:10px">hogfanboy.github.io wants to connect</text><text x="44" y="32" class="tk" style="font-size:10px">to a serial port</text>
           <rect x="44" y="36" width="232" height="50" fill="#fff" stroke="#bbb"/>
           <g class="row"><rect class="hl" x="46" y="38" width="228" height="20" fill="#fff"/><text x="52" y="52" class="tk">USB JTAG/serial debug unit</text></g>
           <rect x="224" y="94" width="52" height="18" rx="4" fill="#ddd"/><text x="250" y="106.5" text-anchor="middle" class="tk" style="font-size:10px">Cancel</text>
           <g class="conb box-c"><rect class="con" x="160" y="94" width="58" height="18" rx="4" fill="#c9c9d4"/><text x="189" y="106.5" text-anchor="middle" style="font-size:10px;fill:#fff">Connect</text></g>
           <text x="160" y="140" text-anchor="middle" class="tg">still holding S1</text>
           <g transform="translate(150,50)"><g class="cur"><use href="#cur"/></g></g>
-        </svg><span class="figcap">Example drawing, it repeats. Your progress shows under the yellow button.</span></li>
+        </svg><span class="figcap">Example drawing, it repeats. Not a button: use the real window at the top of the browser.</span></li>
       <li><b>Let go of the button</b> when the text under the yellow button says <i>Installing… 1%</i>, and wait for
         <i>Software installed ✓</i>. <span class="muted">Don't unplug anything while it works.</span>
         <svg class="fig f6" viewBox="0 0 320 150" role="img" aria-label="Let go of S1; the bar under the yellow button fills while it installs. Don't unplug anything.">
