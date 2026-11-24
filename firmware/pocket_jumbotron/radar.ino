@@ -16,7 +16,7 @@
 // (firmware/probes/radar_probe/NOTES.md on branch claude/inspiring-perlman-7d2eaa): 0.4 s per request, 0.8 s to
 // stream and decode a 26 KB heavy-rain tile.
 static const uint8_t RD_NF = 7;                 // frames in the loop (the last hour)
-static const uint16_t RD_FRAME_MS = 450, RD_HOLD_MS = 3000;   // loop speed, how long the newest frame stays
+static const uint16_t RD_FRAME_MS = 750, RD_HOLD_MS = 3000;   // loop speed, how long the newest frame stays
 static const uint8_t RD_MIN_ALPHA = 96;         // fainter radar stays map
 static const uint8_t RD_HX = 85;                // home's column (home row = H / 2)
 static uint8_t rdRingMiles(uint8_t z) { return z >= 7 ? 10 : z == 6 ? 25 : z == 5 ? 50 : 100; }

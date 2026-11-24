@@ -314,14 +314,14 @@ function drawRadar(it, w, ms) {
   if (map) for (let i = 0; i < W * H; i++) { const v = map[16 + i]; if (v) P(i % W, Math.trunc(i / W), v === 3 && z <= 5 ? '#181818' : RD_MAPC[v]); }
   const miles = RD_RANGES[z][1], mpl = 156543.03 / 2 ** z * Math.cos((real ? lat : 40) * Math.PI / 180) / 1609.34, r = miles / mpl, cx = RD_HX, cy = H / 2;
   for (let t = 0; t < 1440; t++) { const a = t * 2 * Math.PI / 1440, x = Math.round(cx + r * Math.cos(a)), y = Math.round(cy + r * Math.sin(a)); if (x >= 0 && x < W && ((x + y) & 1) === 0 && !(map && map[16 + y * W + x])) P(x, y, '#3c3c3c'); }
-  const loop = 6 * 450 + 3000, inL = ms % loop, fi = Math.min(6, Math.trunc(inL / 450)), last = fi === 6;
+  const loop = 6 * 750 + 3000, inL = ms % loop, fi = Math.min(6, Math.trunc(inL / 750)), last = fi === 6;
   const bx = 30 + fi * 7, by = 26 + fi;                // the made-up shower moves east toward home
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const dd = Math.hypot((x - bx) / 1.8, y - by) + Math.sin(x * 0.7 + y * 0.4) * 1.5, lv = dd < 3 ? 6 : dd < 6 ? 5 : dd < 10 ? 3 : dd < 15 ? 2 : 0;
     if (lv) P(x, y, RD_LED[lv]);
   }
   tctx.fillStyle = '#000'; tctx.fillRect(cx - 3, cy - 1, 7, 3); tctx.fillRect(cx - 1, cy - 3, 3, 7);
-  const home = !last || Math.trunc((inL - fi * 450) / 400) % 2 === 0;
+  const home = !last || Math.trunc((inL - fi * 750) / 400) % 2 === 0;
   if (home) { tctx.fillStyle = '#fff'; tctx.fillRect(cx - 2, cy, 5, 1); tctx.fillRect(cx, cy - 2, 1, 5); }
   const sc = miles + ' MI';
   rdText(sc, W - rdW(sc) - 1, H - 6, '#787878');

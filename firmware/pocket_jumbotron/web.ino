@@ -199,7 +199,7 @@ static void handleSettings() {
     wxHome = web->arg("wx"); wxHome.replace("\t", " "); prefs.putString("wxhome", wxHome);
   }
   if (web->hasArg("au")) { autoUpdate = web->arg("au") != "0"; prefs.putBool("aupd", autoUpdate); }
-  if (web->hasArg("nl")) { nightLevel = constrain((int)web->arg("nl").toInt(), 0, 100); prefs.putUChar("nlevel", nightLevel); }
+  if (web->hasArg("nl")) { nightLevel = constrain((int)web->arg("nl").toInt(), 0, 25); prefs.putUChar("nlevel", nightLevel); }
   forceNightCheck();
   applyBrightness();                               // night level may have changed while it's night
   sendJson("{\"ok\":true}");

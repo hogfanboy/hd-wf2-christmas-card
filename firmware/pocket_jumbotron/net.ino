@@ -33,7 +33,7 @@ static size_t upFree = 0;   // free space measured once per file (usedBytes() wa
 // ---------- Settings (NVS) ----------
 void settingsLoad() {
   prefs.begin("pj", false);
-  brightnessPct = prefs.getUChar("bright", 100);
+  brightnessPct = prefs.getUChar("bright", 50);      // a new card starts at 50%
   staSsid = prefs.getString("ssid", "");
   staPass = prefs.getString("pass", "");
   apPass = prefs.getString("appass", "");
@@ -44,6 +44,7 @@ void settingsLoad() {
   nightFrom = prefs.getChar("nfrom", -1);
   nightTo = prefs.getChar("nto", -1);
   nightLevel = prefs.getUChar("nlevel", 0);
+  if (nightLevel > 25) nightLevel = 25;            // old 50% choice: night levels are now 5, 10, 25
   autoUpdate = prefs.getBool("aupd", true);
   themeIx = prefs.getUChar("theme", 2);
   wxHome = prefs.getString("wxhome", "");
@@ -62,8 +63,11 @@ void settingsLoad() {
   hostName.toLowerCase();
 }
 void applyBrightness() {
-  uint16_t pct = nightNow ? brightnessPct * nightLevel / 100 : brightnessPct;
-  panel->setBrightness8((uint16_t)MAX_BRIGHTNESS * pct / 100);
+  // in 1/10000 steps so a low night level (5% of 50%) doesn't round away; never fully dark unless night = Off
+  uint32_t v = (uint32_t)MAX_BRIGHTNESS * brightnessPct * (nightNow ? nightLevel : 100) + 5000;
+  uint8_t b = v / 10000;
+  if (!b && (!nightNow || nightLevel)) b = 1;
+  panel->setBrightness8(b);
 }
 
 // A freshly installed update must confirm itself, or the next reboot goes back to the previous version
