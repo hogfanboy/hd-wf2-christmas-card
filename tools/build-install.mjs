@@ -69,7 +69,8 @@ for (const src of process.argv.slice(2).map(p => path.resolve(p)).filter(p => fs
   for (const p of packs) for (const f of fs.readdirSync(p.dir).sort(byName)) {
     const s = (p.meta.pictures || {})[f] || {};
     if (!isPic(path.join(p.dir, f)) || s.install === false) continue;
-    picked.push({ src: path.join(p.dir, f), dates: /^\d{4}-\d{4}$/.test(s.dates || '') ? s.dates : '' });
+    picked.push({ src: path.join(p.dir, f), dates: /^\d{4}-\d{4}$/.test(s.dates || '') ? s.dates : '',
+      fit: s.fit === 'fill' ? 'cover' : s.fit === 'fit' ? 'contain' : 'auto' });   // the pack builder's Fill / Fit
   }
 }
 if (!picked.length) {                                 // no content repo: our generated greetings
@@ -85,7 +86,7 @@ picked.forEach((p, i) => {
   const base = String(i + 1).padStart(2, '0') + '-' + path.basename(p.src, path.extname(p.src)).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24);
   if (isCardGif(p.src)) { fs.copyFileSync(p.src, path.join(gifs, base + '.gif')); showPics.push({ file: base + '.gif', dates: p.dates }); return; }
   const tmp = path.join(stage, 'one'); fs.rmSync(tmp, { recursive: true, force: true }); fs.mkdirSync(tmp);
-  run(process.execPath, [path.join(root, 'tools/make-gifs.mjs'), tmp, p.src]);
+  run(process.execPath, [path.join(root, 'tools/make-gifs.mjs'), tmp, p.src, '--fit=' + (p.fit || 'auto')]);
   const made = fs.readdirSync(tmp).filter(f => f.endsWith('.gif'));
   if (!made.length) { console.warn('warning: could not convert ' + p.src + '; left off the first show'); return; }
   fs.copyFileSync(path.join(tmp, made[0]), path.join(gifs, base + '.gif')); showPics.push({ file: base + '.gif', dates: p.dates });
