@@ -65,6 +65,7 @@
   .small-btn { font-size:15px; padding:9px 14px; width:auto; margin-top:10px; }
   /* Step drawings: 5 s loops. Each is drawn so that 60% of the loop is the step's "goal" picture; reduced motion
      freezes it there. */
+  .figcap { display:block; font-size:13px; color:var(--muted); font-style:italic; margin-bottom:4px; }
   .fig { display:block; width:100%; max-width:360px; height:auto; margin:10px 0 2px; background:#0d0d16; border:1px solid var(--line); border-radius:10px; }
   .fig text { font:600 11px Inter,system-ui,sans-serif; fill:var(--muted); }
   .fig .tw { fill:var(--text); } .fig .tg { fill:var(--gold); } .fig .tok { fill:var(--green); } .fig .tr { fill:var(--red); } .fig .tk { fill:#222; }
@@ -160,7 +161,7 @@
             <rect x="48" y="65" width="10" height="8" fill="#b9c0cc"/><text x="4" y="52">power supply</text></g>
           <rect x="54" y="56" width="28" height="26" rx="3" fill="#111" stroke="#444"/>
           <g class="ok"><text x="178" y="140" text-anchor="middle" class="tok">Only the power supply comes out &#10003;</text></g>
-        </svg></li>
+        </svg><span class="figcap">Example drawing, it repeats. Your progress shows under the yellow button.</span></li>
       <li><b>Plug the USB cable into the blue board first</b>, in the USB socket next to the two screws. <span class="muted">That end is the tight one, so get it done now.</span> Leave the other end unplugged.
         <svg class="fig f2" viewBox="0 0 320 150" role="img" aria-label="The USB cable goes up into the USB socket next to the power screws; the other end stays unplugged.">
           <g class="in"><path d="M182 120 V170" stroke="#444" stroke-width="6"/><rect x="171" y="98" width="22" height="22" rx="3" fill="#2a2a33" stroke="#666"/>
@@ -171,7 +172,7 @@
           <text x="308" y="100" text-anchor="end">other end: not yet</text>
           <g class="glow"><rect x="165" y="60" width="34" height="40" rx="7" fill="none" stroke="#ffbe3c" stroke-width="2"/>
             <text x="160" y="118" text-anchor="end" class="tg">tight end first</text></g>
-        </svg></li>
+        </svg><span class="figcap">Example drawing, it repeats. Your progress shows under the yellow button.</span></li>
       <li><b>Click the yellow button just below.</b> A small window opens at the top of the browser. It says
         <b>"No compatible devices found."</b> <b>That's normal</b>: the screen isn't plugged into the computer yet.
         <b>Leave that window open</b> (don't click Cancel) and go on to step 4.
@@ -186,7 +187,7 @@
             <rect x="88" y="50" width="144" height="40" fill="#fff" stroke="#bbb"/><text x="160" y="68" text-anchor="middle" style="fill:#777;font-size:9px">No compatible devices found.</text><text x="160" y="82" text-anchor="middle" style="fill:#2a8a4a;font-size:9px">(normal for now)</text>
             <rect x="186" y="98" width="46" height="14" rx="3" fill="#c9c9d4"/><text x="209" y="108.5" text-anchor="middle" style="font-size:9px;fill:#666">Connect</text></g>
           <g transform="translate(160,104)"><g class="cur"><use href="#cur"/></g></g>
-        </svg></li>
+        </svg><span class="figcap">Example drawing, it repeats. Your progress shows under the yellow button.</span></li>
     </ol>
     <button id="go" disabled>Loading software…</button>
     <div class="bar"><i id="bar"></i></div>
@@ -211,7 +212,7 @@
             <path d="M262 121 V180" stroke="#444" stroke-width="6"/></g>
           <g class="ring"><circle cx="110" cy="48" r="10" fill="none" stroke="#ffbe3c" stroke-width="2"/><text x="128" y="30" class="tg">hold S1</text></g>
           <g transform="translate(110,48)"><g class="fing"><rect x="-7" y="-68" width="14" height="70" rx="7" fill="#e7b08a" stroke="#b9805a"/><ellipse cx="0" cy="-3" rx="4" ry="3" fill="#f6d5bd"/></g></g>
-        </svg></li>
+        </svg><span class="figcap">Example drawing, it repeats. Your progress shows under the yellow button.</span></li>
       <li>Within a second or two <b>"USB JTAG/serial debug unit"</b> appears in the window. <b>Click it, then click Connect.</b> <span class="muted">Keep holding the button.</span>
         <svg class="fig f5" viewBox="0 0 320 150" role="img" aria-label="USB JTAG/serial debug unit appears in the window; click it, then Connect, still holding S1.">
           <rect x="30" y="8" width="260" height="112" rx="10" fill="#ececf2" stroke="#999"/>
@@ -222,17 +223,17 @@
           <g class="conb box-c"><rect class="con" x="218" y="94" width="58" height="18" rx="4" fill="#c9c9d4"/><text x="247" y="106.5" text-anchor="middle" style="font-size:10px;fill:#fff">Connect</text></g>
           <text x="160" y="140" text-anchor="middle" class="tg">still holding S1</text>
           <g transform="translate(150,50)"><g class="cur"><use href="#cur"/></g></g>
-        </svg></li>
-      <li><b>Let go of the button</b> when it says <i>Installing</i>, and wait for <i>Done</i>. <span class="muted">Don't unplug anything while it works.</span>
-        <svg class="fig f6" viewBox="0 0 320 150" role="img" aria-label="Let go of S1; the bar fills while it installs, then it says Done. Don't unplug anything.">
-          <g class="ina"><text x="30" y="38" class="tw" style="font-size:14px">Installing…</text></g>
-          <g class="inb"><text x="30" y="38" class="tok" style="font-size:14px">Done ✓</text></g>
+        </svg><span class="figcap">Example drawing, it repeats. Your progress shows under the yellow button.</span></li>
+      <li><b>Let go of the button</b> when the text under the yellow button says <i>Installing… 1%</i>, and wait for
+        <i>Software installed ✓</i>. <span class="muted">Don't unplug anything while it works.</span>
+        <svg class="fig f6" viewBox="0 0 320 150" role="img" aria-label="Let go of S1; the bar under the yellow button fills while it installs. Don't unplug anything.">
+          <text x="30" y="38" style="font-size:12px">the bar under the yellow button fills up</text>
           <rect x="30" y="48" width="260" height="12" rx="6" fill="#22222f"/><rect class="barf" x="30" y="48" width="260" height="12" rx="6" fill="#4ee08a"/>
           <g class="blink"><text x="160" y="84" text-anchor="middle" class="tr">Don't unplug anything</text></g>
           <use href="#wf2" transform="translate(20,98) scale(.5)"/>
           <g transform="translate(67,100)"><g class="fing"><rect x="-7" y="-50" width="14" height="52" rx="7" fill="#e7b08a" stroke="#b9805a"/><ellipse cx="0" cy="-3" rx="4" ry="3" fill="#f6d5bd"/></g></g>
           <g class="letgo"><text x="96" y="122" class="tg">let go of S1</text></g>
-        </svg></li>
+        </svg><span class="figcap">Example drawing, it repeats. Your progress shows under the yellow button.</span></li>
     </ol>
     <div class="callout" id="next1" hidden>
       <b>Step 1 is done. Don't unplug yet!</b>
