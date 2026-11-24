@@ -84,7 +84,7 @@ function drawForecast(it, w, t, ms = 0) {   // copy of the card's drawDays5: 25-
 // ("hourly") or 24 hours ("chart"), one column per hour, sliding; daily = 5 days ("forecast") or 10 days ("days10", sliding).
 const WX_PAGES = [
   ['rainsoon', 'rainsoon', 'Rain on the way: only when rain or snow is coming in the next 2 hours'],
-  ['radar', 'radar', 'Rain radar map, the last hour: only when rain or snow is on the way <select data-k="rzoom"><option value="7">Close (10-mile ring)</option><option value="6">Normal (25-mile ring)</option><option value="5">Wide (50-mile ring)</option><option value="4">Regional (100-mile ring)</option></select> <span class="muted">(radar <a href="https://www.rainviewer.com" target="_blank" rel="noopener">RainViewer</a>, map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>)</span>'],
+  ['radar', 'radar', 'Rain radar map, the last hour: only when rain or snow is on the way <select data-k="rzoom"><option value="7">Close (10-mile ring)</option><option value="6">Normal (25-mile ring)</option><option value="5">Wide (50-mile ring)</option><option value="4">Regional (100-mile ring)</option></select> <span class="muted"><input type="checkbox" data-k="radarAlways"> even when dry (test)</span> <span class="muted">(radar <a href="https://www.rainviewer.com" target="_blank" rel="noopener">RainViewer</a>, map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>)</span>'],
   ['hourly', 'hourly', 'Hourly forecast', ['hours24', '12 hours', '24 hours', 'chart']],
   ['forecast', 'fc', 'Daily forecast', ['days10', '5 days', '10 days', 'days10']],
   ['details', 'details', 'Wind, humidity, UV, dew point'],
@@ -346,7 +346,7 @@ const WX_DRAW = { rainsoon: drawRainSoon, radar: drawRadar, hourly: drawHourStri
   details: drawDetails, air: drawAir, sun: drawSun };
 const WX_MINMS = { hourly: (it, w) => stripMs(hourN(it, w) * 32), fc: (it, w) => stripMs(3 + dayN(it, w) * 25) };   // strips last at least this long
 // (a screen just ticked shows even when it has nothing to say right now, so its box can be tried)
-const wxScreens = (it, w) => WX_PAGES.filter(p => it[p[1]] && (WX_HAS[p[1]](w) || it.focusPage === p[1])).map(p => p[1]);
+const wxScreens = (it, w) => WX_PAGES.filter(p => it[p[1]] && (WX_HAS[p[1]](w) || it.focusPage === p[1] || (p[1] === 'radar' && it.radarAlways))).map(p => p[1]);
 // Every item key the checkboxes and toggles use (for loading a show from the card).
 const WX_KEYS = WX_PAGES.flatMap(p => p[3] ? [p[1], p[3][0]] : [p[1]]);
 // ---------- Stocks: the screen reads the same small files from the website (made hourly, tools/build-feeds.mjs) ----------

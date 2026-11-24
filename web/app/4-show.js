@@ -115,7 +115,7 @@ function optsField(it) {
   if (w.days.length < 7) o.push('days=' + w.days);
   if (w.h1 !== '' && w.h2 !== '' && w.h1 !== w.h2) o.push(`hours=${w.h1}-${w.h2}`);
   if ((it.kind === 'countdown' || it.kind === 'dates') && it.lead !== '' && it.lead != null) o.push('lead=' + it.lead);
-  if (it.kind === 'weather') for (const [opt, k, , tg] of WX_PAGES) if (it[k]) o.push(tg && it[tg[0]] ? tg[3] : opt);
+  if (it.kind === 'weather') for (const [opt, k, , tg] of WX_PAGES) if (it[k]) o.push(tg && it[tg[0]] ? tg[3] : k === 'radar' && it.radarAlways ? 'radar=always' : opt);   // radar=always: testing
   if (it.kind === 'weather' && it.radar && String(it.rzoom) !== '6') o.push('rzoom=' + it.rzoom);
   if (it.kind === 'weather' && it.alerts) o.push('alerts');
   return '@' + o.join(' ');
@@ -134,6 +134,7 @@ function parseOpts(field) {
     }
     if (k === 'alerts') o.alerts = true;
     if (k === 'rzoom') o.rzoom = v;
+    if (k === 'radar' && v === 'always') o.radarAlways = true;
   }
   return o;
 }
