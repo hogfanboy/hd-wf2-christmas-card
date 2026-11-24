@@ -1,6 +1,6 @@
 # PROGRESS
 
-## Working state (2026-11-22: 1.0.0 released; card 1 = dev card, beta20 until its 3 am update; card 2 = soak, beta18, au off)
+## Working state (2026-11-22: 1.0.0 released; card 1 = dev card, beta20 until its 3 am update; card 2 = radar beta 1.1.0-beta1, au off)
 - **beta20 (better effect art + card report), on card 1:** sleigh scene, turkey, bunny + eggs, bats + pumpkins +
   moon, shamrocks, balloons, fish, hearts use shaded sprites from `tools/make-fxsprites.mjs` (1 byte/pixel + palette
   per sprite: 21 KB flash, no RAM; web/fxsprites.js for the page). App 1.64 of 1.75 MB (195 KB free). Art not
@@ -33,18 +33,15 @@
 - Test uploads with curl: `-H "Content-Type: text/plain"` for /api/show, then POST /api/play.
 
 ## Next (the user can answer with one of these commands)
-0000. **"Build the radar screen"** - radar probe v2 approved by eye on card 2 (Seattle rain loop over a dim map,
-   home cross + town, 25 MI ring, radar time top-right). Probe + notes: branch `claude/inspiring-perlman-7d2eaa`,
-   `firmware/probes/radar_probe/` (NOTES.md has URLs, memory numbers, makebase.py). Make it a weather screen (`radar`
-   checkbox) that only plays when rain/snow is on the way (same test as rainSoon). The page builds the town's map
-   once (OSM tiles in the browser) and uploads it (~8 KB) when the town is saved; frames in flash, not RAM.
-   Data: RainViewer over plain HTTP (zoom 7). Needs PNGdec 1.1.6 in CI libs; its 45 KB block fits only after
-   playerFree(): allocate it first, skip the round if it fails. Details in NOTES.md (merge only the notes).
+0000. **Radar screen built (1.1.0-beta1, branch `radar`, pushed, NOT merged; card 2 runs it).** Approved by eye on
+   card 2 2026-11-23 (forced with the hidden `radar=always`; card 2 is back on plain `radar`). Test: 0 crashes, min
+   heap 18 KB, block back to 31.7 KB. App 1.70 of 1.75 MB. Details: PROJECT-NOTES on the branch. Next: "release
+   radar" = merge `radar` into main (CI then publishes 1.1.0-beta1 to every auto-update card) or bump to 1.1.0 first.
+   Still to see: a real rain loop (needs rain at the town).
 000. **Soak passed (card 2, 32.3 h, 2026-11-23)**: 1427 polls, 0 missed, 0 crashes, 0 lowmem restarts; biggest block
-   flat (hourly avg 26-32 KB), one single-poll dip to 9.7 KB (11-22 20:12) that recovered. No nightly restart yet: at
-   4 am it was only 17.6 h up (rule = 20 h), so the first is due 11-24 04:00. Next: "check the nightly restart"
-   (soak log, boot = nightly), then card 2 `POST /api/settings?au=1` (OFF until then: a 3 am update would hide it).
-   Radar is unblocked.
+   flat (hourly avg 26-32 KB), one single-poll dip to 9.7 KB (11-22 20:12) that recovered. No nightly restart seen: card 2
+   restarted for the radar beta on 11-23 22:24, so the first nightly is due 11-25 04:00 (20 h rule). Card 2's
+   auto-update stays OFF while it runs the beta.
 00. **Judge beta17 by eye** - message scrolling and the moons (sun & moon screen).
 00a. **"Weather screens look good" / "change X"** - card 1: now, 24 hours sliding, 10 days sliding, details, air,
    sun & moon. Speed, hold times, column width and temperature colors are easy to change.
