@@ -47,8 +47,7 @@
      leave it), shows only within N days (default 7), one screen per date, fireworks + "HAPPY BIRTHDAY" on the day,
      "TURNS 41" with a year. Paste a list, Save/Load a file, the phone keeps a copy and offers it back.
    - App 1.71 of 1.75 MB. Release (user, 11-23): only after a real rain loop by eye, merged as 1.1.0.
-000. **Soak passed (card 2, 32.3 h, 11-23)**: 0 crashes, 0 lowmem restarts, block flat 26-32 KB. First nightly restart
-   due 11-25 04:00 (20 h rule). Card 2's auto-update stays OFF while it runs the beta.
+000. **Soak passed (card 2, 32.3 h, 11-23)**: 0 crashes, flat memory. Card 2's auto-update stays OFF on the beta.
 00. **Judge beta17 by eye** - message scrolling and the moons (sun & moon screen).
 00a. **"Weather screens look good" / "change X"** - card 1: now, 24 hours sliding, 10 days sliding, details, air,
    sun & moon. Speed, hold times, column width and temperature colors are easy to change.
