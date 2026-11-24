@@ -44,6 +44,7 @@ void settingsLoad() {
   nightFrom = prefs.getChar("nfrom", -1);
   nightTo = prefs.getChar("nto", -1);
   nightLevel = prefs.getUChar("nlevel", 0);
+  redLow = prefs.getUChar("redlow", 60);
   if (nightLevel > 25) nightLevel = 25;            // old 50% choice: night levels are now 5, 10, 25
   autoUpdate = prefs.getBool("aupd", true);
   themeIx = prefs.getUChar("theme", 2);
@@ -68,6 +69,13 @@ void applyBrightness() {
   uint8_t b = v / 10000;
   if (!b && (!nightNow || nightLevel)) b = 1;
   panel->setBrightness8(b);
+  // Red LEDs light up more than green and blue at very short on-times, so a dim panel looks too red. Below panel
+  // level 32 red is turned down, reaching redLow % at level 4 and under (5% night of 50% = level 4).
+  float t = b >= 32 ? 0 : b <= 4 ? 1 : (32 - b) / 28.0f, f = 1 - (1 - redLow / 100.0f) * t;
+  if (gammaLutR[255] != (uint8_t)(gammaLut[255] * f + 0.5f)) {
+    for (int i = 0; i < 256; i++) gammaLutR[i] = (uint8_t)(gammaLut[i] * f + 0.5f);
+    shownValid = false;                            // redraw everything with the new red
+  }
 }
 
 // A freshly installed update must confirm itself, or the next reboot goes back to the previous version
