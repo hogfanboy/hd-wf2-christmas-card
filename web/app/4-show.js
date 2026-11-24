@@ -38,10 +38,16 @@ function remove(it) {
 }
 function baseEl(it) {
   const el = document.createElement('div'); el.className = 'item';
-  el.innerHTML = `<canvas width="128" height="64"></canvas><div><div class="name"></div><div class="meta"></div>
-    <div class="row"><button class="chip editBtn">✓ Done</button><span class="muted" style="font-size:12px">Seconds</span><input class="s secs" type="number" min="0" max="600" placeholder="auto">
-    <button class="chip" data-mv="-1">▲</button><button class="chip" data-mv="1">▼</button><button class="chip whenBtn">⏰ When</button></div></div>
-    <button class="chip del" title="Remove" aria-label="Remove">✕</button>`;
+  // Open card, top to bottom: picture + name, the item's own settings (added by the caller before .foot), then the
+  // bottom bar: how long and when it plays (the When panel opens right under its button), then Move and Done.
+  el.innerHTML = `<canvas width="128" height="64"></canvas><div><div class="name"></div><div class="meta"></div></div>
+    <button class="chip del" title="Remove from the show" aria-label="Remove from the show">✕</button>
+    <div class="foot">
+      <div class="row plays"><span class="lbl">Plays</span><input class="s secs" type="number" min="0" max="600" placeholder="auto"><span class="lbl">seconds</span>
+        <button class="chip whenBtn">⏰ When…</button></div>
+      <div class="row ends"><button class="chip mv" data-mv="-1" title="Move up in the show" aria-label="Move up">▲</button><button class="chip mv" data-mv="1" title="Move down in the show" aria-label="Move down">▼</button>
+        <span class="lbl">Move</span><span style="flex:1"></span><button class="chip editBtn">✓ Done</button></div>
+    </div>`;
   it.el = el; it.thumb = el.querySelector('canvas'); it.metaEl = el.querySelector('.meta');
   el.querySelector('.name').textContent = label(it);
   const secs = el.querySelector('.secs');
@@ -87,7 +93,7 @@ function whenPanel(it, el) {
     <label>On ${DAY_LETTERS.map((d, i) => `<button class="chip" data-d="${i}">${d}</button>`).join('')}</label>
     <label>From <select data-w="h1">${hours}</select> to <select data-w="h2">${hours}</select></label>
     <div class="muted" style="font-size:12px">Dates repeat every year. Leave blank to always show. Needs the screen's clock (internet).</div>`;
-  el.appendChild(wp);
+  el.querySelector('.plays').after(wp);
   const sum = document.createElement('div'); sum.className = 'meta whenSum'; sum.style.color = 'var(--cyan)';
   it.metaEl.after(sum);
   it.whenRefresh = () => {
@@ -148,21 +154,21 @@ async function addFile(file, secs = 0, fromCard = false, set = {}) {
   const it = { kind: 'pic', name: file.name, fit: 'auto', format: set.format || 'auto', frames: [], blob: null, secs };
   const el = baseEl(it);
   it.metaEl.textContent = 'Converting…';
-  const row = document.createElement('div'); row.className = 'row';
-  row.innerHTML = `<button class="chip" data-fit="fill">Fill</button><button class="chip" data-fit="fit">Fit</button>
-    <button class="chip" data-fmt="gif">GIF</button><button class="chip" data-fmt="full">Full color</button>`;
-  el.children[1].appendChild(row);
+  const row = document.createElement('div'); row.className = 'edit';
+  row.innerHTML = `<div class="lrow"><span class="lbl">Shape</span><span class="seg"><button class="chip" data-fit="fill">Fill</button><button class="chip" data-fit="fit">Fit</button></span></div>
+    <div class="lrow"><span class="lbl">Colors</span><span class="seg"><button class="chip" data-fmt="gif">GIF</button><button class="chip" data-fmt="full">Full color</button></span></div>`;
+  el.insertBefore(row, el.querySelector('.foot'));
   row.querySelectorAll('[data-fit]').forEach(b => b.onclick = async () => { it.fit = b.dataset.fit; marks(it); await build(it); select(it); });
   row.querySelectorAll('[data-fmt]').forEach(b => b.onclick = async () => { it.format = b.dataset.fmt; marks(it); await build(it); select(it); });
   try {
     it.src = await decode(file, it);
     if (it.vDur) {                                 // a video: pick which part to show
       it.file = file;
-      const vr = document.createElement('div'); vr.className = 'row';
+      const vr = document.createElement('div'); vr.className = 'edit';
       vr.innerHTML = `<label>Start at <input class="secs" type="number" min="0" step="0.5" data-v="vStart" value="0"> s</label>
         <label>Length <input class="secs" type="number" min="0.5" max="${VIDEO_MAX_S}" step="0.5" data-v="vLen" value="${+Math.min(10, it.vDur).toFixed(1)}"> s</label>
         <span class="muted" style="font-size:12px">of ${it.vDur.toFixed(1)} s (up to ${VIDEO_MAX_S} s; longer clips get fewer frames a second)</span>`;
-      el.children[1].appendChild(vr);
+      el.insertBefore(vr, el.querySelector('.foot'));
       vr.querySelectorAll('[data-v]').forEach(inp => inp.onchange = async () => {
         it[inp.dataset.v] = Math.max(0, +inp.value || 0);
         it.metaEl.textContent = 'Reading the video…';
@@ -207,15 +213,16 @@ function addDrawn(kind, o = {}) {
   const wxMeta = () => it.lat === 'auto' ? `Weather where the screen is${card.place ? ': ' + card.place : ''}, guessed from its internet connection. Not right? Type your town.` : `Weather for ${it.place} (needs internet)`;
   const wxMark = () => { const need = !it.lat; el.classList.toggle('need', need); it.metaEl.textContent = need ? META.weather : wxMeta(); };
   const ed = document.createElement('div'); ed.className = 'edit';
-  const colors = `<label>Color <input type="checkbox" data-k="useTheme"> Theme &nbsp; <input type="color" data-k="fg"> <input type="checkbox" data-k="rainbow"> Rainbow
-      &nbsp; Background <input type="color" data-k="bg"></label>`;
+  const colors = `<div class="lrow"><span class="lbl">Color</span><label class="nw"><input type="checkbox" data-k="useTheme"> Theme</label>
+      <input type="color" data-k="fg" title="Your own color"><label class="nw"><input type="checkbox" data-k="rainbow"> Rainbow</label></div>
+    <label>Background <input type="color" data-k="bg"></label>`;
   const opt = (l) => l.map(v => `<option value="${v}">${SIZE_NAME[v]}</option>`).join('');
   const sizes = opt(kind === 'weather' ? [11, 12, 3, 4] : kind === 'stocks' ? [10, 11, 2, 3]
     : kind === 'text' ? [9, 10, 11, 12, 1, 2, 3, 4] : [10, 11, 12, 2, 3, 4]);
   const dateKinds = Object.entries(DATE_KINDS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
   ed.innerHTML = kind === 'fx'
-    ? `<label>Effect <select data-k="effect">${fxOptions().replace('<option value="none">None</option>', '')}</select>
-       &nbsp; Background <input type="color" data-k="bg"></label>`
+    ? `<label>Effect <select data-k="effect">${fxOptions().replace('<option value="none">None</option>', '')}</select></label>
+       <label>Background <input type="color" data-k="bg"></label>`
     : `
     ${kind === 'text' || kind === 'countdown' ? `<input type="text" maxlength="${kind === 'text' ? 120 : 21}" data-k="text" placeholder="${kind === 'text' ? 'Your message' : 'What for, e.g. Christmas'}">` : ''}
     ${kind === 'countdown' ? `<label>Holiday <select class="hol"><option value="">My own date</option><option value="next">The next holiday (whichever comes next)</option>
@@ -240,9 +247,9 @@ function addDrawn(kind, o = {}) {
         ${WX_PAGES.map(([, k, t, tg]) => `<label><input type="checkbox" data-k="${k}"> ${t}${tg ? ` <select class="wtg" data-k="${tg[0]}"><option value="">${tg[1]}</option><option value="1">${tg[2]}</option></select>` : ''}</label>`).join('')}</div>
       <button class="chip walert" type="button">⚠ See a sample alert</button>` : ''}
     ${colors}
-    <label>Size <select data-k="font">${sizes}</select>
-      &nbsp; Effect <select data-k="effect">${fxOptions(kind)}</select></label>`;
-  el.appendChild(ed);
+    <label>Size <select data-k="font">${sizes}</select></label>
+    <label>Effect <select data-k="effect">${fxOptions(kind)}</select></label>`;
+  el.insertBefore(ed, el.querySelector('.foot'));
   ed.querySelectorAll('[data-k]').forEach(inp => {
     const k = inp.dataset.k;
     if (inp.type === 'checkbox') inp.checked = !!it[k];
@@ -487,7 +494,7 @@ function wxRemember(it) {
   card.wxHome = v;
   api('/api/settings?wx=' + encodeURIComponent(v), { method: 'POST' }).catch(() => {});
 }
-$('addWx').onclick = () => addDrawn('weather', { hourly: true, fc: true, ...wxDefault() });   // new: 12 hours + 5 days on
+$('addWx').onclick = () => addDrawn('weather', { alerts: true, hourly: true, hours24: true, fc: true, days10: true, effect: 'auto', ...wxDefault() });   // new: alerts, 24 hours, 10 days, match the weather (theme color + Jumbo huge like every new item)
 $('addStocks').onclick = () => addDrawn('stocks');
 
 const ready = () => items.filter(i => i.kind === 'pic' ? i.blob && !i.failed : i.kind === 'weather' ? i.lat : i.kind === 'stocks' ? i.syms : i.kind === 'dates' ? i.dates.length : true);

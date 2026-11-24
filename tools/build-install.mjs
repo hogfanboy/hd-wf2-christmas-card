@@ -50,7 +50,8 @@ run(arduinoCli, ['compile', '-b', FQBN, '--build-property', 'upload.maximum_size
 const version = /FW_VERSION = "([^"]+)"/.exec(fs.readFileSync(path.join(sketch, 'pocket_jumbotron.ino'), 'utf8'))[1];
 
 // 2. The first show -> LittleFS image (must match partitions.csv: spiffs @0x390000, 0x460000):
-//    clock, weather where the screen is (found by its internet address) + 5-day forecast, then the pictures from
+//    clock + weather where the screen is (found by its internet address; alerts, 24 hours, 10 days), both in the
+//    theme color and Jumbo huge, then the pictures from
 //    the content folders: loose pictures, then every pack whose pack.json has "install": true (pack list order,
 //    then play order). Per picture, pack.json "pictures": { "<file>": { "install": false } } leaves it off new
 //    cards and { "dates": "1115-0106" } shows it only between those days. All set in the pack builder; the
@@ -93,8 +94,8 @@ picked.forEach((p, i) => {
 });
 const L = (...f) => f.join('\t');
 const show = [
-  L('clock', 0, '5AC8FF', '000000', 4, 'none', 12),
-  L('weather', 0, 'FFFFFF', '000000', 4, 'none', 'A', 'auto', 'auto', '', '@forecast'),
+  L('clock', 0, 'theme', '000000', 12, 'none', 12),                        // theme color (Soft gold on a new card), Jumbo huge
+  L('weather', 0, 'theme', '000000', 12, 'auto', 'A', 'auto', 'auto', '', '@alerts chart days10'),   // + alerts, 24 hours, 10 days, match the weather
   ...showPics.map(p => p.dates ? L('pic', 0, p.file, '@dates=' + p.dates) : L('pic', 0, p.file)),
 ];
 fs.writeFileSync(path.join(fsDir, 'show.txt'), show.join('\n') + '\n');

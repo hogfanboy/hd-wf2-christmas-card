@@ -31,7 +31,7 @@
      schedule. Tap it to open it. */
   .item.mini { grid-template-columns:64px minmax(0,1fr); gap:10px; padding:6px 8px; cursor:pointer; }
   .item.mini canvas { width:64px; height:32px; }
-  .item.mini .edit, .item.mini .row, .item.mini .meta.desc { display:none; }
+  .item.mini .edit, .item.mini .row, .item.mini .foot, .item.mini .meta.desc { display:none; }
   .item.mini .meta { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .item.mini .name { white-space:normal; }
   .item.mini .name { padding-right:32px; }
@@ -40,10 +40,22 @@
   .item .name { font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .item .meta { font-size:12px; color:var(--muted); }
   .item .row { display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; align-items:center; }
-  .item .edit { grid-column:1 / -1; display:grid; gap:8px; }
+  .item .edit { grid-column:1 / -1; display:grid; grid-template-columns:minmax(0,1fr); gap:8px; }
   .item .edit label { font-size:13px; color:var(--muted); display:flex; gap:8px; align-items:center; }
-  .item .edit .wpages { display:grid; gap:6px; font-size:13px; color:var(--muted); }
-  .item .edit .wpages label { flex-wrap:nowrap; align-items:flex-start; }
+  .item .edit .lrow { font-size:13px; color:var(--muted); display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .item .edit label.nw { display:inline-flex; gap:5px; flex-wrap:nowrap; }
+  .item .seg { display:inline-flex; gap:4px; }
+  .item .edit > .chip { justify-self:start; width:auto; max-width:100%; }
+  .item .lbl { font-size:13px; color:var(--muted); }
+  /* Bottom bar of an open card: how long + when (its panel opens right below), then Move and Done. */
+  .item .foot { grid-column:1 / -1; display:grid; gap:8px; border-top:1px solid var(--line); padding-top:8px; }
+  .item .foot .row { margin-top:0; }
+  .item .foot .mv { width:34px; padding:5px 0; }
+  .item .editBtn { background:var(--gold); color:#1a1300; border-color:var(--gold); padding:6px 18px; font-size:13px; }
+  .item .edit .wpages { display:grid; grid-template-columns:minmax(0,1fr); gap:6px; font-size:13px; color:var(--muted); }
+  .item .edit .wpages label { display:block; padding-left:24px; text-indent:-24px; }   /* text wraps under itself, not under the box */
+  .item .edit .wpages label input[type=checkbox] { margin:0 8px 0 0; width:16px; vertical-align:-3px; }
+  .item .edit .wpages label select { text-indent:0; margin-top:4px; }
   .item input[type=text], .item select, .item input[type=date], select.s, input.s { background:#1b1b28; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 8px; font:15px system-ui,sans-serif; }
   .item input[type=text] { width:100%; }
   .item input[type=color] { width:36px; height:30px; border:0; background:none; padding:0; }
