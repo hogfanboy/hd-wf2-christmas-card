@@ -45,7 +45,9 @@ void settingsLoad() {
   nightTo = prefs.getChar("nto", -1);
   nightLevel = prefs.getUChar("nlevel", 0);
   redLow = prefs.getUChar("redlow", 50);
-  hwMin = prefs.getUChar("hwmin", 16);
+  greenLow = prefs.getUChar("greenlow", 100);
+  blueLow = prefs.getUChar("bluelow", 100);
+  hwMin = prefs.getUChar("hwmin", 12);
   if (nightLevel > 25) nightLevel = 25;            // old 50% choice: night levels are now 5, 10, 25
   autoUpdate = prefs.getBool("aupd", true);
   themeIx = prefs.getUChar("theme", 2);
@@ -74,16 +76,19 @@ void applyBrightness() {
   if (nightNow && !nightLevel) hw = 0;             // night = Off: dark
   else if (hw < hwMin) { hw = hwMin; soft = v / 10000.0f / hwMin; if (soft < 0.02f) soft = 0.02f; }
   panel->setBrightness8(hw);
-  // Red LEDs light up more than green and blue at short on-times, so a dim panel looks too red. Below panel
-  // level 32 red is turned down, reaching redLow percent at level 4 and under.
-  float t = hw >= 32 ? 0 : hw <= 4 ? 1 : (32 - hw) / 28.0f, f = 1 - (1 - redLow / 100.0f) * t;
-  static float lastSoft = -1, lastF = -1;
-  if (soft != lastSoft || f != lastF) {
-    lastSoft = soft; lastF = f;
+  // At short on-times the colors don't keep their balance (red and blue too strong), so below panel level 32
+  // each color is scaled, reaching redLow / greenLow / blueLow percent at level 4 and under. Tuned by eye.
+  float t = hw >= 32 ? 0 : hw <= 4 ? 1 : (32 - hw) / 28.0f;
+  float fr = 1 - (1 - redLow / 100.0f) * t, fg = 1 - (1 - greenLow / 100.0f) * t, fb = 1 - (1 - blueLow / 100.0f) * t;
+  static float lastSoft = -1, lr = -1, lg = -1, lb = -1;
+  if (soft != lastSoft || fr != lr || fg != lg || fb != lb) {
+    lastSoft = soft; lr = fr; lg = fg; lb = fb;
     for (int i = 0; i < 256; i++) {
       float g = powf(i / 255.0f, GAMMA) * 255.0f * soft;
       gammaLut[i] = (uint8_t)(g + 0.5f);
-      gammaLutR[i] = (uint8_t)(g * f + 0.5f);
+      gammaLutR[i] = (uint8_t)std::min(255.0f, g * fr + 0.5f);
+      gammaLutG[i] = (uint8_t)std::min(255.0f, g * fg + 0.5f);
+      gammaLutB[i] = (uint8_t)std::min(255.0f, g * fb + 0.5f);
     }
     shownValid = false;                            // redraw everything with the new colors
   }

@@ -73,9 +73,10 @@ bool doubleBuffered = false;
 AnimatedGIF *gifp = nullptr;
 #define gif (*gifp)
 uint8_t gammaLut[256];
-uint8_t gammaLutR[256];                        // table for red: turned down when the panel is dim, see applyBrightness
+uint8_t gammaLutR[256], gammaLutG[256], gammaLutB[256];   // per color: balanced when the panel is dim, see applyBrightness
 uint8_t redLow = 50;                           // red percent at the dimmest panel levels: NVS redlow, set with POST /api/settings?redlow=
-uint8_t hwMin = 16;                            // lowest panel level used; dimmer than that is done in the colors: NVS hwmin
+uint8_t greenLow = 100, blueLow = 100;         // the same for green and blue: NVS greenlow, bluelow
+uint8_t hwMin = 12;                            // lowest panel level used; dimmer than that is done in the colors: NVS hwmin
 typedef uint8_t PixRow[W][3];
 static const size_t CANVAS_BYTES = sizeof(PixRow) * H;
 PixRow *canvas = nullptr;                      // composited frame (RGB888)
@@ -202,7 +203,7 @@ void setup() {
   Serial.begin(115200);
   delay(300);
   Serial.println("\nPocket Jumbotron - GIF player");
-  for (int i = 0; i < 256; i++) gammaLutR[i] = gammaLut[i] = (uint8_t)(powf(i / 255.0f, GAMMA) * 255.0f + 0.5f);
+  for (int i = 0; i < 256; i++) gammaLutR[i] = gammaLutG[i] = gammaLutB[i] = gammaLut[i] = (uint8_t)(powf(i / 255.0f, GAMMA) * 255.0f + 0.5f);
 
   if (!startPanel(USE_DOUBLE_BUFFER) && !startPanel(false)) { Serial.println("Panel init FAILED"); for (;;) delay(1000); }
   settingsLoad();

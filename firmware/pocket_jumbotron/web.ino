@@ -51,12 +51,12 @@ static void handleInfo() {
   uint8_t mac[6]; WiFi.macAddress(mac); snprintf(cardId, sizeof(cardId), "%02x%02x", mac[4], mac[5]);   // e.g. eed0
   snprintf(buf, sizeof(buf), "{\"api\":1,\"fw\":\"%s\",\"name\":\"%s\",\"total\":%u,\"used\":%u,\"files\":%d,\"items\":%u,\"brightness\":%u,\"heap\":%u,"
            "\"up\":%u,\"minHeap\":%u,\"block\":%u,\"boot\":\"%s\",\"bootWhy\":\"%s\",\"quietRestarts\":%u,\"crashes\":%u,"
-           "\"tz\":\"%s\",\"nightFrom\":%d,\"nightTo\":%d,\"nightLevel\":%u,\"redLow\":%u,\"hwMin\":%u,\"night\":%s,\"time\":%lu,\"place\":\"%s\",\"tzAuto\":%s,\"autoUpdate\":%s,\"theme\":%u,\"wxHome\":\"%s\","
+           "\"tz\":\"%s\",\"nightFrom\":%d,\"nightTo\":%d,\"nightLevel\":%u,\"redLow\":%u,\"hwMin\":%u,\"greenLow\":%u,\"blueLow\":%u,\"night\":%s,\"time\":%lu,\"place\":\"%s\",\"tzAuto\":%s,\"autoUpdate\":%s,\"theme\":%u,\"wxHome\":\"%s\","
            "\"id\":\"%s\",\"rssi\":%d,\"chip\":\"%s rev %u\",\"app\":%u,\"appMax\":%u,\"boots\":%u,\"lifeCrashes\":%u,\"lastCrash\":\"%s\"}",
            FW_VERSION, hostName.c_str(), (unsigned)LittleFS.totalBytes(), (unsigned)LittleFS.usedBytes(), countPictures(),
            (unsigned)playlist.size(), brightnessPct, (unsigned)ESP.getFreeHeap(),
            (unsigned)upSec(), (unsigned)ESP.getMinFreeHeap(), (unsigned)ESP.getMaxAllocHeap(), BOOT_NAME[bootKind], bootDetail,
-           (unsigned)rtcQuietN, (unsigned)rtcCrashN, jsonEsc(tzString).c_str(), nightFrom, nightTo, nightLevel, (unsigned)redLow, (unsigned)hwMin,
+           (unsigned)rtcQuietN, (unsigned)rtcCrashN, jsonEsc(tzString).c_str(), nightFrom, nightTo, nightLevel, (unsigned)redLow, (unsigned)hwMin, (unsigned)greenLow, (unsigned)blueLow,
            nightNow ? "true" : "false", timeValid() ? (unsigned long)time(nullptr) : 0UL,
            geoOk ? jsonEsc(geoCity.substring(0, 40)).c_str() : "", tzAuto ? "true" : "false", autoUpdate ? "true" : "false", themeIx, jsonEsc(wxHome).c_str(),
            cardId, WiFi.status() == WL_CONNECTED ? (int)WiFi.RSSI() : 0, ESP.getChipModel(), (unsigned)ESP.getChipRevision(),
@@ -200,7 +200,9 @@ static void handleSettings() {
   }
   if (web->hasArg("au")) { autoUpdate = web->arg("au") != "0"; prefs.putBool("aupd", autoUpdate); }
   if (web->hasArg("hwmin")) { hwMin = constrain((int)web->arg("hwmin").toInt(), 1, 64); prefs.putUChar("hwmin", hwMin); }
-  if (web->hasArg("redlow")) { redLow = constrain((int)web->arg("redlow").toInt(), 20, 100); prefs.putUChar("redlow", redLow); }
+  if (web->hasArg("greenlow")) { greenLow = constrain((int)web->arg("greenlow").toInt(), 20, 150); prefs.putUChar("greenlow", greenLow); }
+  if (web->hasArg("bluelow")) { blueLow = constrain((int)web->arg("bluelow").toInt(), 20, 150); prefs.putUChar("bluelow", blueLow); }
+  if (web->hasArg("redlow")) { redLow = constrain((int)web->arg("redlow").toInt(), 20, 150); prefs.putUChar("redlow", redLow); }
   if (web->hasArg("nl")) { nightLevel = constrain((int)web->arg("nl").toInt(), 0, 25); prefs.putUChar("nlevel", nightLevel); }
   forceNightCheck();
   applyBrightness();                               // night level may have changed while it's night

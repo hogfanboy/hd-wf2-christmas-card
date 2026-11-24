@@ -66,7 +66,7 @@ void pushCanvas() {
   if (doubleBuffered || !shown || !shownValid) {
     for (int y = 0; y < H; y++)
       for (int x = 0; x < W; x++)
-        panel->drawPixelRGB888(x, y, gammaLutR[canvas[y][x][0]], gammaLut[canvas[y][x][1]], gammaLut[canvas[y][x][2]]);
+        panel->drawPixelRGB888(x, y, gammaLutR[canvas[y][x][0]], gammaLutG[canvas[y][x][1]], gammaLutB[canvas[y][x][2]]);
     if (doubleBuffered) panel->flipDMABuffer();
     if (shown) { memcpy(shown, canvas, CANVAS_BYTES); shownValid = true; }
     return;
@@ -75,7 +75,7 @@ void pushCanvas() {
     for (int x = 0; x < W; x++) {
       uint8_t *c = canvas[y][x], *o = shown[y][x];
       if (c[0] == o[0] && c[1] == o[1] && c[2] == o[2]) continue;
-      panel->drawPixelRGB888(x, y, gammaLutR[c[0]], gammaLut[c[1]], gammaLut[c[2]]);
+      panel->drawPixelRGB888(x, y, gammaLutR[c[0]], gammaLutG[c[1]], gammaLutB[c[2]]);
       o[0] = c[0]; o[1] = c[1]; o[2] = c[2];
     }
 }
