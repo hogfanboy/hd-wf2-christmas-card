@@ -33,7 +33,7 @@
 - Test uploads with curl: `-H "Content-Type: text/plain"` for /api/show, then POST /api/play.
 
 ## Next (the user can answer with one of these commands)
-0000. **1.1.0-beta2 on card 2 (branch `radar`, pushed, NOT merged; 2026-11-23).** Not judged by eye yet. Re-send the
+0000. **1.1.0-beta2 on card 2 (branch `radar`, NOT merged).** 11-24: forced `radar=always`, Regional; not judged yet. Re-send the
    show from **http://192.168.50.199/local** (the website app doesn't have this code until the merge).
    - **Radar:** range picker next to the radar checkbox (`rzoom=`): Close 10-mi ring (zoom-7 tile 1:1), Normal 25,
      Wide 50, Regional 100 (no roads). Home at column 85 (weather comes from the west), labels on the right, no town
