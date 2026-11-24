@@ -200,14 +200,14 @@ static void handleSettings() {
   }
   if (web->hasArg("au")) { autoUpdate = web->arg("au") != "0"; prefs.putBool("aupd", autoUpdate); }
   if (web->hasArg("hwmin")) { hwMin = constrain((int)web->arg("hwmin").toInt(), 1, 64); prefs.putUChar("hwmin", hwMin); }
-  if (web->hasArg("nl")) { nightLevel = constrain((int)web->arg("nl").toInt(), 0, 25); prefs.putUChar("nlevel", nightLevel); }
+  if (web->hasArg("nl")) { nightLevel = constrain((int)web->arg("nl").toInt(), 0, 25); if (nightLevel && nightLevel < 10) nightLevel = 10; prefs.putUChar("nlevel", nightLevel); }
   forceNightCheck();
   applyBrightness();                               // night level may have changed while it's night
   sendJson("{\"ok\":true}");
 }
 
 // Color tune (tune.ino). GET: the table and what the test screen shows. POST (all optional, the screen comes up
-// for 10 minutes): level=0..5 (-1 = the normal level), pattern=1..4 (0 = stop), color=rrggbb, r=&g=&b= (percent,
+// for 10 minutes): level=0..4 (-1 = the normal level), pattern=1..4 (0 = stop), color=rrggbb, r=&g=&b= (percent,
 // for the level being tuned), pick=<row 0-4><col 0-6> (move the level to that grid patch), hwmin=, reset=1 (this
 // level back to the default), resetall=1, save=1 (keep the table and hwmin).
 static String calJson() {

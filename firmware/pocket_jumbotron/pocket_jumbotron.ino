@@ -75,11 +75,11 @@ AnimatedGIF *gifp = nullptr;
 #define gif (*gifp)
 uint8_t gammaLut[256];
 uint8_t gammaLutR[256], gammaLutG[256], gammaLutB[256];   // per color, from the color balance: applyBrightness
-// Color balance per brightness, tuned by eye on the Color tune screens: red, green, blue percent at 6 panel levels
-// out of 255, blended in between. NVS "cal". Levels: night 5% and 10% of 50%, night 25%, normal 25%, 50%, 100%.
-static const uint8_t CAL_N = 6;
-static const float CAL_LEVEL[CAL_N] = {3.5f, 7.0f, 17.5f, 35.0f, 70.0f, 140.0f};
-static const uint8_t CAL_DEFAULT[CAL_N][3] = {{64, 100, 100}, {64, 100, 100}, {75, 100, 100}, {100, 100, 100}, {100, 100, 100}, {100, 100, 100}};
+// Color balance per brightness, tuned by eye on the Color tune screens: red, green, blue percent at 5 panel levels
+// out of 255, blended in between. NVS "cal". Levels: night 10% and 25% of 50%, normal 25%, 50%, 100%.
+static const uint8_t CAL_N = 5;
+static const float CAL_LEVEL[CAL_N] = {7.0f, 17.5f, 35.0f, 70.0f, 140.0f};
+static const uint8_t CAL_DEFAULT[CAL_N][3] = {{95, 100, 156}, {95, 100, 113}, {100, 100, 100}, {100, 100, 100}, {100, 100, 100}};   // card 2, 11-25
 uint8_t calGain[CAL_N][3];
 uint32_t tuneUntil = 0;                        // a Color tune screen is up until then: tune.ino
 int8_t tuneLevel = -1;                         // the level being tuned, shown on the panel whatever the time of day

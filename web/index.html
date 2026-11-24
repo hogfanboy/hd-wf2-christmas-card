@@ -174,13 +174,14 @@
       </div>
       <div class="flex">
         <span class="muted">Night brightness</span>
-        <select class="s" id="nl"><option value="0">Off (dark)</option><option value="5">5%</option><option value="10">10%</option><option value="25">25%</option></select>
+        <select class="s" id="nl"><option value="0">Off (dark)</option><option value="10">10%</option><option value="25">25%</option></select>
       </div>
       <button class="secondary" id="saveTime">Save night mode</button>
       <div class="status" id="timeStatus"></div>
     </div>
-    <div class="setting stack" id="tuneBox" hidden>
-      <h3>Color tune</h3>
+    <details class="setting" id="tuneBox" hidden>
+      <summary><b>Color tune</b> <span class="muted">(only needed once, if dim colors look off)</span></summary>
+      <div class="stack" style="margin-top:10px">
       <div class="muted">Puts a test screen on the panel at one brightness level, any time of day, so the colors can be
         balanced by eye. Tune each level, press <b>Save</b>. The show comes back by itself after 10 minutes, or press Stop.</div>
       <div class="muted"><b>1. Brightness level to tune</b></div>
@@ -207,7 +208,8 @@
       </div>
       <div class="muted" id="tuneTable"></div>
       <div class="status" id="tuneStatus"></div>
-    </div>
+      </div>
+    </details>
     <div class="setting stack" id="auBox" hidden>
       <h3>Software updates</h3>
       <label class="flex"><input type="checkbox" id="au" style="width:auto"> <span>Update by itself (checks the website at 3 am)</span></label>

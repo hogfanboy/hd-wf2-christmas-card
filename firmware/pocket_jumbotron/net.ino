@@ -46,8 +46,15 @@ void settingsLoad() {
   nightLevel = prefs.getUChar("nlevel", 0);
   memcpy(calGain, CAL_DEFAULT, sizeof(calGain));
   if (prefs.getBytesLength("cal") == sizeof(calGain)) prefs.getBytes("cal", calGain, sizeof(calGain));
+  else if (prefs.getBytesLength("cal") == sizeof(calGain) + 3) {   // old table with a night 5% level first: drop it
+    uint8_t old[CAL_N + 1][3];
+    prefs.getBytes("cal", old, sizeof(old));
+    memcpy(calGain, old[1], sizeof(calGain));
+    prefs.putBytes("cal", calGain, sizeof(calGain));
+  }
   hwMin = prefs.getUChar("hwmin", 12);
-  if (nightLevel > 25) nightLevel = 25;            // old 50% choice: night levels are now 5, 10, 25
+  if (nightLevel > 25) nightLevel = 25;            // night levels are 10 and 25 (old 50 -> 25, old 5 -> 10)
+  else if (nightLevel && nightLevel < 10) nightLevel = 10;
   autoUpdate = prefs.getBool("aupd", true);
   themeIx = prefs.getUChar("theme", 2);
   wxHome = prefs.getString("wxhome", "");

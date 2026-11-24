@@ -39,7 +39,7 @@ http.createServer((req, res) => {
   // Firmware info + files for the update check (serves docs/firmware/ when built locally).
   if (url.pathname.startsWith('/firmware/')) { const f = path.join(root, 'docs', path.normalize(url.pathname)); if (f.startsWith(path.join(root, 'docs', 'firmware')) && fs.existsSync(f)) { res.writeHead(200); return res.end(fs.readFileSync(f)); } }
   if (url.pathname === '/api/cal') {            // Color tune (the card's tune.ino), kept in memory
-    const q = url.searchParams, c = globalThis.cal ??= { levels: [3.5, 7, 17.5, 35, 70, 140], gain: [[64, 100, 100], [64, 100, 100], [75, 100, 100], [100, 100, 100], [100, 100, 100], [100, 100, 100]], hwMin: 12, level: -1, pattern: 0, color: 'ffffff', on: false, now: 70, saved: true };
+    const q = url.searchParams, c = globalThis.cal ??= { levels: [7, 17.5, 35, 70, 140], gain: [[95, 100, 156], [95, 100, 113], [100, 100, 100], [100, 100, 100], [100, 100, 100]], hwMin: 12, level: -1, pattern: 0, color: 'ffffff', on: false, now: 70, saved: true };
     if (req.method === 'POST') {
       if (q.has('level')) c.level = +q.get('level'); if (q.has('color')) c.color = q.get('color');
       const g = c.gain[c.level];

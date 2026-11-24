@@ -1,7 +1,7 @@
 // Color tune: test screens on the panel (the card's tune.ino) to set the color balance at each brightness level.
 // Part of the card app: tools/build-web.mjs joins web/app/*.js in name order into one <script> in web/index.html.
-const TUNE_LEVELS = ['Night 5%', 'Night 10%', 'Night 25%', 'Normal 25%', 'Normal 50%', 'Normal 100%'];
-const TUNE_HELP = ['night 5% with brightness 50%', 'night 10% with brightness 50%', 'night 25% with brightness 50%, or brightness 12%',
+const TUNE_LEVELS = ['Night 10%', 'Night 25%', 'Normal 25%', 'Normal 50%', 'Normal 100%'];
+const TUNE_HELP = ['night 10% with brightness 50%', 'night 25% with brightness 50%, or brightness 12%',
   'brightness 25%', 'brightness 50%', 'brightness 100%'];
 let tune = null, tuneLv = 0, tuneTimer;
 function tuneShow(t) {
@@ -43,3 +43,4 @@ for (const c of ['R', 'G', 'B']) $('tune' + c).oninput = (e) => {
 $('tuneSave').onclick = () => tuneSend('save=1');
 $('tuneReset').onclick = () => tuneSend((tuneOn() ? '' : 'level=' + tuneLv + '&pattern=' + $('tunePat').value + '&') + 'reset=1');
 $('tuneStop').onclick = () => tuneSend('pattern=0');
+$('tuneBox').ontoggle = () => { if (!$('tuneBox').open && tune?.on) tuneSend('pattern=0'); };   // folding it away ends the test
