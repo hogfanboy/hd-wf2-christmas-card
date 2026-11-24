@@ -35,7 +35,7 @@
 ## Next (the user can answer with one of these commands)
 0000. **1.1.0-beta2 on card 2 (branch `radar`, NOT merged).** 11-24: Regional judged great by eye. Now set to Close +
    "even when dry (test)" (writes `radar=always`; re-sends keep it). Try each range from **http://192.168.50.199/local**
-   (the website app doesn't have this code until the merge). Remove the test box before release.
+   (website app lacks it until the merge). Remove the test box before release.
    - 11-24 too: radar 750 ms/frame (OK by eye); night Off/5/10/25%; new cards start at 50%. Dim panel: never under
      `hwmin` 12 (row bands at 4; 16/24 band green/blue), darker is done in the colors (tune.ino, net.ino applyBrightness).
    - **Color tune (11-25 morning, with the user):** /local > Settings > Color tune. Table = R/G/B % at 6 panel levels
@@ -44,11 +44,9 @@
      drifts) -> Grid White, "Use it" on the whitest patch until C4 wins -> Colors (big block vs small text) -> Save.
      Then make the agreed table the default in CAL_DEFAULT.
    - **Radar:** range picker next to the radar checkbox (`rzoom=`): Close 10-mi ring (zoom-7 tile 1:1), Normal 25,
-     Wide 50, Regional 100 (no roads). Home at column 85 (weather comes from the west), labels on the right, no town
-     name. US state lines (solid) + county dots (Close/Normal) from Census us-atlas. Old radar.map no longer matches.
+     Wide 50, Regional 100. Home at column 85, labels right; state + county lines from Census us-atlas.
    - **Birthdays & dates** (replaces + Reminder): one item, list in `/dates.txt` (GET/POST /api/dates; Send/Clear
-     leave it), shows only within N days (default 7), one screen per date, fireworks + "HAPPY BIRTHDAY" on the day,
-     "TURNS 41" with a year. Paste a list, Save/Load a file, the phone keeps a copy and offers it back.
+     leave it), shows within N days (default 7), fireworks + "HAPPY BIRTHDAY" on the day, "TURNS 41" with a year.
    - App 1.71 of 1.75 MB. Release (user, 11-23): only after a real rain loop by eye, merged as 1.1.0.
 000. **Soak passed (card 2, 32.3 h, 11-23)**: 0 crashes, flat memory. Card 2's auto-update stays OFF on the beta.
 00. **Judge beta17 by eye** - message scrolling and the moons (sun & moon screen).
