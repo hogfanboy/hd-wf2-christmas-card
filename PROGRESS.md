@@ -1,6 +1,6 @@
 # PROGRESS
 
-## Working state (2026-11-22: 1.0.0 released; card 1 = dev card, beta20 until its 3 am update; card 2 = radar beta 1.1.0-beta1, au off)
+## Working state (2026-11-22: 1.0.0 released; card 1 = dev card, beta20 until its 3 am update; card 2 = 1.1.0-beta2 (radar range + birthdays), au off)
 - **beta20 (better effect art + card report), on card 1:** sleigh scene, turkey, bunny + eggs, bats + pumpkins +
   moon, shamrocks, balloons, fish, hearts use shaded sprites from `tools/make-fxsprites.mjs` (1 byte/pixel + palette
   per sprite: 21 KB flash, no RAM; web/fxsprites.js for the page). App 1.64 of 1.75 MB (195 KB free). Art not
@@ -33,15 +33,17 @@
 - Test uploads with curl: `-H "Content-Type: text/plain"` for /api/show, then POST /api/play.
 
 ## Next (the user can answer with one of these commands)
-0000. **Radar screen built (1.1.0-beta1, branch `radar`, pushed, NOT merged; card 2 runs it).** Approved by eye on
-   card 2 2026-11-23 (forced with the hidden `radar=always`; card 2 is back on plain `radar`). Test: 0 crashes, min
-   heap 18 KB, block back to 31.7 KB. App 1.70 of 1.75 MB. Details: PROJECT-NOTES on the branch. Next: "release
-   radar" = merge `radar` into main (CI then publishes 1.1.0-beta1 to every auto-update card) or bump to 1.1.0 first.
-   Still to see: a real rain loop (needs rain at the town).
-000. **Soak passed (card 2, 32.3 h, 2026-11-23)**: 1427 polls, 0 missed, 0 crashes, 0 lowmem restarts; biggest block
-   flat (hourly avg 26-32 KB), one single-poll dip to 9.7 KB (11-22 20:12) that recovered. No nightly restart seen: card 2
-   restarted for the radar beta on 11-23 22:24, so the first nightly is due 11-25 04:00 (20 h rule). Card 2's
-   auto-update stays OFF while it runs the beta.
+0000. **1.1.0-beta2 on card 2 (branch `radar`, pushed, NOT merged; 2026-11-23).** Not judged by eye yet. Re-send the
+   show from **http://192.168.50.199/local** (the website app doesn't have this code until the merge).
+   - **Radar:** range picker next to the radar checkbox (`rzoom=`): Close 10-mi ring (zoom-7 tile 1:1), Normal 25,
+     Wide 50, Regional 100 (no roads). Home at column 85 (weather comes from the west), labels on the right, no town
+     name. US state lines (solid) + county dots (Close/Normal) from Census us-atlas. Old radar.map no longer matches.
+   - **Birthdays & dates** (replaces + Reminder): one item, list in `/dates.txt` (GET/POST /api/dates; Send/Clear
+     leave it), shows only within N days (default 7), one screen per date, fireworks + "HAPPY BIRTHDAY" on the day,
+     "TURNS 41" with a year. Paste a list, Save/Load a file, the phone keeps a copy and offers it back.
+   - App 1.71 of 1.75 MB. Release (user, 11-23): only after a real rain loop by eye, merged as 1.1.0.
+000. **Soak passed (card 2, 32.3 h, 11-23)**: 0 crashes, 0 lowmem restarts, block flat 26-32 KB. First nightly restart
+   due 11-25 04:00 (20 h rule). Card 2's auto-update stays OFF while it runs the beta.
 00. **Judge beta17 by eye** - message scrolling and the moons (sun & moon screen).
 00a. **"Weather screens look good" / "change X"** - card 1: now, 24 hours sliding, 10 days sliding, details, air,
    sun & moon. Speed, hold times, column width and temperature colors are easy to change.
