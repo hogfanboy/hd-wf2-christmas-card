@@ -174,6 +174,19 @@ $('send').onclick = async () => {
       await api('/api/upload', { method: 'POST', body: fd });
       lines.push(showLine(it, name));
     }
+    // radar maps (one per town with the radar screen ticked, up to 3), for screens with radar software
+    const radarTowns = [...new Map(list.filter(i => i.kind === 'weather' && i.radar && i.lat && i.lat !== 'auto' && !isNaN(+i.lat))
+      .map(i => [radarKey(i.lat, i.lon), i])).values()].slice(0, 3);
+    if (radarTowns.length && !newer('1.1.0-beta1', card.fw)) {
+      st.textContent = 'Making the radar map…';
+      for (const [k, it] of radarTowns.entries()) {
+        const m = await radarMap(it.lat, it.lon);
+        if (!m) continue;                           // no map (OpenStreetMap unreachable): the radar shows on black
+        const fd = new FormData();
+        fd.append('file', new Blob([m]), `radar${k ? k + 1 : ''}.map`);
+        await api('/api/upload', { method: 'POST', body: fd });
+      }
+    }
     await api('/api/show', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: lines.join('\n') + '\n' });
     await api('/api/play', { method: 'POST' });
     st.className = 'status ok'; st.textContent = `Done! ${list.length} item${list.length > 1 ? 's are' : ' is'} now playing.`;

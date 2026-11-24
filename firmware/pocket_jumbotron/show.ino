@@ -78,6 +78,7 @@ static void parseOptions(ShowItem &it, const String &opts) {
     else if (k == "details") it.wxPages |= WXP_DETAILS;
     else if (k == "air") it.wxPages |= WXP_AIR;
     else if (k == "sun") it.wxPages |= WXP_SUN;
+    else if (k == "radar") it.wxPages |= v == "always" ? WXP_RADAR | WXP_RADAR_ALWAYS : WXP_RADAR;
     else if (k == "alerts") it.alerts = v == "demo" ? 2 : 1;
   }
 }

@@ -736,8 +736,12 @@ static void playWeather(const ShowItem &item) {
     if (waitMs(wait > 0 ? wait : 1)) return;
   }
   // the extra screens the item asks for, in this order; each only when there is something to show
-  uint8_t pg = it.wxPages;
+  uint16_t pg = it.wxPages;
   if ((pg & WXP_RAINSOON) && rainSoon(&snow, &ends) >= 0 && wxScreen(it, frame, drawRainSoon)) return;
+  if ((pg & WXP_RADAR) && ((pg & WXP_RADAR_ALWAYS) || rainSoon(&snow, &ends) >= 0)) {   // only when rain/snow is on the way
+    int c1 = it.extra.indexOf(','), c2 = it.extra.indexOf(',', c1 + 1);
+    if (playRadar(it, it.extra.substring(c1 + 1, c2).toFloat(), it.extra.substring(c2 + 1).toFloat(), it.text)) return;
+  }
   if ((pg & (WXP_HOURLY | WXP_CHART)) && wx.hrN) {   // chart = 24 hours (both on, from an old show: 24)
     wxHours = pg & WXP_CHART ? 24 : 12;
     wxMinMs = stripMs(hourStripW());

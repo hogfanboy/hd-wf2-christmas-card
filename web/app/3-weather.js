@@ -84,6 +84,7 @@ function drawForecast(it, w, t, ms = 0) {   // copy of the card's drawDays5: 25-
 // ("hourly") or 24 hours ("chart"), one column per hour, sliding; daily = 5 days ("forecast") or 10 days ("days10", sliding).
 const WX_PAGES = [
   ['rainsoon', 'rainsoon', 'Rain on the way: only when rain or snow is coming in the next 2 hours'],
+  ['radar', 'radar', 'Rain radar map, the last hour: only when rain or snow is on the way <span class="muted">(radar <a href="https://www.rainviewer.com" target="_blank" rel="noopener">RainViewer</a>, map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>)</span>'],
   ['hourly', 'hourly', 'Hourly forecast', ['hours24', '12 hours', '24 hours', 'chart']],
   ['forecast', 'fc', 'Daily forecast', ['days10', '5 days', '10 days', 'days10']],
   ['details', 'details', 'Wind, humidity, UV, dew point'],
@@ -191,6 +192,90 @@ function drawSun(it, w, ms, f) {
   if (w.sunrise != null && w.sunset > w.sunrise) { const d = w.sunset - w.sunrise; L(`DAY ${Math.trunc(d / 60)}H ${d % 60}M`, 52, 37, TH().dim); }
   LC(MOON_NAME[phase], W / 2, 55, TH().acc);
 }
+// ---------- Radar (the card's radar.ino screen) ----------
+// The card fetches the RainViewer radar itself. The map under it (shores, interstates, state lines) is made here
+// from OpenStreetMap tiles when the show is sent, and uploaded as radar.map: "PJRM", float32 lat, lon (little
+// endian), 4 spare bytes, then one class per LED row by row: 0 nothing, 1 water, 2 shore, 3 interstate, 4 state
+// line. The window is 512x256 OSM zoom-8 pixels centered on the town (= the radar's 256x128 zoom-7 pixels), 4x4 per
+// LED; classes come from the OSM Carto colors (water #aad3df, motorways pink, state lines purple).
+const radarMaps = {};                             // "lat,lon" -> Promise of the file (Uint8Array) or null
+const radarKey = (lat, lon) => (+lat).toFixed(4) + ',' + (+lon).toFixed(4);
+function radarMap(lat, lon) {
+  const key = radarKey(lat, lon);
+  return radarMaps[key] ??= buildRadarMap(+lat, +lon).catch(e => { console.warn('radar map:', e); delete radarMaps[key]; return null; });
+}
+const loadTile = (url) => new Promise((ok, bad) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => ok(im); im.onerror = () => bad(new Error('tile ' + url)); im.src = url; });
+async function buildRadarMap(lat, lon) {
+  const z = 8, n = 256 * 2 ** z, ww = W * 4, hh = H * 4;
+  const cx = (lon + 180) / 360 * n, cy = (1 - Math.asinh(Math.tan(lat * Math.PI / 180)) / Math.PI) / 2 * n;
+  const x0 = Math.round(cx) - ww / 2, y0 = Math.round(cy) - hh / 2;
+  const cv = document.createElement('canvas'); cv.width = ww; cv.height = hh;
+  const g = cv.getContext('2d', { willReadFrequently: true }), jobs = [];
+  for (let ty = Math.floor(y0 / 256); ty <= Math.floor((y0 + hh - 1) / 256); ty++)
+    for (let tx = Math.floor(x0 / 256); tx <= Math.floor((x0 + ww - 1) / 256); tx++) {
+      const wrap = ((tx % 2 ** z) + 2 ** z) % 2 ** z;
+      jobs.push(loadTile(`https://tile.openstreetmap.org/${z}/${wrap}/${ty}.png`).then(im => g.drawImage(im, tx * 256 - x0, ty * 256 - y0)));
+    }
+  await Promise.all(jobs);
+  const d = g.getImageData(0, 0, ww, hh).data, cls = new Uint8Array(W * H);
+  const kind = (i) => {
+    const r = d[i], gg = d[i + 1], b = d[i + 2];
+    if (Math.abs(r - 170) < 14 && Math.abs(gg - 211) < 14 && Math.abs(b - 223) < 14) return 1;   // water
+    if (r > 200 && gg > 110 && gg < 175 && b > 120 && b < 185 && r - gg > 45) return 3;           // motorway
+    if (r < 215 && r - gg >= 12 && b - gg >= 6 && r >= b) return 4;                               // state line
+    return 0;
+  };
+  for (let Y = 0; Y < H; Y++) for (let X = 0; X < W; X++) {
+    const c = [0, 0, 0, 0, 0];
+    for (let dy = 0; dy < 4; dy++) for (let dx = 0; dx < 4; dx++) c[kind(((Y * 4 + dy) * ww + X * 4 + dx) * 4)]++;
+    cls[Y * W + X] = c[3] >= 2 ? 3 : c[4] >= 2 ? 4 : c[1] >= 8 ? 1 : 0;
+  }
+  const out = new Uint8Array(16 + W * H), dv = new DataView(out.buffer);
+  out.set([80, 74, 82, 77]); dv.setFloat32(4, lat, true); dv.setFloat32(8, lon, true);
+  for (let Y = 0; Y < H; Y++) for (let X = 0; X < W; X++) {   // water next to land = shore
+    let v = cls[Y * W + X];
+    if (v === 1 && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dy, dx]) => { const y = Y + dy, x = X + dx; return y >= 0 && y < H && x >= 0 && x < W && cls[y * W + x] !== 1; })) v = 2;
+    out[16 + Y * W + X] = v;
+  }
+  return out;
+}
+// 3x5 font for the radar labels (the card's rdGlyph).
+const RD_CHARS = '0123456789:- .ABCDEFGHIJKLMNOPQRSTUVWXYZ', RD_BITS = [
+  0x7B6F, 0x2C97, 0x73E7, 0x73CF, 0x5BC9, 0x79CF, 0x79EF, 0x7292, 0x7BEF, 0x7BCF, 0x0410, 0x01C0, 0x0000, 0x0002,
+  0x2BED, 0x6BAE, 0x3923, 0x6B6E, 0x79A7, 0x79A4, 0x396B, 0x5BED, 0x7497, 0x126A, 0x5BAD, 0x4927, 0x5FED, 0x6B6D, 0x2B6A,
+  0x6BA4, 0x2B73, 0x6BAD, 0x388E, 0x7492, 0x5B6F, 0x5B6A, 0x5BFD, 0x5AAD, 0x5A92, 0x72A7];
+const rdW = (s) => s.length * 4 - 1;
+function rdText(s, x, y, c) {
+  tctx.fillStyle = '#000'; tctx.fillRect(x - 1, y - 1, rdW(s) + 2, 7);
+  [...s.toUpperCase()].forEach((ch, i) => { const k = RD_CHARS.indexOf(ch), gl = k < 0 ? 0 : RD_BITS[k]; for (let b = 0; b < 15; b++) if (gl & (0x4000 >> b)) P(x + i * 4 + b % 3, y + Math.trunc(b / 3), c); });
+}
+const RD_LED = ['', '#786030', '#5ad2ff', '#008cff', '#003cc8', '#ffdc00', '#ff8200', '#ff1e00', '#960000'];
+const RD_MAPC = ['', '#000a24', '#003c82', '#2c2c2c', '#460046'];
+// Preview: the town's map (made the first time the screen shows), the ring, home and a made-up shower drifting
+// past, as a 7-frame loop like the card ("SAMPLE" in the corner: the real radar comes from the screen).
+function drawRadar(it, w, ms) {
+  tctx.fillStyle = '#000'; tctx.fillRect(0, 0, W, H);
+  const lat = +it.lat, lon = +it.lon, real = it.lat && it.lat !== 'auto' && !isNaN(lat);
+  if (real && it.rmapKey !== radarKey(lat, lon)) { const k = radarKey(lat, lon); it.rmapKey = k; it.rmap = null; radarMap(lat, lon).then(m => { if (it.rmapKey === k) it.rmap = m; }); }
+  const map = real ? it.rmap : null;
+  if (map) for (let i = 0; i < W * H; i++) { const v = map[16 + i]; if (v) P(i % W, Math.trunc(i / W), RD_MAPC[v]); }
+  const mpl = 2 * 156543.03 / 128 * Math.cos((real ? lat : 40) * Math.PI / 180) / 1609.34, r = 25 / mpl, cx = W / 2, cy = H / 2;
+  for (let t = 0; t < 1440; t++) { const a = t * 2 * Math.PI / 1440, x = Math.round(cx + r * Math.cos(a)), y = Math.round(cy + r * Math.sin(a)); if (((x + y) & 1) === 0 && !(map && map[16 + y * W + x])) P(x, y, '#3c3c3c'); }
+  const loop = 6 * 450 + 3000, inL = ms % loop, fi = Math.min(6, Math.trunc(inL / 450)), last = fi === 6;
+  const bx = 20 + fi * 7, by = 26 + fi;                // the made-up shower moves east toward home
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const dd = Math.hypot((x - bx) / 1.8, y - by) + Math.sin(x * 0.7 + y * 0.4) * 1.5, lv = dd < 3 ? 6 : dd < 6 ? 5 : dd < 10 ? 3 : dd < 15 ? 2 : 0;
+    if (lv) P(x, y, RD_LED[lv]);
+  }
+  tctx.fillStyle = '#000'; tctx.fillRect(cx - 3, cy - 1, 7, 3); tctx.fillRect(cx - 1, cy - 3, 3, 7);
+  const home = !last || Math.trunc((inL - fi * 450) / 400) % 2 === 0;
+  if (home) { tctx.fillStyle = '#fff'; tctx.fillRect(cx - 2, cy, 5, 1); tctx.fillRect(cx, cy - 2, 1, 5); }
+  const nm = String(it.place || (it.lat === 'auto' ? card.place || '' : '')).toUpperCase().slice(0, 14);
+  if (nm) rdText(nm, Math.max(1, Math.min(W - 1 - rdW(nm), cx - Math.trunc(rdW(nm) / 2))), cy - 10, '#fff');
+  const sc = '25 MI', rr = Math.round(r);
+  if (cx + rr + 2 + rdW(sc) < W) rdText(sc, cx + rr + 2, cy - 2, '#787878'); else rdText(sc, 1, H - 6, '#787878');
+  rdText('SAMPLE', W - rdW('SAMPLE') - 1, 1, last ? '#ffc83c' : '#787878');
+}
 // The line under the temperature takes turns, like the card: the sky, then only what matters today (rain or snow
 // on the way, else today's chance when 10% or more; strong gusts; high UV in the daytime; unhealthy air), then feels like.
 function wxSay(w, pj) {
@@ -204,12 +289,13 @@ function wxSay(w, pj) {
   return say;
 }
 // Which screens have something to show (the card skips the others), and how to draw each.
-const WX_HAS = { rainsoon: (w) => rainSoon(w).m >= 0, hourly: (w) => w.hr?.length, fc: (w) => w.fc?.length,
+const WX_HAS = { rainsoon: (w) => rainSoon(w).m >= 0, radar: (w) => rainSoon(w).m >= 0, hourly: (w) => w.hr?.length, fc: (w) => w.fc?.length,
   details: () => true, air: (w) => w.aqi >= 0, sun: () => true };
-const WX_DRAW = { rainsoon: drawRainSoon, hourly: drawHourStrip, fc: (it, w, ms, f, t) => drawForecast(it, w, t, ms),
+const WX_DRAW = { rainsoon: drawRainSoon, radar: drawRadar, hourly: drawHourStrip, fc: (it, w, ms, f, t) => drawForecast(it, w, t, ms),
   details: drawDetails, air: drawAir, sun: drawSun };
 const WX_MINMS = { hourly: (it, w) => stripMs(hourN(it, w) * 32), fc: (it, w) => stripMs(3 + dayN(it, w) * 25) };   // strips last at least this long
-const wxScreens = (it, w) => WX_PAGES.filter(p => it[p[1]] && WX_HAS[p[1]](w)).map(p => p[1]);
+// (a screen just ticked shows even when it has nothing to say right now, so its box can be tried)
+const wxScreens = (it, w) => WX_PAGES.filter(p => it[p[1]] && (WX_HAS[p[1]](w) || it.focusPage === p[1])).map(p => p[1]);
 // Every item key the checkboxes and toggles use (for loading a show from the card).
 const WX_KEYS = WX_PAGES.flatMap(p => p[3] ? [p[1], p[3][0]] : [p[1]]);
 // ---------- Stocks: the screen reads the same small files from the website (made hourly, tools/build-feeds.mjs) ----------

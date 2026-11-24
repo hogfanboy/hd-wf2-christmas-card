@@ -99,7 +99,7 @@ static void handleUploadData() {
     String name = up.filename;
     name.replace("/", ""); name.replace("\\", "");
     String low = name; low.toLowerCase();
-    if (!low.endsWith(".gif") && !low.endsWith(".pjm")) name += ".gif";
+    if (!low.endsWith(".gif") && !low.endsWith(".pjm") && !low.endsWith(".map")) name += ".gif";   // .map = radar map
     upFree = LittleFS.totalBytes() - LittleFS.usedBytes();
     upPath = "/gifs/" + name;
     upFile = LittleFS.open(upPath, "w");
