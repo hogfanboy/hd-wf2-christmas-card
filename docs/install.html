@@ -35,6 +35,7 @@
   .bar { height:12px; border-radius:999px; background:#22222f; overflow:hidden; margin:12px 0 6px; }
   .bar i { display:block; height:100%; width:0; background:var(--green); transition:width .2s; }
   #status { font-weight:600; min-height:27px; }
+  #status.bad { background:rgba(255,77,106,.12); border:2px solid var(--red); border-radius:10px; padding:10px 12px; }
   .ok { color:var(--green); } .bad { color:var(--red); }
   details { margin-top:12px; color:var(--muted); font-size:14px; }
   pre { white-space:pre-wrap; word-break:break-word; max-height:220px; overflow:auto; background:#0a0a10; border-radius:8px; padding:10px; font-size:12px; }
@@ -89,7 +90,7 @@
   @keyframes f5row { 0%,10% { opacity:0; transform:translateY(-5px); } 20%,100% { opacity:1; transform:translateY(0); } }
   @keyframes f5hl { 0%,44% { fill:#fff; } 48%,100% { fill:#cfe3ff; } }
   @keyframes f5con { 0%,44% { fill:#c9c9d4; } 48%,100% { fill:#2f6fd8; } }
-  @keyframes f5cur { 0%,22% { transform:translate(110px,70px); } 40%,64% { transform:translate(0,0); } 74%,100% { transform:translate(97px,64px); } }
+  @keyframes f5cur { 0%,22% { transform:translate(110px,70px); } 40%,64% { transform:translate(0,0); } 74%,100% { transform:translate(39px,58px); } }
   @keyframes press78 { 0%,76% { transform:scale(1); } 79% { transform:scale(.92); } 83%,100% { transform:scale(1); } }
   .f6 .barf { animation-name:f6bar; transform-box:fill-box; transform-origin:left center; } .f6 .ina { animation-name:f6a; } .f6 .inb { animation-name:f6b; }
   .f6 .blink { animation-name:f6blink; } .f6 .fing { animation-name:f6fing; } .f6 .letgo { animation-name:f6let; }
@@ -192,6 +193,7 @@
     <button id="go" disabled>Loading software…</button>
     <div class="bar"><i id="bar"></i></div>
     <div id="status"></div>
+    <button class="ghost small-btn" id="copylog" hidden>Copy the technical details (to text to whoever helps you)</button>
     <details class="help" id="trouble"><summary>Nothing shows up in the window?</summary><ul>
       <li>Unplug the cable from the computer, <b>hold S1</b> and plug it in again. Without S1 held, the screen only shows up for a moment.</li>
       <li>Plug straight into the computer, not into a USB hub or keyboard, and try another USB port.</li>
@@ -219,8 +221,8 @@
           <text x="44" y="28" class="tk" style="font-size:12px">Pick a device</text>
           <rect x="44" y="36" width="232" height="50" fill="#fff" stroke="#bbb"/>
           <g class="row"><rect class="hl" x="46" y="38" width="228" height="20" fill="#fff"/><text x="52" y="52" class="tk">USB JTAG/serial debug unit</text></g>
-          <rect x="160" y="94" width="52" height="18" rx="4" fill="#ddd"/><text x="186" y="106.5" text-anchor="middle" class="tk" style="font-size:10px">Cancel</text>
-          <g class="conb box-c"><rect class="con" x="218" y="94" width="58" height="18" rx="4" fill="#c9c9d4"/><text x="247" y="106.5" text-anchor="middle" style="font-size:10px;fill:#fff">Connect</text></g>
+          <rect x="224" y="94" width="52" height="18" rx="4" fill="#ddd"/><text x="250" y="106.5" text-anchor="middle" class="tk" style="font-size:10px">Cancel</text>
+          <g class="conb box-c"><rect class="con" x="160" y="94" width="58" height="18" rx="4" fill="#c9c9d4"/><text x="189" y="106.5" text-anchor="middle" style="font-size:10px;fill:#fff">Connect</text></g>
           <text x="160" y="140" text-anchor="middle" class="tg">still holding S1</text>
           <g transform="translate(150,50)"><g class="cur"><use href="#cur"/></g></g>
         </svg><span class="figcap">Example drawing, it repeats. Your progress shows under the yellow button.</span></li>
@@ -426,6 +428,12 @@ $('go').onclick = async () => {
   install(port);
 };
 
+$('copylog').onclick = async () => {
+  const t = `Pocket Jumbotron install, ${info?.version}, ${navigator.userAgent}\n${$('status').textContent}\n${$('log').textContent}`;
+  try { await navigator.clipboard.writeText(t); $('copylog').textContent = 'Copied ✓ Paste it into a text or email.'; }
+  catch { $('log').parentNode.open = true; $('copylog').textContent = 'Couldn\'t copy: open Technical details below and copy the text.'; }
+};
+
 // The screen's USB connection only lasts a moment unless the button is held. Once Chrome has been
 // given permission, re-plugging fires a "connect" event and we start again without any dialog.
 navigator.serial?.addEventListener('connect', (e) => {
@@ -439,7 +447,8 @@ async function install(port) {
   keepAwake(true);
   let transport;
   try {
-    status('Connecting to the screen…');
+    status('Connecting to the screen…'); $('copylog').hidden = true;
+    $('status').scrollIntoView({ behavior: 'smooth', block: 'center' });
     transport = new Transport(port, false);
     const loader = new ESPLoader({ transport, baudrate: 921600, terminal, debugLogging: false });
     const chip = await loader.main();                 // resets the chip into install mode (USB reset)
@@ -502,6 +511,8 @@ async function install(port) {
     $('go').disabled = false;
     $('go').textContent = 'Try again';
     nowStep(4);
+    $('copylog').hidden = false;
+    setTimeout(() => $('status').scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
   }
   keepAwake(false);
   busy = false;

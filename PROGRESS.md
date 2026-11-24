@@ -35,7 +35,8 @@
 0000. **1.1.0 released 11-24 (main = radar branch)**: radar ranges, birthdays & dates, night Off/10/25%, new cards 50%,
    Color tune (defaults = card 2's tuning; details PROJECT-NOTES). Installer step 3 now says "No compatible devices
    found" is normal. 11-24: tester 2 saw "Installing, Done" loop = step 6's example drawing (it repeats); drawing no
-   longer shows "Done", every drawing is captioned "Example drawing". Next: hear back from testers; parked: share pictures.
+   longer shows "Done", drawings captioned "Example drawing"; Connect/Cancel order = Windows; a failed install shows a
+   red box + "Copy the technical details". Next: tester 2 sends that copy; parked: share pictures.
 000. **Soak passed (card 2, 32.3 h, 11-23)**: 0 crashes, flat memory. Card 2's auto-update stays OFF on the beta.
 00. **Judge beta17 by eye** - message scrolling and the moons (sun & moon screen).
 00a. **"Weather screens look good" / "change X"** - card 1: now, 24 hours sliding, 10 days sliding, details, air,
