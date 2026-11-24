@@ -40,10 +40,11 @@
    once (OSM tiles in the browser) and uploads it (~8 KB) when the town is saved; frames in flash, not RAM.
    Data: RainViewer over plain HTTP (zoom 7). Needs PNGdec 1.1.6 in CI libs; its 45 KB block fits only after
    playerFree(): allocate it first, skip the round if it fails. Details in NOTES.md (merge only the notes).
-000. **"Soak results"** - after 11-23 08:00 run `tools/soak-log.ps1 -Cards 192.168.50.199 -Summary`: want crashes 0,
-   no lowmem restarts, one nightly restart. If card 2's block keeps sinking, find what holds it (20 items). Don't
-   flash/restart card 2 till then; card 1 is free for firmware work. Radar waits on this. Card 2's auto-update
-   is OFF for the soak (`POST /api/settings?au=0`); turn it back on after (`?au=1`).
+000. **Soak passed (card 2, 32.3 h, 2026-11-23)**: 1427 polls, 0 missed, 0 crashes, 0 lowmem restarts; biggest block
+   flat (hourly avg 26-32 KB), one single-poll dip to 9.7 KB (11-22 20:12) that recovered. No nightly restart yet: at
+   4 am it was only 17.6 h up (rule = 20 h), so the first is due 11-24 04:00. Next: "check the nightly restart"
+   (soak log, boot = nightly), then card 2 `POST /api/settings?au=1` (OFF until then: a 3 am update would hide it).
+   Radar is unblocked.
 00. **Judge beta17 by eye** - message scrolling and the moons (sun & moon screen).
 00a. **"Weather screens look good" / "change X"** - card 1: now, 24 hours sliding, 10 days sliding, details, air,
    sun & moon. Speed, hold times, column width and temperature colors are easy to change.
