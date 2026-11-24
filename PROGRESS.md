@@ -36,8 +36,9 @@
 0000. **1.1.0-beta2 on card 2 (branch `radar`, NOT merged).** 11-24: Regional judged great by eye. Now set to Close +
    "even when dry (test)" (writes `radar=always`; re-sends keep it). Try each range from **http://192.168.50.199/local**
    (the website app doesn't have this code until the merge). Remove the test box before release.
-   - 11-24 too: radar 750 ms/frame (OK by eye); night Off/5/10/25%; new cards start at 50%. Dim red fix: below
-     panel level 32 red is scaled down, to `redlow`% (default 60) at level 4 (5% of 50%); `POST /api/settings?redlow=`.
+   - 11-24 too: radar 750 ms/frame (OK by eye); night Off/5/10/25%; new cards start at 50%. Dim panel: row bands at
+     level 4, so the panel stays >= `hwmin` (16), darker is done in the colors; red scaled down under level 32 to
+     `redlow`% (50) at 4. Tune: `POST /api/settings?hwmin=&redlow=` (in /api/info). Not judged yet.
    - **Radar:** range picker next to the radar checkbox (`rzoom=`): Close 10-mi ring (zoom-7 tile 1:1), Normal 25,
      Wide 50, Regional 100 (no roads). Home at column 85 (weather comes from the west), labels on the right, no town
      name. US state lines (solid) + county dots (Close/Normal) from Census us-atlas. Old radar.map no longer matches.
@@ -57,4 +58,3 @@
 1. **"Fonts/icons look good" / "change X"** - weather + forecast and a Jumbo text item ("use the straight rays").
 2. **"Re-add the Christmas pack"** - on the phone page, ★ Get the latest pictures, add Christmas 2026, Send; they
    should now come in as GIF and look like the originals. Try Shuffle at the same time.
-3. **Installer is solid** (spare 11-22: 10/10 writes, unplug recovers; details PROJECT-NOTES). 1.0.0 released 11-22.

@@ -74,7 +74,8 @@ AnimatedGIF *gifp = nullptr;
 #define gif (*gifp)
 uint8_t gammaLut[256];
 uint8_t gammaLutR[256];                        // table for red: turned down when the panel is dim, see applyBrightness
-uint8_t redLow = 60;                           // red percent at the dimmest panel levels: NVS redlow, set with POST /api/settings?redlow=
+uint8_t redLow = 50;                           // red percent at the dimmest panel levels: NVS redlow, set with POST /api/settings?redlow=
+uint8_t hwMin = 16;                            // lowest panel level used; dimmer than that is done in the colors: NVS hwmin
 typedef uint8_t PixRow[W][3];
 static const size_t CANVAS_BYTES = sizeof(PixRow) * H;
 PixRow *canvas = nullptr;                      // composited frame (RGB888)

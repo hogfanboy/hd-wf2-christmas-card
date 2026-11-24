@@ -44,7 +44,8 @@ void settingsLoad() {
   nightFrom = prefs.getChar("nfrom", -1);
   nightTo = prefs.getChar("nto", -1);
   nightLevel = prefs.getUChar("nlevel", 0);
-  redLow = prefs.getUChar("redlow", 60);
+  redLow = prefs.getUChar("redlow", 50);
+  hwMin = prefs.getUChar("hwmin", 16);
   if (nightLevel > 25) nightLevel = 25;            // old 50% choice: night levels are now 5, 10, 25
   autoUpdate = prefs.getBool("aupd", true);
   themeIx = prefs.getUChar("theme", 2);
@@ -64,17 +65,27 @@ void settingsLoad() {
   hostName.toLowerCase();
 }
 void applyBrightness() {
-  // in 1/10000 steps so a low night level (5% of 50%) doesn't round away; never fully dark unless night = Off
-  uint32_t v = (uint32_t)MAX_BRIGHTNESS * brightnessPct * (nightNow ? nightLevel : 100) + 5000;
-  uint8_t b = v / 10000;
-  if (!b && (!nightNow || nightLevel)) b = 1;
-  panel->setBrightness8(b);
-  // Red LEDs light up more than green and blue at very short on-times, so a dim panel looks too red. Below panel
-  // level 32 red is turned down, reaching redLow % at level 4 and under (5% night of 50% = level 4).
-  float t = b >= 32 ? 0 : b <= 4 ? 1 : (32 - b) / 28.0f, f = 1 - (1 - redLow / 100.0f) * t;
-  if (gammaLutR[255] != (uint8_t)(gammaLut[255] * f + 0.5f)) {
-    for (int i = 0; i < 256; i++) gammaLutR[i] = (uint8_t)(gammaLut[i] * f + 0.5f);
-    shownValid = false;                            // redraw everything with the new red
+  // Wanted panel level in 1/10000 steps, so a low night level (5% of 50%) isn't rounded away.
+  uint32_t v = (uint32_t)MAX_BRIGHTNESS * brightnessPct * (nightNow ? nightLevel : 100);
+  // The panel dims by shortening each row's on-time; at a few steps out of 255 the rows no longer match and
+  // text shows bands. So the panel never goes under hwMin; dimmer than that is done by darkening the colors.
+  uint8_t hw = (v + 5000) / 10000;
+  float soft = 1;
+  if (nightNow && !nightLevel) hw = 0;             // night = Off: dark
+  else if (hw < hwMin) { hw = hwMin; soft = v / 10000.0f / hwMin; if (soft < 0.02f) soft = 0.02f; }
+  panel->setBrightness8(hw);
+  // Red LEDs light up more than green and blue at short on-times, so a dim panel looks too red. Below panel
+  // level 32 red is turned down, reaching redLow percent at level 4 and under.
+  float t = hw >= 32 ? 0 : hw <= 4 ? 1 : (32 - hw) / 28.0f, f = 1 - (1 - redLow / 100.0f) * t;
+  static float lastSoft = -1, lastF = -1;
+  if (soft != lastSoft || f != lastF) {
+    lastSoft = soft; lastF = f;
+    for (int i = 0; i < 256; i++) {
+      float g = powf(i / 255.0f, GAMMA) * 255.0f * soft;
+      gammaLut[i] = (uint8_t)(g + 0.5f);
+      gammaLutR[i] = (uint8_t)(g * f + 0.5f);
+    }
+    shownValid = false;                            // redraw everything with the new colors
   }
 }
 
