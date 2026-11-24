@@ -36,8 +36,7 @@
 0000. **1.1.0-beta2 on card 2 (branch `radar`, NOT merged).** 11-24: Regional judged great by eye. Now set to Close +
    "even when dry (test)" (writes `radar=always`; re-sends keep it). Try each range from **http://192.168.50.199/local**
    (the website app doesn't have this code until the merge). Remove the test box before release.
-   - 11-24 also on card 2: radar 750 ms/frame (was 450, "too fast"); night brightness Off/5/10/25% (50 gone, old 50
-     = 25; finer math so 5% of 50% isn't rounded away); a new card starts at 50% brightness. Not judged by eye yet.
+   - 11-24 too: radar 750 ms/frame (was 450); night Off/5/10/25% (old 50 = 25); new cards start at 50%. Not judged.
    - **Radar:** range picker next to the radar checkbox (`rzoom=`): Close 10-mi ring (zoom-7 tile 1:1), Normal 25,
      Wide 50, Regional 100 (no roads). Home at column 85 (weather comes from the west), labels on the right, no town
      name. US state lines (solid) + county dots (Close/Normal) from Census us-atlas. Old radar.map no longer matches.
@@ -57,6 +56,5 @@
 1. **"Fonts/icons look good" / "change X"** - weather + forecast and a Jumbo text item ("use the straight rays").
 2. **"Re-add the Christmas pack"** - on the phone page, ★ Get the latest pictures, add Christmas 2026, Send; they
    should now come in as GIF and look like the originals. Try Shuffle at the same time.
-3. **Online builder** works (Christmas 2026 published from it). Next there: Holiday starter animations → new cards.
-4. **Installer is solid** - spare 2026-11-22: 10/10 verified writes, 0 retries; mid-write unplug recovered on re-plug
+3. **Installer is solid** - spare 2026-11-22: 10/10 verified writes, 0 retries; mid-write unplug recovered on re-plug
    by itself (details PROJECT-NOTES). WiFi only worked on card 1 (install steps now hide). 1.0.0 released 2026-11-22.
