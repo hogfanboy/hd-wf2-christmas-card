@@ -158,6 +158,23 @@ static void handleFileGet() {
   web->streamFile(f, "application/octet-stream");
   f.close();
 }
+// Birthdays & dates (/dates.txt, screens.ino): kept apart from the show, so Send and Clear leave it alone.
+static void handleDatesGet() {
+  if (!touch()) return;
+  File f = LittleFS.open("/dates.txt", "r");
+  if (!f) { web->send(200, "text/plain", ""); return; }
+  web->streamFile(f, "text/plain");
+  f.close();
+}
+static void handleDatesPost() {
+  if (!touch()) return;
+  String body = web->arg("plain");
+  if (body.length() > 24000) { web->send(400, "text/plain", "list too long"); return; }
+  File f = LittleFS.open("/dates.txt", "w");
+  if (!f || f.print(body) != body.length()) { web->send(500, "text/plain", "write failed"); return; }
+  f.close();
+  sendJson("{\"ok\":true}");
+}
 static void handleShowPost() {
   if (!touch()) return;
   String body = web->arg("plain");
@@ -276,6 +293,8 @@ static void startHomeWeb() {
   web->on("/api/forget-wifi", HTTP_POST, handleForgetWifi);
   web->on("/api/show", HTTP_GET, handleShowGet);
   web->on("/api/show", HTTP_POST, handleShowPost);
+  web->on("/api/dates", HTTP_GET, handleDatesGet);
+  web->on("/api/dates", HTTP_POST, handleDatesPost);
   web->on("/api/settings", HTTP_POST, handleSettings);
   web->on("/api/file", HTTP_GET, handleFileGet);
   web->onNotFound([]() { web->send(404, "text/plain", "not found"); });

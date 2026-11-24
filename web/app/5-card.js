@@ -108,13 +108,19 @@ async function loadShow(auto) {
         const r = await fetch('/api/file?name=' + encodeURIComponent(f[2]));
         if (r.ok) await addFile(new File([await r.blob()], f[2]), secs, true);
       } else {
-        const o = { lead: op.lead, alerts: op.alerts, ...Object.fromEntries(WX_KEYS.map((k) => [k, !!op[k]])), secs, fg: f[2] === 'rainbow' ? '#ffffff' : f[2] === 'theme' ? TH().main : '#' + f[2], useTheme: f[2] === 'theme', rainbow: f[2] === 'rainbow', bg: '#' + f[3], font: +f[4] >= 8 && +f[4] <= 12 ? +f[4] : +f[4] >= 5 && +f[4] <= 7 ? +f[4] - 3 : Math.max(1, Math.min(4, +f[4] || 3)), effect: FX[f[5]] ? f[5] : 'none' };
+        const o = { lead: op.lead, alerts: op.alerts, rzoom: op.rzoom || '6', ...Object.fromEntries(WX_KEYS.map((k) => [k, !!op[k]])), secs, fg: f[2] === 'rainbow' ? '#ffffff' : f[2] === 'theme' ? TH().main : '#' + f[2], useTheme: f[2] === 'theme', rainbow: f[2] === 'rainbow', bg: '#' + f[3], font: +f[4] >= 8 && +f[4] <= 12 ? +f[4] : +f[4] >= 5 && +f[4] <= 7 ? +f[4] - 3 : Math.max(1, Math.min(4, +f[4] || 3)), effect: FX[f[5]] ? f[5] : 'none' };
         if (f[0] === 'text') addDrawn('text', { ...o, text: f[6] });
         if (f[0] === 'clock') addDrawn('clock', { ...o, h24: f[6] === '24' });
         if (f[0] === 'countdown') addDrawn('countdown', { ...o, date: f[6], text: f[7] || '' });
         if (f[0] === 'fx' && o.effect !== 'none') addDrawn('fx', o);
         if (f[0] === 'weather') { const w = addDrawn('weather', { ...o, unit: f[6] || 'F', lat: f[7] || '', lon: f[8] || '', place: f[9] || '' }); if (!card.wxHome && w.lat) wxRemember(w); }
         if (f[0] === 'stocks') addDrawn('stocks', { ...o, syms: f[6] || '' });
+        if (f[0] === 'dates' && !items.some(i => i.kind === 'dates')) {
+          const d = addDates({ ...o, lead: o.lead || '7' });
+          try { const r = await fetch('/api/dates'); if (r.ok) d.dates = datesFromText(await r.text()); } catch {}
+          d.drawDates(); d.relabel();
+          if (d.dates.length) { try { localStorage.setItem(datesKey(), JSON.stringify(d.dates)); } catch {} } else d.offerRestore();
+        }
       }
       const added = items[before];
       if (added) { Object.assign(added.when, op.when); added.whenRefresh(); }
@@ -141,6 +147,7 @@ function showLineBase(it, fileName) {
   if (it.kind === 'fx') return ['fx', ...common, ''].join('\t');
   if (it.kind === 'weather') return ['weather', ...common, it.unit, it.lat, it.lon, clean(it.place)].join('\t');
   if (it.kind === 'stocks') return ['stocks', ...common, it.syms].join('\t');
+  if (it.kind === 'dates') return ['dates', ...common].join('\t');
   return ['countdown', ...common, it.date, clean(it.text)].join('\t');
 }
 
@@ -176,16 +183,21 @@ $('send').onclick = async () => {
     }
     // radar maps (one per town with the radar screen ticked, up to 3), for screens with radar software
     const radarTowns = [...new Map(list.filter(i => i.kind === 'weather' && i.radar && i.lat && i.lat !== 'auto' && !isNaN(+i.lat))
-      .map(i => [radarKey(i.lat, i.lon), i])).values()].slice(0, 3);
+      .map(i => [radarKey(i.lat, i.lon, rdZoom(i)), i])).values()].slice(0, 3);
     if (radarTowns.length && !newer('1.1.0-beta1', card.fw)) {
       st.textContent = 'Making the radar map…';
       for (const [k, it] of radarTowns.entries()) {
-        const m = await radarMap(it.lat, it.lon);
+        const m = await radarMap(it.lat, it.lon, rdZoom(it));
         if (!m) continue;                           // no map (OpenStreetMap unreachable): the radar shows on black
         const fd = new FormData();
         fd.append('file', new Blob([m]), `radar${k ? k + 1 : ''}.map`);
         await api('/api/upload', { method: 'POST', body: fd });
       }
+    }
+    const dl = list.find(i => i.kind === 'dates');   // the birthday list: its own file on the card, kept when the show changes
+    if (dl && !newer('1.1.0-beta2', card.fw)) {
+      st.textContent = 'Saving the birthday list…';
+      await api('/api/dates', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: datesText(dl.dates) });
     }
     await api('/api/show', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: lines.join('\n') + '\n' });
     await api('/api/play', { method: 'POST' });

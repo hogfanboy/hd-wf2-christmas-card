@@ -84,7 +84,7 @@ function drawForecast(it, w, t, ms = 0) {   // copy of the card's drawDays5: 25-
 // ("hourly") or 24 hours ("chart"), one column per hour, sliding; daily = 5 days ("forecast") or 10 days ("days10", sliding).
 const WX_PAGES = [
   ['rainsoon', 'rainsoon', 'Rain on the way: only when rain or snow is coming in the next 2 hours'],
-  ['radar', 'radar', 'Rain radar map, the last hour: only when rain or snow is on the way <span class="muted">(radar <a href="https://www.rainviewer.com" target="_blank" rel="noopener">RainViewer</a>, map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>)</span>'],
+  ['radar', 'radar', 'Rain radar map, the last hour: only when rain or snow is on the way <select data-k="rzoom"><option value="7">Close (10-mile ring)</option><option value="6">Normal (25-mile ring)</option><option value="5">Wide (50-mile ring)</option><option value="4">Regional (100-mile ring)</option></select> <span class="muted">(radar <a href="https://www.rainviewer.com" target="_blank" rel="noopener">RainViewer</a>, map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>)</span>'],
   ['hourly', 'hourly', 'Hourly forecast', ['hours24', '12 hours', '24 hours', 'chart']],
   ['forecast', 'fc', 'Daily forecast', ['days10', '5 days', '10 days', 'days10']],
   ['details', 'details', 'Wind, humidity, UV, dew point'],
@@ -193,31 +193,79 @@ function drawSun(it, w, ms, f) {
   LC(MOON_NAME[phase], W / 2, 55, TH().acc);
 }
 // ---------- Radar (the card's radar.ino screen) ----------
-// The card fetches the RainViewer radar itself. The map under it (shores, interstates, state lines) is made here
-// from OpenStreetMap tiles when the show is sent, and uploaded as radar.map: "PJRM", float32 lat, lon (little
-// endian), 4 spare bytes, then one class per LED row by row: 0 nothing, 1 water, 2 shore, 3 interstate, 4 state
-// line. The window is 512x256 OSM zoom-8 pixels centered on the town (= the radar's 256x128 zoom-7 pixels), 4x4 per
-// LED; classes come from the OSM Carto colors (water #aad3df, motorways pink, state lines purple).
-const radarMaps = {};                             // "lat,lon" -> Promise of the file (Uint8Array) or null
-const radarKey = (lat, lon) => (+lat).toFixed(4) + ',' + (+lon).toFixed(4);
-function radarMap(lat, lon) {
-  const key = radarKey(lat, lon);
-  return radarMaps[key] ??= buildRadarMap(+lat, +lon).catch(e => { console.warn('radar map:', e); delete radarMaps[key]; return null; });
+// The card fetches the RainViewer radar itself. The map under it (shores, interstates, state lines, counties) is made
+// here when the show is sent, and uploaded as radar.map: "PJRM", float32 lat, lon (little endian), uint8 zoom,
+// uint8 home column, 2 spare bytes, then one class per LED row by row: 0 nothing, 1 water, 2 shore, 3 interstate,
+// 4 state line, 5 county line. Range = the LED's map zoom (rzoom): 7 close, 6 normal, 5 wide, 4 regional. Home sits at
+// column RD_HX (right of the middle: weather mostly comes from the west), so the view's middle is west of home.
+// Water and interstates come from OpenStreetMap tiles 2 zooms deeper (4x4 pixels per LED, OSM Carto colors: water
+// #aad3df, motorways pink); no interstates on regional. In the US, state lines (solid) and county lines (dots, close
+// and normal only) come from the Census outlines in us-atlas (counties-10m); elsewhere state lines from OSM (purple).
+const RD_HX = 85, RD_RANGES = { 7: ['Close', 10], 6: ['Normal', 25], 5: ['Wide', 50], 4: ['Regional', 100] };
+const rdZoom = (it) => RD_RANGES[+it.rzoom] ? +it.rzoom : 6;
+const radarMaps = {};                             // "lat,lon,zoom" -> Promise of the file (Uint8Array) or null
+const radarKey = (lat, lon, z = 6) => (+lat).toFixed(4) + ',' + (+lon).toFixed(4) + ',' + z;
+function radarMap(lat, lon, z = 6) {
+  const key = radarKey(lat, lon, z);
+  return radarMaps[key] ??= buildRadarMap(+lat, +lon, z).catch(e => { console.warn('radar map:', e); delete radarMaps[key]; return null; });
 }
+// Web-mercator pixel of a place at LED zoom z, and the view's top-left pixel (home at RD_HX, H / 2).
+const mercPx = (lat, lon, z) => { const n = 256 * 2 ** z; return [(lon + 180) / 360 * n, (1 - Math.asinh(Math.tan(lat * Math.PI / 180)) / Math.PI) / 2 * n]; };
+const radarView = (lat, lon, z) => { const [x, y] = mercPx(lat, lon, z); return [x - RD_HX, y - H / 2]; };
 const loadTile = (url) => new Promise((ok, bad) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => ok(im); im.onerror = () => bad(new Error('tile ' + url)); im.src = url; });
-async function buildRadarMap(lat, lon) {
-  const z = 8, n = 256 * 2 ** z, ww = W * 4, hh = H * 4;
-  const cx = (lon + 180) / 360 * n, cy = (1 - Math.asinh(Math.tan(lat * Math.PI / 180)) / Math.PI) / 2 * n;
-  const x0 = Math.round(cx) - ww / 2, y0 = Math.round(cy) - hh / 2;
+let usAtlas = null;                               // Promise of us-atlas counties-10m (topojson: counties + states), loaded once
+const inUS = (lat, lon) => lat > 17 && lat < 72 && lon > -180 && lon < -64;
+// Borders from the Census outlines into the map: an arc two shapes share is a border (one shape = coast, Canada,
+// Mexico). States solid as class 4 (over roads), counties dotted as class 5 (only on empty LEDs). False = no data.
+async function atlasLines(cls, lat, lon, z) {
+  usAtlas ??= fetch('https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json').then(r => r.ok ? r.json() : null).catch(() => null);
+  const topo = await usAtlas;
+  if (!topo) { usAtlas = null; return false; }
+  const [sx, sy] = topo.transform.scale, [tx, ty] = topo.transform.translate, [vx, vy] = radarView(lat, lon, z);
+  const draw = (obj, v, dotted) => {
+    const uses = new Uint8Array(topo.arcs.length);
+    for (const g of topo.objects[obj].geometries) {
+      const polys = g.type === 'Polygon' ? [g.arcs] : g.type === 'MultiPolygon' ? g.arcs : [];
+      for (const p of polys) for (const ring of p) for (const a of ring) { const i = a < 0 ? ~a : a; if (uses[i] < 2) uses[i]++; }
+    }
+    const put = (x, y) => { if (x < 0 || x >= W || y < 0 || y >= H) return; const k = cls[y * W + x]; if (dotted ? !k : k !== 1 && k !== 2) cls[y * W + x] = v; };
+    topo.arcs.forEach((arc, i) => {
+      if (uses[i] < 2) return;
+      let qx = 0, qy = 0, prev = null, step = 0;
+      for (const [dx, dy] of arc) {
+        qx += dx; qy += dy;
+        const [mx, my] = mercPx(qy * sy + ty, qx * sx + tx, z), p = [Math.round(mx - vx), Math.round(my - vy)];
+        if (prev && !(Math.max(p[0], prev[0]) < 0 || Math.min(p[0], prev[0]) >= W || Math.max(p[1], prev[1]) < 0 || Math.min(p[1], prev[1]) >= H)) {
+          let [x0, y0] = prev; const [x1, y1] = p, ddx = Math.abs(x1 - x0), ddy = -Math.abs(y1 - y0), stx = x0 < x1 ? 1 : -1, sty = y0 < y1 ? 1 : -1;
+          let e = ddx + ddy;
+          for (;;) {
+            if (!dotted || step % 2 === 0) put(x0, y0);   // dots: every other LED along the border
+            step++;
+            if (x0 === x1 && y0 === y1) break;
+            const e2 = 2 * e; if (e2 >= ddy) { e += ddy; x0 += stx; } if (e2 <= ddx) { e += ddx; y0 += sty; }
+          }
+          step--;                                   // the joint is the next piece's first LED
+        }
+        prev = p;
+      }
+    });
+  };
+  draw('states', 4, false);
+  if (z >= 6) draw('counties', 5, true);
+  return true;
+}
+async function buildRadarMap(lat, lon, z = 6) {
+  const oz = z + 2, ww = W * 4, hh = H * 4;
+  const [vx, vy] = radarView(lat, lon, z), x0 = Math.round(vx * 4), y0 = Math.round(vy * 4);
   const cv = document.createElement('canvas'); cv.width = ww; cv.height = hh;
   const g = cv.getContext('2d', { willReadFrequently: true }), jobs = [];
   for (let ty = Math.floor(y0 / 256); ty <= Math.floor((y0 + hh - 1) / 256); ty++)
     for (let tx = Math.floor(x0 / 256); tx <= Math.floor((x0 + ww - 1) / 256); tx++) {
-      const wrap = ((tx % 2 ** z) + 2 ** z) % 2 ** z;
-      jobs.push(loadTile(`https://tile.openstreetmap.org/${z}/${wrap}/${ty}.png`).then(im => g.drawImage(im, tx * 256 - x0, ty * 256 - y0)));
+      const wrap = ((tx % 2 ** oz) + 2 ** oz) % 2 ** oz;
+      jobs.push(loadTile(`https://tile.openstreetmap.org/${oz}/${wrap}/${ty}.png`).then(im => g.drawImage(im, tx * 256 - x0, ty * 256 - y0)));
     }
   await Promise.all(jobs);
-  const d = g.getImageData(0, 0, ww, hh).data, cls = new Uint8Array(W * H);
+  const d = g.getImageData(0, 0, ww, hh).data, cls = new Uint8Array(W * H), roads = z >= 5;
   const kind = (i) => {
     const r = d[i], gg = d[i + 1], b = d[i + 2];
     if (Math.abs(r - 170) < 14 && Math.abs(gg - 211) < 14 && Math.abs(b - 223) < 14) return 1;   // water
@@ -228,15 +276,20 @@ async function buildRadarMap(lat, lon) {
   for (let Y = 0; Y < H; Y++) for (let X = 0; X < W; X++) {
     const c = [0, 0, 0, 0, 0];
     for (let dy = 0; dy < 4; dy++) for (let dx = 0; dx < 4; dx++) c[kind(((Y * 4 + dy) * ww + X * 4 + dx) * 4)]++;
-    cls[Y * W + X] = c[3] >= 2 ? 3 : c[4] >= 2 ? 4 : c[1] >= 8 ? 1 : 0;
+    cls[Y * W + X] = roads && c[3] >= 2 ? 3 : c[4] >= 2 ? 4 : c[1] >= 8 ? 1 : 0;
+  }
+  for (let i = 0; i < W * H; i++) {               // water next to land = shore
+    const Y = Math.trunc(i / W), X = i % W;
+    if (cls[i] === 1 && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dy, dx]) => { const y = Y + dy, x = X + dx; return y >= 0 && y < H && x >= 0 && x < W && cls[y * W + x] !== 1 && cls[y * W + x] !== 2; })) cls[i] = 2;
+  }
+  if (inUS(lat, lon)) {                           // US: state lines from the Census (OSM's are dashed at small zooms)
+    const osm = cls.slice();
+    for (let i = 0; i < W * H; i++) if (cls[i] === 4) cls[i] = 0;
+    if (!await atlasLines(cls, lat, lon, z)) cls.set(osm);
   }
   const out = new Uint8Array(16 + W * H), dv = new DataView(out.buffer);
-  out.set([80, 74, 82, 77]); dv.setFloat32(4, lat, true); dv.setFloat32(8, lon, true);
-  for (let Y = 0; Y < H; Y++) for (let X = 0; X < W; X++) {   // water next to land = shore
-    let v = cls[Y * W + X];
-    if (v === 1 && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dy, dx]) => { const y = Y + dy, x = X + dx; return y >= 0 && y < H && x >= 0 && x < W && cls[y * W + x] !== 1; })) v = 2;
-    out[16 + Y * W + X] = v;
-  }
+  out.set([80, 74, 82, 77]); dv.setFloat32(4, lat, true); dv.setFloat32(8, lon, true); out[12] = z; out[13] = RD_HX;
+  out.set(cls, 16);
   return out;
 }
 // 3x5 font for the radar labels (the card's rdGlyph).
@@ -250,19 +303,19 @@ function rdText(s, x, y, c) {
   [...s.toUpperCase()].forEach((ch, i) => { const k = RD_CHARS.indexOf(ch), gl = k < 0 ? 0 : RD_BITS[k]; for (let b = 0; b < 15; b++) if (gl & (0x4000 >> b)) P(x + i * 4 + b % 3, y + Math.trunc(b / 3), c); });
 }
 const RD_LED = ['', '#786030', '#5ad2ff', '#008cff', '#003cc8', '#ffdc00', '#ff8200', '#ff1e00', '#960000'];
-const RD_MAPC = ['', '#000a24', '#003c82', '#2c2c2c', '#460046'];
+const RD_MAPC = ['', '#000a24', '#003c82', '#2c2c2c', '#460046', '#1e1e1e'];
 // Preview: the town's map (made the first time the screen shows), the ring, home and a made-up shower drifting
 // past, as a 7-frame loop like the card ("SAMPLE" in the corner: the real radar comes from the screen).
 function drawRadar(it, w, ms) {
   tctx.fillStyle = '#000'; tctx.fillRect(0, 0, W, H);
-  const lat = +it.lat, lon = +it.lon, real = it.lat && it.lat !== 'auto' && !isNaN(lat);
-  if (real && it.rmapKey !== radarKey(lat, lon)) { const k = radarKey(lat, lon); it.rmapKey = k; it.rmap = null; radarMap(lat, lon).then(m => { if (it.rmapKey === k) it.rmap = m; }); }
+  const lat = +it.lat, lon = +it.lon, real = it.lat && it.lat !== 'auto' && !isNaN(lat), z = rdZoom(it);
+  if (real && it.rmapKey !== radarKey(lat, lon, z)) { const k = radarKey(lat, lon, z); it.rmapKey = k; it.rmap = null; radarMap(lat, lon, z).then(m => { if (it.rmapKey === k) it.rmap = m; }); }
   const map = real ? it.rmap : null;
-  if (map) for (let i = 0; i < W * H; i++) { const v = map[16 + i]; if (v) P(i % W, Math.trunc(i / W), RD_MAPC[v]); }
-  const mpl = 2 * 156543.03 / 128 * Math.cos((real ? lat : 40) * Math.PI / 180) / 1609.34, r = 25 / mpl, cx = W / 2, cy = H / 2;
-  for (let t = 0; t < 1440; t++) { const a = t * 2 * Math.PI / 1440, x = Math.round(cx + r * Math.cos(a)), y = Math.round(cy + r * Math.sin(a)); if (((x + y) & 1) === 0 && !(map && map[16 + y * W + x])) P(x, y, '#3c3c3c'); }
+  if (map) for (let i = 0; i < W * H; i++) { const v = map[16 + i]; if (v) P(i % W, Math.trunc(i / W), v === 3 && z <= 5 ? '#181818' : RD_MAPC[v]); }
+  const miles = RD_RANGES[z][1], mpl = 156543.03 / 2 ** z * Math.cos((real ? lat : 40) * Math.PI / 180) / 1609.34, r = miles / mpl, cx = RD_HX, cy = H / 2;
+  for (let t = 0; t < 1440; t++) { const a = t * 2 * Math.PI / 1440, x = Math.round(cx + r * Math.cos(a)), y = Math.round(cy + r * Math.sin(a)); if (x >= 0 && x < W && ((x + y) & 1) === 0 && !(map && map[16 + y * W + x])) P(x, y, '#3c3c3c'); }
   const loop = 6 * 450 + 3000, inL = ms % loop, fi = Math.min(6, Math.trunc(inL / 450)), last = fi === 6;
-  const bx = 20 + fi * 7, by = 26 + fi;                // the made-up shower moves east toward home
+  const bx = 30 + fi * 7, by = 26 + fi;                // the made-up shower moves east toward home
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const dd = Math.hypot((x - bx) / 1.8, y - by) + Math.sin(x * 0.7 + y * 0.4) * 1.5, lv = dd < 3 ? 6 : dd < 6 ? 5 : dd < 10 ? 3 : dd < 15 ? 2 : 0;
     if (lv) P(x, y, RD_LED[lv]);
@@ -270,10 +323,8 @@ function drawRadar(it, w, ms) {
   tctx.fillStyle = '#000'; tctx.fillRect(cx - 3, cy - 1, 7, 3); tctx.fillRect(cx - 1, cy - 3, 3, 7);
   const home = !last || Math.trunc((inL - fi * 450) / 400) % 2 === 0;
   if (home) { tctx.fillStyle = '#fff'; tctx.fillRect(cx - 2, cy, 5, 1); tctx.fillRect(cx, cy - 2, 1, 5); }
-  const nm = String(it.place || (it.lat === 'auto' ? card.place || '' : '')).toUpperCase().slice(0, 14);
-  if (nm) rdText(nm, Math.max(1, Math.min(W - 1 - rdW(nm), cx - Math.trunc(rdW(nm) / 2))), cy - 10, '#fff');
-  const sc = '25 MI', rr = Math.round(r);
-  if (cx + rr + 2 + rdW(sc) < W) rdText(sc, cx + rr + 2, cy - 2, '#787878'); else rdText(sc, 1, H - 6, '#787878');
+  const sc = miles + ' MI';
+  rdText(sc, W - rdW(sc) - 1, H - 6, '#787878');
   rdText('SAMPLE', W - rdW('SAMPLE') - 1, 1, last ? '#ffc83c' : '#787878');
 }
 // The line under the temperature takes turns, like the card: the sky, then only what matters today (rain or snow
@@ -459,6 +510,18 @@ function renderItem(it, t) {      // t = ms since the item started
   tctx.textBaseline = 'alphabetic';
   if (it.kind === 'fx') return tctx.getImageData(0, 0, W, H);
   if (it.kind === 'stocks') { drawStocks(it, t); return tctx.getImageData(0, 0, W, H); }
+  if (it.kind === 'dates') {                       // like the card's playDates: one screen per date coming up
+    const e = datesShown(it, t);
+    smallF(); tctx.textBaseline = 'top';
+    if (!e) { tctx.fillStyle = TH().dim; T('ADD SOME DATES', (W - M('ADD SOME DATES')) / 2, 28); return tctx.getImageData(0, 0, W, H); }
+    const [bigS, l1, l2] = datesLines(e, it.font);
+    tctx.textBaseline = 'alphabetic';
+    fitBig(it.font, bigS, W - 2, 0);
+    drawStr(it, bigS, (W - M(bigS)) / 2, Math.round((40 + capOf()) / 2), t);
+    smallF(); tctx.textBaseline = 'top';
+    tctx.fillStyle = TH().main; T(l1, (W - M(l1)) / 2, 42); tctx.fillStyle = TH().acc; T(l2, (W - M(l2)) / 2, 53);
+    return tctx.getImageData(0, 0, W, H);
+  }
   if (it.kind === 'weather') {
     const w = it.wx || SAMPLE_WX, f = Math.floor(t / 40), per = (it.secs || 10) * 1000;
     // same order as the card: alerts (4.5 s each), the weather, then the forecast

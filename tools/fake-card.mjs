@@ -15,6 +15,7 @@ const json = (res, o) => { res.writeHead(200, { 'Content-Type': 'application/jso
 const files = () => fs.readdirSync(store).filter(f => /.(gif|pjm)$/.test(f));
 let settings = { tz: 'UTC0', nightFrom: -1, nightTo: -1, nightLevel: 0, theme: 2 };
 const showFile = path.join(store, 'show.txt');
+const datesFile = path.join(store, 'dates.txt');
 
 http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
@@ -25,10 +26,12 @@ http.createServer((req, res) => {
   if (url.pathname === '/api/wifi' || url.pathname === '/api/forget-wifi') { let b = ''; req.on('data', c => b += c); req.on('end', () => { log(b); json(res, { ok: true }); }); return; }
   if (url.pathname === '/api/info') {
     const used = files().reduce((s, f) => s + fs.statSync(path.join(store, f)).size, 0);
-    return json(res, { fw: '0.0.1', name: 'pocketjumbo-fake', place: 'Springfield', tzAuto: true, total: TOTAL, used, files: files().length, items: fs.existsSync(showFile) ? fs.readFileSync(showFile, 'utf8').split(String.fromCharCode(10)).filter(Boolean).length : files().length, brightness, ...settings, night: false, time: Math.floor(Date.now() / 1000), id: 'fa4e', rssi: -58, chip: 'ESP32-S3 rev 2', app: 1640000, appMax: 1835008, up: Math.floor(process.uptime()), boot: 'power', bootWhy: 'power on', crashes: 0, quietRestarts: 0, boots: 7, lifeCrashes: 1, lastCrash: 'watchdog, 1.0.0-beta18', heap: 120000, block: 31700, minHeap: 18000 });
+    return json(res, { fw: '1.1.0-beta2', name: 'pocketjumbo-fake', place: 'Springfield', tzAuto: true, total: TOTAL, used, files: files().length, items: fs.existsSync(showFile) ? fs.readFileSync(showFile, 'utf8').split(String.fromCharCode(10)).filter(Boolean).length : files().length, brightness, ...settings, night: false, time: Math.floor(Date.now() / 1000), id: 'fa4e', rssi: -58, chip: 'ESP32-S3 rev 2', app: 1640000, appMax: 1835008, up: Math.floor(process.uptime()), boot: 'power', bootWhy: 'power on', crashes: 0, quietRestarts: 0, boots: 7, lifeCrashes: 1, lastCrash: 'watchdog, 1.0.0-beta18', heap: 120000, block: 31700, minHeap: 18000 });
   }
   if (url.pathname === '/api/clear' && (globalThis.busy = !globalThis.busy)) { log('503 busy'); res.writeHead(503); return res.end('busy'); }
   if (url.pathname === '/api/clear') { files().forEach(f => fs.unlinkSync(path.join(store, f))); fs.rmSync(showFile, { force: true }); log(); return json(res, { ok: true }); }
+  if (url.pathname === '/api/dates' && req.method === 'GET') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end(fs.existsSync(datesFile) ? fs.readFileSync(datesFile) : ''); }
+  if (url.pathname === '/api/dates') { let b = ''; req.on('data', c => b += c); req.on('end', () => { fs.writeFileSync(datesFile, b); log('dates', b.split(String.fromCharCode(10)).length - 1, 'lines'); json(res, { ok: true }); }); return; }
   if (url.pathname === '/api/show' && req.method === 'GET') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end(fs.existsSync(showFile) ? fs.readFileSync(showFile) : files().sort().map(f => 'pic	0	' + f + String.fromCharCode(10)).join('')); }
   if (url.pathname === '/api/show') { let b = ''; req.on('data', c => b += c); req.on('end', () => { fs.writeFileSync(showFile, b); log(b.split(String.fromCharCode(10)).length - 1, 'lines'); json(res, { ok: true }); }); return; }
   if (url.pathname === '/api/file') { const f = path.join(store, path.basename(url.searchParams.get('name') || '')); if (fs.existsSync(f)) { res.writeHead(200); return res.end(fs.readFileSync(f)); } res.writeHead(404); return res.end('not found'); }

@@ -371,6 +371,7 @@ function paintBg(it, t) {
   tctx.fillStyle = it.bg; tctx.fillRect(0, 0, W, H);
   let effect = it.effect;
   if (effect === 'auto' && it.kind === 'countdown') { const h = countdownDays(it.date).hol; effect = h >= 0 ? HOLIDAYS[h][7] : 'sparkle'; }   // match the holiday
+  else if (it.kind === 'dates' && datesShown(it, t)?.n === 0) effect = 'fireworks';   // the big day
   else if (effect === 'auto') { const k = it.kind === 'weather' ? wxKind((it.wx || SAMPLE_WX).code) : ''; effect = k === 'snow' ? 'snow' : k === 'rain' || k === 'storm' ? 'rain' : 'none'; }
   if (!effect || effect === 'none') return;
   const per = it.kind === 'text' ? 25 : it.kind === 'fx' ? 30 : 40, behind = it.kind !== 'fx';

@@ -7,6 +7,8 @@
 //     fx        <sec> <fg> <bg> <font> <effect>                      (an effect on its own, full screen)
 //     weather   <sec> <fg> <bg> <font> <effect> <F|C|A> <lat> <lon> <place>   lat/lon "auto" = where the card is
 //               (found by its internet address, online.ino), A = F in the US, else C; empty place = that town
+//     dates     <sec> <fg> <bg> <font> <effect>   birthdays & dates from /dates.txt (screens.ino; fw 1.1.0-beta2),
+//               only when one is within lead=N days (default 7); sec = per date
 //     stocks    <sec> <fg> <bg> <font> <effect> <symbols>   e.g. ^GSPC,^DJI,AAPL (see tools/build-feeds.mjs)
 //     order     shuffle | inorder                              (fw 1.0: a line on its own, anywhere; shuffle =
 //               random order, new each round, never the same item twice in a row. Older firmware skips it)
@@ -79,13 +81,14 @@ static void parseOptions(ShowItem &it, const String &opts) {
     else if (k == "air") it.wxPages |= WXP_AIR;
     else if (k == "sun") it.wxPages |= WXP_SUN;
     else if (k == "radar") it.wxPages |= v == "always" ? WXP_RADAR | WXP_RADAR_ALWAYS : WXP_RADAR;
+    else if (k == "rzoom") it.rzoom = constrain((int)v.toInt(), 4, 7);
     else if (k == "alerts") it.alerts = v == "demo" ? 2 : 1;
   }
 }
 static int countdownDays(const String &when, int *hol);
 // Is this item on the schedule right now? (see the options above)
 bool itemActive(const ShowItem &it) {
-  bool timed = it.dFrom || it.days != 0x7F || it.hFrom >= 0 || it.lead >= 0;
+  bool timed = it.dFrom || it.days != 0x7F || it.hFrom >= 0 || it.lead >= 0 || it.type == 'b';
   if (!timed) return true;
   if (!timeValid()) return false;
   time_t t = time(nullptr); struct tm lt; localtime_r(&t, &lt);
@@ -101,6 +104,7 @@ bool itemActive(const ShowItem &it) {
     if (!in) return false;
   }
   if (it.lead >= 0 && it.type == 'd' && countdownDays(it.extra, nullptr) > it.lead) return false;
+  if (it.type == 'b' && datesComing(datesLead(it), 1).empty()) return false;
   return true;
 }
 
@@ -137,7 +141,7 @@ void loadPlaylist() {
       else {
         if (f.size() < 6) continue;
         it.type = f[0] == "text" ? 't' : f[0] == "clock" ? 'c' : f[0] == "countdown" ? 'd' : f[0] == "fx" ? 'f' : f[0] == "weather" ? 'w' :
-                  f[0] == "stocks" ? 's' : 0;
+                  f[0] == "stocks" ? 's' : f[0] == "dates" ? 'b' : 0;
         if (!it.type) continue;
         it.rainbow = f[2] == "rainbow";
         it.themed = f[2] == "theme";
@@ -180,6 +184,7 @@ void playItem(const ShowItem &item) {
     case 't': playText(it); break;
     case 'c': playClock(it); break;
     case 'd': playCountdown(it); break;
+    case 'b': playDates(it); break;
     default: {
       String l = it.file; l.toLowerCase();
       if (l.endsWith(".pjm")) playPjm(it); else playOne(it.file, it.sec);

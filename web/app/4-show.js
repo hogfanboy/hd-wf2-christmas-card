@@ -23,6 +23,7 @@ function select(it) {
 }
 const label = (it) => it.kind === 'pic' ? it.name : it.kind === 'text' ? '“' + it.text + '”' : it.kind === 'clock' ? 'Clock'
   : it.kind === 'fx' ? (FX[it.effect] || 'Effect') : it.kind === 'weather' ? (!it.lat ? 'Weather: pick a town' : it.lat === 'auto' ? 'Weather here' + (card.place ? ' (' + card.place + ')' : '') : 'Weather' + (it.place ? ' in ' + it.place : ''))
+  : it.kind === 'dates' ? `🎂 Birthdays & dates (${it.dates.length})`
   : it.kind === 'stocks' ? 'Stocks: ' + (it.syms.split(',').filter(Boolean).map(s => MKT_LABEL[s] || s).join(', ') || 'pick some') : (it.lead !== '' && it.lead != null ? '🔔 ' : 'Countdown to ') + (it.date === 'next' ? 'the next holiday' : it.text || HOLIDAYS.find(h => h[0] === it.date)?.[1] || '…') + (/^\d\d-\d\d$/.test(it.date) ? ' · ' + md(it.date.replace('-', '')) : '');
 function move(it, d) {
   const i = items.indexOf(it), j = i + d;
@@ -113,8 +114,9 @@ function optsField(it) {
   if (w.from && w.to) o.push(`dates=${w.from}-${w.to}`);
   if (w.days.length < 7) o.push('days=' + w.days);
   if (w.h1 !== '' && w.h2 !== '' && w.h1 !== w.h2) o.push(`hours=${w.h1}-${w.h2}`);
-  if (it.kind === 'countdown' && it.lead !== '' && it.lead != null) o.push('lead=' + it.lead);
+  if ((it.kind === 'countdown' || it.kind === 'dates') && it.lead !== '' && it.lead != null) o.push('lead=' + it.lead);
   if (it.kind === 'weather') for (const [opt, k, , tg] of WX_PAGES) if (it[k]) o.push(tg && it[tg[0]] ? tg[3] : opt);
+  if (it.kind === 'weather' && it.radar && String(it.rzoom) !== '6') o.push('rzoom=' + it.rzoom);
   if (it.kind === 'weather' && it.alerts) o.push('alerts');
   return '@' + o.join(' ');
 }
@@ -131,6 +133,7 @@ function parseOpts(field) {
       if (tg && (k === tg[3] || (k === 'days16' && ik === 'fc'))) { o[ik] = true; o[tg[0]] = true; }   // days16: the old 14 days
     }
     if (k === 'alerts') o.alerts = true;
+    if (k === 'rzoom') o.rzoom = v;
   }
   return o;
 }
@@ -185,7 +188,8 @@ function marks(it) {
 
 // Message / clock / countdown items with their own little editor.
 const COLORS = { fg: '#ffbe3c', bg: '#000000' };
-const META = { text: 'Message', clock: 'Shows the time (needs internet)', countdown: 'Counts the days (needs internet). With "days before" it is a reminder: fireworks on the day',
+const META = { text: 'Message', clock: 'Shows the time (needs internet)', countdown: 'Counts the days (needs internet). With "days before" it only shows near the date, with fireworks on the day',
+  dates: 'Birthdays and other dates, every year. Plays only when one is coming up (needs internet)',
   fx: 'Drawn by the screen itself: takes no space', weather: '⚠ Pick a town below. Weather without a town is not sent to the screen.',
   stocks: 'Market prices and today\'s change (needs internet, updated every hour, may be delayed)' };
 const usesF = () => /^en-(US|LR|MM)$/i.test(navigator.language) || /-(US)$/i.test(navigator.language);
@@ -195,7 +199,7 @@ function addDrawn(kind, o = {}) {
   const it = Object.assign({ kind, secs: 0, useTheme: !('fg' in o), fg: TH().main, bg: COLORS.bg, rainbow: false,
     font: kind === 'text' || kind === 'stocks' ? 11 : 12, syms: '^GSPC,^DJI,^IXIC', effect: kind === 'countdown' ? 'snow' : kind === 'fx' ? 'fireworks' : 'none',
     text: kind === 'text' ? 'Happy Birthday!' : kind === 'countdown' ? 'Christmas' : '', date: '12-25',
-    unit: usesF() ? 'F' : 'C', lat: '', lon: '', place: '', lead: '', fc: false, rainsoon: false, alerts: false,
+    unit: usesF() ? 'F' : 'C', lat: '', lon: '', place: '', lead: '', fc: false, rainsoon: false, alerts: false, rzoom: '6',
     h24: !new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12 }, o);
   const el = baseEl(it);
   it.metaEl.textContent = META[kind]; it.metaEl.classList.add('desc');
@@ -207,6 +211,7 @@ function addDrawn(kind, o = {}) {
   const opt = (l) => l.map(v => `<option value="${v}">${SIZE_NAME[v]}</option>`).join('');
   const sizes = opt(kind === 'weather' ? [11, 12, 3, 4] : kind === 'stocks' ? [10, 11, 2, 3]
     : kind === 'text' ? [9, 10, 11, 12, 1, 2, 3, 4] : [10, 11, 12, 2, 3, 4]);
+  const dateKinds = Object.entries(DATE_KINDS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
   ed.innerHTML = kind === 'fx'
     ? `<label>Effect <select data-k="effect">${fxOptions().replace('<option value="none">None</option>', '')}</select>
        &nbsp; Background <input type="color" data-k="bg"></label>`
@@ -216,6 +221,13 @@ function addDrawn(kind, o = {}) {
         ${HOLIDAYS.map(h => `<option value="${h[0]}">${h[1]}</option>`).join('')}</select></label>
       <label class="owndate">Date <input type="date" data-k="date"></label>
       <label>Start showing <input class="s" type="number" min="0" max="365" data-k="lead" placeholder="any" style="width:70px"> days before (blank = all year)</label>` : ''}
+    ${kind === 'dates' ? `<div class="dlist"></div>
+      <div class="flex"><input type="text" class="dname" maxlength="30" placeholder="Name, e.g. Kevin" style="flex:1;min-width:0"></div>
+      <div class="flex"><select class="dmon"></select><select class="dday"></select><input class="dyear s" type="number" min="1880" max="2100" placeholder="Year (optional)" style="width:130px"><select class="dkind">${dateKinds}</select><button class="chip dadd">+ Add</button></div>
+      <details><summary>Paste a whole list</summary><textarea class="dpaste" rows="5" style="width:100%;box-sizing:border-box" placeholder="One per line, for example:&#10;Kevin 3/14/1985&#10;Mom &amp; Dad anniversary 6/20/1980&#10;Grandma March 2"></textarea><button class="chip dpasteGo">Add these</button></details>
+      <div class="flex"><button class="chip dsave">💾 Save to a file</button><label class="chip">📂 Load from a file<input type="file" class="dloadFile" accept=".txt,.csv,text/plain,text/csv" hidden></label></div>
+      <div class="muted dnote" style="font-size:13px">With a year, the screen counts it: "Kevin turns 41". Tap a name to change it.</div>
+      <label>Start showing <input class="s" type="number" min="0" max="60" data-k="lead" placeholder="7" style="width:70px"> days before (each date gets its own screen; fireworks on the day)</label>` : ''}
     ${kind === 'clock' ? `<label><input type="checkbox" data-k="h24"> 24-hour clock</label>` : ''}
     ${kind === 'stocks' ? '<div class="row syms">Loading…</div>' : ''}
     ${kind === 'weather' ? `<div class="flex"><input type="text" class="wq" placeholder="Your town" style="flex:1;min-width:0"><button class="chip wfind">Find</button></div>
@@ -240,13 +252,13 @@ function addDrawn(kind, o = {}) {
       it[k] = inp.type === 'checkbox' ? inp.checked : inp.classList.contains('wtg') ? inp.value === '1' : k === 'font' ? +inp.value : k === 'date' ? inp.value.slice(5) : inp.value;
       if (k === 'fg') { it.useTheme = false; const c = ed.querySelector('[data-k=useTheme]'); if (c) c.checked = false; }
       if (k === 'useTheme' && it.useTheme) { it.fg = TH().main; const c = ed.querySelector('[data-k=fg]'); if (c) c.value = it.fg; }
-      if (k === 'lead') it.whenRefresh();
+      if (k === 'lead') { it.whenRefresh(); it.drawDates?.(); }
       el.querySelector('.name').textContent = label(it);
       if (k === 'unit') wxFetch(it);
       if (k === 'alerts') alertsFetch(it);
-      const pg = WX_PAGES.find(p => p[1] === k || p[3]?.[0] === k);   // the preview jumps to a screen just ticked or toggled
+      const pg = WX_PAGES.find(p => p[1] === k || p[3]?.[0] === k || (k === 'rzoom' && p[1] === 'radar'));   // the preview jumps to a screen just ticked or toggled
       if (pg) {
-        if (pg[3]?.[0] === k && !it[pg[1]]) { it[pg[1]] = true; const c = ed.querySelector(`[data-k=${pg[1]}]`); if (c) c.checked = true; }   // picking 24 hours ticks Hourly
+        if ((pg[3]?.[0] === k || k === 'rzoom') && !it[pg[1]]) { it[pg[1]] = true; const c = ed.querySelector(`[data-k=${pg[1]}]`); if (c) c.checked = true; }   // picking 24 hours ticks Hourly
         it.focusPage = it[pg[1]] ? pg[1] : null;
       }
       it.t0 = performance.now(); updateSpace();
@@ -338,14 +350,126 @@ function addDrawn(kind, o = {}) {
 $('addText').onclick = () => addDrawn('text');
 $('addClock').onclick = () => addDrawn('clock');
 $('addCount').onclick = () => addDrawn('countdown');
-// A reminder is a countdown that shows only in the last N days (every year), with fireworks on the day.
-$('addRem').onclick = () => {
-  const d = new Date(Date.now() + 30 * 864e5), mm = String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-  const it = addDrawn('countdown', { text: '', date: mm, lead: '5', effect: 'sparkle' });
-  it.el.querySelector('[data-k=text]').placeholder = "Who or what, e.g. Kevin's anniversary";
-  it.el.querySelector('[data-k=text]').focus();
-};
 $('addFx').onclick = () => addDrawn('fx');
+// ---------- Birthdays & dates: one item holds the whole list (the card's /dates.txt, apart from the show) ----------
+// The list is safe three ways: on the card in its own file (Send and Clear leave it alone), on this phone (saved on
+// every change, offered back if the card comes up empty), and as a file the user saves ("Save to a file").
+const DATE_KINDS = { b: 'Birthday', a: 'Anniversary', o: 'Other' };
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const datesKey = () => 'pjDates:' + (card.id || 'card');
+// One typed or pasted line -> { name, date: 'MM-DD', year, kind } or null. Reads "Kevin 3/14/1985", "Mom & Dad
+// anniversary 6-20-1980", "Grandma March 2", "1985-03-14 Kevin" and spreadsheet rows / our own file ("Kevin, 03/14/1985, birthday").
+function parseDateLine(line) {
+  let s = String(line).replace(/[\t,;"]+/g, ' ').trim();
+  if (!s || s.startsWith('#')) return null;
+  const kind = /\banniv(ersary)?\b/i.test(s) ? 'a' : /\b(other|event)\b/i.test(s) ? 'o' : 'b';
+  s = s.replace(/\b(anniv(ersary)?|birthday|b-?day|other|event)\b/ig, ' ');
+  let r, m, d, y = '';
+  if ((r = s.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/))) { y = r[1]; m = +r[2]; d = +r[3]; }
+  else if ((r = s.match(/\b(\d{1,2})[/\-.](\d{1,2})(?:[/\-.](\d{2,4}))?\b/))) { m = +r[1]; d = +r[2]; y = r[3] || ''; }
+  else if ((r = s.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b(?:\s+(\d{4})\b)?/i))) { m = MONTHS.indexOf(r[1].toLowerCase()) + 1; d = +r[2]; y = r[3] || ''; }
+  if (!r || !(m >= 1 && m <= 12 && d >= 1 && d <= 31)) return null;
+  if (y.length === 2) y = String(+y > new Date().getFullYear() % 100 ? 1900 + +y : 2000 + +y);
+  if (y && (+y < 1880 || +y > new Date().getFullYear())) y = '';
+  const name = s.replace(r[0], ' ').replace(/\s+/g, ' ').trim().slice(0, 30);
+  return name ? { name, date: String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0'), year: y, kind } : null;
+}
+// Days until a date, and how many years it will be then (0 = no year given).
+function dateNext(e) {
+  const n = countdownDays(e.date).n, when = new Date(Date.now() + n * 864e5);
+  return { n, years: e.year ? when.getFullYear() - +e.year : 0 };
+}
+const datesSorted = (list) => list.map(e => ({ ...e, ...dateNext(e) })).sort((a, b) => a.n - b.n || a.name.localeCompare(b.name));
+const datesText = (list) => list.map(e => [e.date, e.year || '', e.kind, clean(e.name)].join('\t')).join('\n') + (list.length ? '\n' : '');
+function datesFromText(txt) {               // the card's /dates.txt
+  return txt.split('\n').map(l => l.replace('\r', '').split('\t')).filter(f => f.length >= 4 && /^\d\d-\d\d$/.test(f[0]))
+    .map(f => ({ date: f[0], year: f[1], kind: DATE_KINDS[f[2]] ? f[2] : 'b', name: f.slice(3).join(' ') }));
+}
+const datesFile = (list) => '# Pocket Jumbotron birthdays & dates. One per line: name, date (month/day/year born), kind\n'
+  + datesSorted(list).sort((a, b) => a.date.localeCompare(b.date)).map(e => `${e.name}, ${+e.date.slice(0, 2)}/${+e.date.slice(3)}${e.year ? '/' + e.year : ''}, ${DATE_KINDS[e.kind].toLowerCase()}`).join('\n') + '\n';
+function datesLines(e, font) {             // what the card shows for one date: [big, line 1, line 2]
+  const nm = e.name.toUpperCase(), y = e.years;
+  const fit = (...t) => { smallF(); return t.find(s => s && M(s) <= W - 2) || t[t.length - 1]; };
+  if (!e.n) {                               // the day: the name big; a name too long for that goes under "TODAY!"
+    const hi = e.kind === 'b' ? 'HAPPY BIRTHDAY' : e.kind === 'a' ? 'HAPPY ANNIVERSARY' : 'TODAY', yr = y ? (e.kind === 'b' ? 'TURNS ' + y : e.kind === 'a' ? y + ' YEARS' : '') : '';
+    fitBig(font, nm, W - 2, 0);
+    if (M(nm) <= W - 2) return [nm, hi, yr];
+    return ['TODAY!', e.kind === 'o' ? '' : hi, fit(yr ? nm + ' ' + yr : '', nm)];
+  }
+  return [String(e.n), e.n === 1 ? 'DAY UNTIL' : 'DAYS UNTIL', e.kind === 'b' ? fit(y ? `${nm} TURNS ${y}` : '', nm + "'S BIRTHDAY", nm + "'S BDAY", nm)
+    : e.kind === 'a' ? fit(nm + "'S ANNIVERSARY", y ? `${nm} ${y} YRS` : '', nm + "'S ANNIV", nm) : nm];
+}
+function addDates(o = {}) {
+  const it = addDrawn('dates', Object.assign({ effect: 'sparkle', lead: '7', dates: [] }, o));
+  const ed = it.el.querySelector('.edit:not(.when)'), list = ed.querySelector('.dlist'), note = ed.querySelector('.dnote');
+  const f = (c) => ed.querySelector(c);
+  f('.dmon').innerHTML = MONTHS.map((m, i) => `<option value="${i + 1}">${m[0].toUpperCase() + m.slice(1)}</option>`).join('');
+  f('.dday').innerHTML = Array.from({ length: 31 }, (_, i) => `<option>${i + 1}</option>`).join('');
+  const changed = () => {
+    try { localStorage.setItem(datesKey(), JSON.stringify(it.dates)); } catch {}
+    it.relabel(); it.t0 = performance.now(); draw(); updateSpace();
+  };
+  const draw = () => {
+    const lead = it.lead === '' ? 7 : +it.lead;
+    list.innerHTML = it.dates.length ? '' : '<div class="muted">No dates yet. Add one below, or paste a whole list.</div>';
+    for (const e of datesSorted(it.dates)) {
+      const row = document.createElement('div'); row.className = 'drow';
+      const when = new Date(2000, +e.date.slice(0, 2) - 1, +e.date.slice(3)).toLocaleDateString([], { month: 'short', day: 'numeric' });
+      row.innerHTML = `<span><b></b> · ${when}${e.years ? ' · ' + (e.kind === 'b' ? 'turns ' + e.years : e.years + ' years') : ''}${e.kind === 'a' ? ' · anniversary' : ''} · <span class="${e.n <= lead ? 'soon' : 'muted'}">${e.n ? 'in ' + e.n + ' day' + (e.n > 1 ? 's' : '') : 'today!'}</span></span><button class="chip" aria-label="Remove">✕</button>`;
+      row.querySelector('b').textContent = e.name;
+      row.querySelector('b').onclick = () => {   // tap a name to change it: back into the boxes
+        f('.dname').value = e.name; f('.dmon').value = +e.date.slice(0, 2); f('.dday').value = +e.date.slice(3); f('.dyear').value = e.year; f('.dkind').value = e.kind;
+        it.dates.splice(it.dates.findIndex(x => x.name === e.name && x.date === e.date), 1); changed(); f('.dname').focus();
+      };
+      row.querySelector('button').onclick = () => { it.dates.splice(it.dates.findIndex(x => x.name === e.name && x.date === e.date), 1); changed(); };
+      list.appendChild(row);
+    }
+  };
+  const addOne = (e) => {                   // same name and date again = no duplicate
+    if (!it.dates.some(x => x.name.toLowerCase() === e.name.toLowerCase() && x.date === e.date)) { it.dates.push(e); return true; }
+    return false;
+  };
+  f('.dadd').onclick = () => {
+    const name = f('.dname').value.trim().slice(0, 30), y = f('.dyear').value.trim();
+    if (!name) { f('.dname').focus(); return; }
+    addOne({ name, date: String(f('.dmon').value).padStart(2, '0') + '-' + String(f('.dday').value).padStart(2, '0'), year: /^\d{4}$/.test(y) ? y : '', kind: f('.dkind').value });
+    f('.dname').value = ''; f('.dyear').value = ''; changed(); f('.dname').focus();
+  };
+  const addText = (txt, where) => {
+    const lines = txt.split(/\r?\n/).filter(l => l.trim() && !l.trim().startsWith('#')), bad = [];
+    let n = 0;
+    for (const l of lines) { const e = parseDateLine(l); if (!e) bad.push(l.trim()); else if (addOne(e)) n++; }
+    changed();
+    note.textContent = `Added ${n} date${n === 1 ? '' : 's'}${where}.` + (bad.length ? ` Couldn't read ${bad.length}: ${bad.slice(0, 3).join(' | ')}${bad.length > 3 ? ' …' : ''} (try "Name 3/14/1985").` : '');
+  };
+  f('.dpasteGo').onclick = () => { addText(f('.dpaste').value, ''); f('.dpaste').value = ''; };
+  f('.dsave').onclick = () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([datesFile(it.dates)], { type: 'text/plain' }));
+    a.download = 'pocket-jumbotron-dates.txt'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    note.textContent = 'Saved. Keep the file somewhere safe; "Load from a file" puts the list back on any screen.';
+  };
+  f('.dloadFile').onchange = async (ev) => { const file = ev.target.files[0]; if (file) addText(await file.text(), ' from ' + file.name); ev.target.value = ''; };
+  it.offerRestore = () => {                 // the card has no list but this phone remembers one
+    let saved = [];
+    try { saved = JSON.parse(localStorage.getItem(datesKey()) || '[]'); } catch {}
+    if (it.dates.length || !saved.length) return;
+    note.innerHTML = `This phone remembers <b>${saved.length}</b> date${saved.length > 1 ? 's' : ''} from before. <button class="chip drestore">Put them back</button>`;
+    note.querySelector('.drestore').onclick = () => { saved.forEach(addOne); changed(); note.textContent = `Put back ${saved.length} dates. Tap Send to save them on the screen.`; };
+  };
+  it.drawDates = draw;
+  it.relabel = () => { it.el.querySelector('.name').textContent = label(it); if (selected === it) $('bigLabel').textContent = 'Preview: ' + label(it); };
+  draw();
+  return it;
+}
+// A new list starts from what the screen already has (a list stays on the card even after its item is removed).
+$('addDates').onclick = async () => {
+  if (items.some(i => i.kind === 'dates')) { openItem(items.find(i => i.kind === 'dates')); return; }   // one list is enough
+  const it = addDates();
+  try { const r = await fetch('/api/dates'); if (r.ok) { it.dates = datesFromText(await r.text()); it.drawDates(); updateSpace(); } } catch {}
+  it.relabel();
+  it.offerRestore();
+};
 // A new weather item starts with the last town picked (the screen remembers it), else another weather item's town,
 // else where the screen is (found from its internet connection). Only with none of those does it ask for a town.
 function wxDefault() {
@@ -365,7 +489,12 @@ function wxRemember(it) {
 $('addWx').onclick = () => addDrawn('weather', { hourly: true, fc: true, ...wxDefault() });   // new: 12 hours + 5 days on
 $('addStocks').onclick = () => addDrawn('stocks');
 
-const ready = () => items.filter(i => i.kind === 'pic' ? i.blob && !i.failed : i.kind === 'weather' ? i.lat : i.kind === 'stocks' ? i.syms : true);
+const ready = () => items.filter(i => i.kind === 'pic' ? i.blob && !i.failed : i.kind === 'weather' ? i.lat : i.kind === 'stocks' ? i.syms : i.kind === 'dates' ? i.dates.length : true);
+// Which date the dates item is showing at t (ms) in the preview: those within the lead days, else the soonest one.
+function datesShown(it, t) {
+  const lead = it.lead === '' ? 7 : +it.lead, all = datesSorted(it.dates || []), soon = all.filter(e => e.n <= lead).slice(0, 6), show = soon.length ? soon : all.slice(0, 1);
+  return show.length ? show[Math.floor(t / ((it.secs || 6) * 1000)) % show.length] : null;
+}
 function updateSpace() {
   const pics = ready().filter(i => i.kind === 'pic');
   const need = pics.reduce((s, i) => s + i.blob.size + 4096, 0);

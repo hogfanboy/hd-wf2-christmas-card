@@ -142,3 +142,77 @@ static void playCountdown(const ShowItem &item) {
     if (waitMs(wait > 0 ? wait : 1)) return;
   }
 }
+
+// ---------- Birthdays & dates (show item "dates") ----------
+// The list lives in /dates.txt, apart from the show, so Send, Clear and firmware updates never touch it (the page
+// reads and writes it with GET/POST /api/dates and keeps a copy on the phone). One date per line, TABs:
+//   MM-DD <year born / married, or empty> <kind: b birthday, a anniversary, o other> <name>
+// The item plays only when a date is within `lead` days (default 7), one screen per date, soonest first.
+static std::vector<DateHit> datesComing(int lead, size_t maxN) {
+  std::vector<DateHit> hits;
+  File f = LittleFS.open("/dates.txt", "r");
+  if (!f) return hits;
+  time_t now = time(nullptr); struct tm lt; localtime_r(&now, &lt);
+  const int y = lt.tm_year + 1900;
+  while (f.available()) {
+    String line = f.readStringUntil('\n'); line.replace("\r", "");
+    int t1 = line.indexOf('\t'), t2 = line.indexOf('\t', t1 + 1), t3 = line.indexOf('\t', t2 + 1);
+    if (t1 != 5 || t2 < 0 || t3 < 0) continue;
+    int m = line.substring(0, 2).toInt(), d = line.substring(3, 5).toInt();
+    if (m < 1 || m > 12 || d < 1 || d > 31) continue;
+    int yy = y, n = daysTo(y, m, d);
+    if (n < 0) n = daysTo(++yy, m, d);
+    if (n < 0 || n > lead) continue;
+    int born = line.substring(t1 + 1, t2).toInt();
+    hits.push_back({n, born > 1800 && born <= yy ? yy - born : 0, line[t2 + 1], line.substring(t3 + 1)});
+  }
+  f.close();
+  std::stable_sort(hits.begin(), hits.end(), [](const DateHit &a, const DateHit &b) { return a.days < b.days; });
+  if (hits.size() > maxN) hits.resize(maxN);
+  return hits;
+}
+static int datesLead(const ShowItem &it) { return it.lead >= 0 ? it.lead : 7; }
+// The first text that fits the width.
+static String fitLabel(std::initializer_list<String> tries) {
+  String last;
+  for (const String &s : tries) { last = s; if (s.length() && labelW(s) <= W - 2) return s; }
+  return last;
+}
+static void playDates(const ShowItem &item) {
+  if (!timeValid()) return;
+  auto hits = datesComing(datesLead(item), 6);
+  pjLabels = isPJ(item.font);
+  for (auto &h : hits) {
+    ShowItem it = item;
+    if (h.days == 0) it.effect = FX_FIREWORKS;                  // the big day
+    String nm = upcase(h.name), big, l1, l2, n = String(h.years);
+    if (h.days == 0) {
+      big = nm;                                                 // the name big; too long for that: under "TODAY!"
+      l1 = h.kind == 'b' ? "HAPPY BIRTHDAY" : h.kind == 'a' ? "HAPPY ANNIVERSARY" : "TODAY";
+      l2 = h.years ? (h.kind == 'b' ? "TURNS " + n : h.kind == 'a' ? n + " YEARS" : "") : "";
+      fitBig(it.font, big, W - 2, 0);
+      if (textWidth(big) > W - 2) { big = "TODAY!"; if (h.kind == 'o') l1 = ""; l2 = fitLabel({l2.length() ? nm + " " + l2 : "", nm}); }
+    } else {
+      big = String(h.days);
+      l1 = h.days == 1 ? "DAY UNTIL" : "DAYS UNTIL";
+      if (h.kind == 'b') l2 = fitLabel({h.years ? nm + " TURNS " + n : "", nm + "'S BIRTHDAY", nm + "'S BDAY", nm});
+      else if (h.kind == 'a') l2 = fitLabel({nm + "'S ANNIVERSARY", h.years ? nm + " " + n + " YRS" : "", nm + "'S ANNIV", nm});
+      else l2 = nm;
+    }
+    effectInit(it); FxGuard fxg;
+    uint32_t total = (it.sec ? it.sec : 6) * 1000UL, start = millis(), frame = 0;
+    shownValid = false;
+    while (millis() - start < total) {
+      uint32_t t0 = millis();
+      paintBackground(it, frame);
+      fitBig(it.font, big, W - 2, 0);
+      drawText(big, (W - textWidth(big)) / 2, textBaseline(curFont, 0, 40), it, millis());
+      if (l1.length()) labelC(l1, W / 2, 42, th().main);
+      if (l2.length()) labelC(l2, W / 2, 53, th().acc);
+      pushCanvas();
+      frame++;
+      int32_t wait = 40 - (int32_t)(millis() - t0);
+      if (waitMs(wait > 0 ? wait : 1)) return;
+    }
+  }
+}

@@ -45,7 +45,7 @@ static const int W = 128, H = 64;
 static const uint8_t BUTTON_PIN = 17;          // S1 on the WF2 board, active LOW (found by pin scan)
 
 // ---- Tuning ----
-static const char *FW_VERSION = "1.1.0-beta1";
+static const char *FW_VERSION = "1.1.0-beta2";
 // Double buffering costs ~100 KB of RAM (no PSRAM); single buffering leaves room for WiFi.
 static const bool USE_DOUBLE_BUFFER = false;
 static const uint8_t MAX_BRIGHTNESS = 140;    // ~55% of full: protects barrel jack / supply. 100% in the app = this.
@@ -79,7 +79,7 @@ PixRow *canvas = nullptr;                      // composited frame (RGB888)
 int offX = 0, offY = 0;                        // centers GIFs smaller than the panel
 // The show (see show.ino). Declared here because Arduino joins the .ino files in name order.
 struct ShowItem {
-  char type = 'p';                // p picture, t text, c clock, d countdown, f effect, w weather
+  char type = 'p';                // p picture, t text, c clock, d countdown, f effect, w weather, s stocks, b dates
   uint16_t sec = 0;
   String file, text, extra;       // extra: clock 12/24, countdown MM-DD / holiday key / next, weather "F,lat,lon"
   uint32_t fg = 0xFFFFFF, bg = 0;
@@ -92,12 +92,14 @@ struct ShowItem {
   int8_t hFrom = -1, hTo = -1;
   int16_t lead = -1;
   uint16_t wxPages = 0;
+  uint8_t rzoom = 6;              // weather radar range: LED zoom 7 close, 6 normal, 5 wide, 4 regional (show.txt rzoom=)
   uint8_t alerts = 0;             // weather: 1 = show weather alerts (US, weather.gov), 2 = demo alerts (testing)
   bool themed = false;            // color "theme": fg follows the card's theme
 };
 // Weather screens after "now" (show.txt options, checkboxes on the page), in the order they play.
 enum { WXP_RAINSOON = 1, WXP_HOURLY = 2, WXP_CHART = 4, WXP_DAYS5 = 8, WXP_DAYS10 = 16, WXP_DETAILS = 32, WXP_AIR = 64, WXP_SUN = 128, WXP_RADAR = 256, WXP_RADAR_ALWAYS = 512 };   // radar=always: testing
 typedef void (*WxDraw)(const ShowItem &, uint32_t frame, uint32_t ms);   // draws one weather screen (weather.ino)
+struct DateHit { int days; int years; char kind; String name; };   // a birthday/date coming up (screens.ino)
 struct WxAlert { char title[32]; uint8_t level; time_t until; };   // a weather alert (weather.ino): level 1-3
 struct Theme { uint32_t main, acc, dim; };   // color theme: main text, accent, dim (canvas.ino THEMES)
 std::vector<ShowItem> playlist;
