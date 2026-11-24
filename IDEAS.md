@@ -38,3 +38,4 @@ Phone OTG install dropped (no iPhone path). Options: borrow any Chrome/Edge comp
 - Bring soft font edges back for the huge font only, if it looks better there (`SOFT = { 34: 1 }` in web/pjfont.js).
 - Weather icon animation frames beyond the breathing sun (cloud puff wobble, raindrop splash) if the crisp set is liked.
 - Research: scan GitHub for projects built on the ESP32-HUB75-MatrixPanel-DMA library, and Huidu's HDPlayer feature list, for things worth adding.
+- Share pictures between owners (beta tester ask, 11-24): easiest = a Share button on a picture in the card app (phone share sheet: text/email the file; the friend adds it with + Pictures). Bigger = a shared community pack on GitHub, needs moderation/abuse checks.

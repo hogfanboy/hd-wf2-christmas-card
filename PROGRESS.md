@@ -1,6 +1,6 @@
 # PROGRESS
 
-## Working state (2026-11-22: 1.0.0 released; card 1 = dev card, beta20 until its 3 am update; card 2 = 1.1.0-beta2 (radar range + birthdays), au off)
+## Working state (2026-11-24: 1.1.0 released; card 2 = 1.1.0, auto-update on; card 1 = dev card)
 - **beta20 (better effect art + card report), on card 1:** sleigh scene, turkey, bunny + eggs, bats + pumpkins +
   moon, shamrocks, balloons, fish, hearts use shaded sprites from `tools/make-fxsprites.mjs` (1 byte/pixel + palette
   per sprite: 21 KB flash, no RAM; web/fxsprites.js for the page). App 1.64 of 1.75 MB (195 KB free). Art not
@@ -32,19 +32,9 @@
 - Test uploads with curl: `-H "Content-Type: text/plain"` for /api/show, then POST /api/play.
 
 ## Next (the user can answer with one of these commands)
-0000. **1.1.0-beta2 on card 2 (branch `radar`, NOT merged).** 11-24: Regional judged great by eye. Now set to Close +
-   "even when dry (test)" (writes `radar=always`; re-sends keep it). Try each range from **http://192.168.50.199/local**
-   (website app lacks it until the merge). Remove the test box before release.
-   - 11-24/25: radar 750 ms/frame (OK by eye); night Off/10/25% (5% dropped: whack-a-mole; old 5 -> 10); new cards
-     start at 50%. Dim panel: never under `hwmin` 12 (row bands lower), darker is done in the colors.
-   - **Color tune** (/local > Settings, folded): R/G/B % at 5 panel levels (7 17.5 35 70 140 of 255 = night 10/25% of
-     50%, normal 25/50/100%), blended; applies to everything incl. GIFs. Defaults = card 2's tuning 11-25
-     (95/100/156, 95/100/113, then 100s): "ballpark", user may refine. 11-25: card 2 had 1 brownout (power, not code).
-   - **Radar:** range picker next to the radar checkbox (`rzoom=`): Close 10-mi ring (zoom-7 tile 1:1), Normal 25,
-     Wide 50, Regional 100. Home at column 85, labels right; state + county lines from Census us-atlas.
-   - **Birthdays & dates** (replaces + Reminder): one item, list in `/dates.txt` (GET/POST /api/dates; Send/Clear
-     leave it), shows within N days (default 7), fireworks + "HAPPY BIRTHDAY" on the day, "TURNS 41" with a year.
-   - App 1.71 of 1.75 MB. Release (user, 11-23): only after a real rain loop by eye, merged as 1.1.0.
+0000. **1.1.0 released 11-24 (main = radar branch)**: radar ranges, birthdays & dates, night Off/10/25%, new cards 50%,
+   Color tune (defaults = card 2's tuning; details PROJECT-NOTES). Installer step 3 now says "No compatible devices
+   found" is normal (a beta tester thought she broke it). Next: hear back from beta testers; idea parked: share pictures.
 000. **Soak passed (card 2, 32.3 h, 11-23)**: 0 crashes, flat memory. Card 2's auto-update stays OFF on the beta.
 00. **Judge beta17 by eye** - message scrolling and the moons (sun & moon screen).
 00a. **"Weather screens look good" / "change X"** - card 1: now, 24 hours sliding, 10 days sliding, details, air,
