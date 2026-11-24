@@ -84,7 +84,7 @@ function drawForecast(it, w, t, ms = 0) {   // copy of the card's drawDays5: 25-
 // ("hourly") or 24 hours ("chart"), one column per hour, sliding; daily = 5 days ("forecast") or 10 days ("days10", sliding).
 const WX_PAGES = [
   ['rainsoon', 'rainsoon', 'Rain on the way: only when rain or snow is coming in the next 2 hours'],
-  ['radar', 'radar', 'Rain radar map, the last hour: only when rain or snow is on the way <select data-k="rzoom"><option value="7">Close (10-mile ring)</option><option value="6">Normal (25-mile ring)</option><option value="5">Wide (50-mile ring)</option><option value="4">Regional (100-mile ring)</option></select> <span class="muted"><input type="checkbox" data-k="radarAlways"> even when dry (test)</span> <span class="muted">(radar <a href="https://www.rainviewer.com" target="_blank" rel="noopener">RainViewer</a>, map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>)</span>'],
+  ['radar', 'radar', 'Rain radar map, the last hour: only when rain or snow is on the way <select data-k="rzoom"><option value="7">Close (10-mile ring)</option><option value="6">Normal (25-mile ring)</option><option value="5">Wide (50-mile ring)</option><option value="4">Regional (100-mile ring)</option></select> <span class="muted">(radar <a href="https://www.rainviewer.com" target="_blank" rel="noopener">RainViewer</a>, map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>)</span>'],
   ['hourly', 'hourly', 'Hourly forecast', ['hours24', '12 hours', '24 hours', 'chart']],
   ['forecast', 'fc', 'Daily forecast', ['days10', '5 days', '10 days', 'days10']],
   ['details', 'details', 'Wind, humidity, UV, dew point'],
