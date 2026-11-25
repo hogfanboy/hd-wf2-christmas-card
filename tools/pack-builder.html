@@ -35,8 +35,14 @@
   .tile canvas { width:100%; aspect-ratio:2/1; display:block; border-radius:6px; background:#07070b; cursor:grab; }
   .tile .nm { font-size:13px; margin-top:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:4px; }
   .tile .info { font-size:12px; color:var(--muted); }
-  .tile .btns { display:flex; gap:6px; margin-top:6px; }
-  .tile .btns button { padding:4px 9px; font-size:12px; }
+  /* Like the phone app's item cards: labeled settings, then a bottom bar with Move and Delete. */
+  .tile .opts { display:grid; gap:6px; margin-top:8px; }
+  .tile .lrow { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .tile .lbl { font-size:12px; color:var(--muted); min-width:66px; }
+  .tile .foot .lbl { min-width:0; }
+  .tile .foot { display:flex; gap:6px; align-items:center; margin-top:10px; padding-top:8px; border-top:1px solid var(--line); }
+  .tile .foot button { padding:4px 10px; font-size:12px; }
+  .tile .foot .del { color:var(--red); }
   .num { position:absolute; top:12px; left:12px; background:rgba(0,0,0,.7); color:var(--gold); font:700 12px system-ui; padding:1px 7px; border-radius:6px; }
   .tag { font:700 11px system-ui; padding:1px 7px; border-radius:6px; background:#2b2440; color:var(--violet); margin-left:4px; }
   .tag.full { background:#3a2a14; color:var(--gold); }
@@ -384,7 +390,7 @@ const esc = (x) => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;
 function renderFresh() {
   const ol = $('fresh'); ol.innerHTML = '';
   const li = (html, cls, pack) => { const e = document.createElement('li'); e.innerHTML = html; if (cls) e.className = cls; if (pack != null) e.onclick = () => openPack(pack); ol.appendChild(e); };
-  li('Clock', 'fixed'); li('Weather where the screen is, with forecast', 'fixed');
+  li('Clock (theme color, Jumbo huge, matches the weather)', 'fixed'); li('Weather where the screen is: alerts, 24 hours, 10 days (theme color, Jumbo huge, matches the weather)', 'fixed');
   const inst = packs.filter(p => p.loose || (p.meta.install && !p.skipped))
     .sort((a, b) => (!!b.loose - !!a.loose) || (Number(a.meta.order) || 50) - (Number(b.meta.order) || 50) || byName(a.folder, b.folder));
   let bytes = 0, n = 0, known = 0;
@@ -469,11 +475,14 @@ function renderTiles() {
   tiles.forEach((t, i) => {
     const el = document.createElement('div'); el.className = 'tile'; el.draggable = true;
     el.innerHTML = `<span class="num">${i + 1}</span><canvas width="${W * S}" height="${H * S}"></canvas><div class="nm"></div><div class="info">Converting…</div>
-      <div class="btns" data-set><button class="chip" data-fit="fill" title="Crop to fill the screen">Fill</button><button class="chip" data-fit="fit" title="Whole picture, black bars">Fit</button>
-        <button class="chip" data-fmt="gif" style="margin-left:8px">GIF</button><button class="chip" data-fmt="full">Full color</button></div>
-      <div class="btns" data-new><button class="chip" data-inst="1" title="In the first show of new cards">On new cards</button><button class="chip" data-inst="0" title="Phones can still add it">Off</button>
-        <input type="text" class="dates" placeholder="every day" title="New cards show it only between these days, every year, e.g. 11-15 to 01-06"></div>
-      <div class="btns"><button class="secondary" data-a="-1" title="Earlier">◀</button><button class="secondary" data-a="1" title="Later">▶</button><button class="secondary" data-a="del" style="color:var(--red);margin-left:auto">Delete</button></div>`;
+      <div class="opts" data-set>
+        <div class="lrow"><span class="lbl">Shape</span><button class="chip" data-fit="fill" title="Crop to fill the screen">Fill</button><button class="chip" data-fit="fit" title="Whole picture, black bars">Fit</button></div>
+        <div class="lrow"><span class="lbl">Colors</span><button class="chip" data-fmt="gif">GIF</button><button class="chip" data-fmt="full">Full color</button></div></div>
+      <div class="opts" data-new>
+        <div class="lrow"><span class="lbl">New cards</span><button class="chip" data-inst="1" title="In the first show of new cards">On</button><button class="chip" data-inst="0" title="Left off new cards; phones can still add it">Off</button></div>
+        <div class="lrow"><span class="lbl">Shows</span><input type="text" class="dates" placeholder="every day" title="New cards show it only between these days, every year, e.g. 11-15 to 01-06"></div></div>
+      <div class="foot"><button class="secondary" data-a="-1" title="Earlier in the pack" aria-label="Move earlier">◀</button><button class="secondary" data-a="1" title="Later in the pack" aria-label="Move later">▶</button>
+        <span class="lbl">Move</span><span style="flex:1"></span><button class="secondary del" data-a="del">Delete</button></div>`;
     el.querySelector('.nm').textContent = t.name; el.querySelector('.nm').title = t.name;
     t.cv = el.querySelector('canvas'); t.info = el.querySelector('.info'); t.el = el;
     if (t.frames) { t.next = 0; showInfo(t); }

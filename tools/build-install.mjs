@@ -71,7 +71,8 @@ for (const src of process.argv.slice(2).map(p => path.resolve(p)).filter(p => fs
     const s = (p.meta.pictures || {})[f] || {};
     if (!isPic(path.join(p.dir, f)) || s.install === false) continue;
     picked.push({ src: path.join(p.dir, f), dates: /^\d{4}-\d{4}$/.test(s.dates || '') ? s.dates : '',
-      fit: s.fit === 'fill' ? 'cover' : s.fit === 'fit' ? 'contain' : 'auto' });   // the pack builder's Fill / Fit
+      fit: s.fit === 'fill' ? 'cover' : s.fit === 'fit' ? 'contain' : 'auto',     // the pack builder's Fill / Fit
+      full: (s.format || p.meta.format) === 'full' });                              // and GIF / Full color
   }
 }
 if (!picked.length) {                                 // no content repo: our generated greetings
@@ -85,16 +86,16 @@ const isCardGif = (f) => { const b = fs.readFileSync(f); return b.slice(0, 3).to
 const showPics = [];
 picked.forEach((p, i) => {
   const base = String(i + 1).padStart(2, '0') + '-' + path.basename(p.src, path.extname(p.src)).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24);
-  if (isCardGif(p.src)) { fs.copyFileSync(p.src, path.join(gifs, base + '.gif')); showPics.push({ file: base + '.gif', dates: p.dates }); return; }
+  if (!p.full && isCardGif(p.src)) { fs.copyFileSync(p.src, path.join(gifs, base + '.gif')); showPics.push({ file: base + '.gif', dates: p.dates }); return; }
   const tmp = path.join(stage, 'one'); fs.rmSync(tmp, { recursive: true, force: true }); fs.mkdirSync(tmp);
-  run(process.execPath, [path.join(root, 'tools/make-gifs.mjs'), tmp, p.src, '--fit=' + (p.fit || 'auto')]);
-  const made = fs.readdirSync(tmp).filter(f => f.endsWith('.gif'));
+  run(process.execPath, [path.join(root, 'tools/make-gifs.mjs'), tmp, p.src, '--fit=' + (p.fit || 'auto'), '--format=' + (p.full ? 'full' : 'gif')]);
+  const made = fs.readdirSync(tmp).filter(f => /\.(gif|pjm)$/.test(f));
   if (!made.length) { console.warn('warning: could not convert ' + p.src + '; left off the first show'); return; }
-  fs.copyFileSync(path.join(tmp, made[0]), path.join(gifs, base + '.gif')); showPics.push({ file: base + '.gif', dates: p.dates });
+  const ext = path.extname(made[0]); fs.copyFileSync(path.join(tmp, made[0]), path.join(gifs, base + ext)); showPics.push({ file: base + ext, dates: p.dates });
 });
 const L = (...f) => f.join('\t');
 const show = [
-  L('clock', 0, 'theme', '000000', 12, 'none', 12),                        // theme color (Soft gold on a new card), Jumbo huge
+  L('clock', 0, 'theme', '000000', 12, 'auto', 12),                          // theme color (Soft gold on a new card), Jumbo huge, match the weather
   L('weather', 0, 'theme', '000000', 12, 'auto', 'A', 'auto', 'auto', '', '@alerts chart days10'),   // + alerts, 24 hours, 10 days, match the weather
   ...showPics.map(p => p.dates ? L('pic', 0, p.file, '@dates=' + p.dates) : L('pic', 0, p.file)),
 ];

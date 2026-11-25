@@ -2,16 +2,18 @@
 // Wide images fill the panel (center crop); tall/square ones are letterboxed on pure black.
 // Every frame is written as a full, opaque frame with its own palette that always includes exact black
 // (so letterbox bars stay black instead of the nearest dark gray/green).
-// Usage: node tools/make-gifs.mjs <outDir> <file-or-folder>... [--fit=auto|cover|contain] [--max-frames=150]
+// Usage: node tools/make-gifs.mjs <outDir> <file-or-folder>... [--fit=auto|cover|contain] [--max-frames=150] [--format=gif|full]
+// --format=full writes the card's full-color .pjm instead (JPEG frames, same as the phone's "Full color": web/convert.js).
 import sharp from 'sharp';
 import { encodeFrames } from './gif-encode.mjs';
+import jpeg from 'jpeg-js';
 import fs from 'node:fs';
 import path from 'node:path';
 
 const W = 128, H = 64;
 const args = process.argv.slice(2);
 const opt = (k, d) => (args.find(a => a.startsWith(`--${k}=`)) || `--${k}=${d}`).split('=')[1];
-const fitArg = opt('fit', 'auto'), maxFrames = +opt('max-frames', 150);
+const fitArg = opt('fit', 'auto'), maxFrames = +opt('max-frames', 150), full = opt('format', 'gif') === 'full';
 const [outDir, ...inputs] = args.filter(a => !a.startsWith('--'));
 if (!outDir || !inputs.length) { console.error('usage: node make-gifs.mjs <outDir> <inputs...> [--fit=auto|cover|contain]'); process.exit(1); }
 fs.mkdirSync(outDir, { recursive: true });
@@ -84,12 +86,28 @@ for (const f of files) {
         .ensureAlpha().raw().toBuffer();
       frames.push({ rgba: new Uint8Array(out), delay: s.delay });
     }
-    let out = path.join(outDir, slug(f) + '.gif');
-    for (let k = 2; written.has(out); k++) out = path.join(outDir, slug(f) + '-' + k + '.gif');
+    const ext = full ? '.pjm' : '.gif';
+    let out = path.join(outDir, slug(f) + ext);
+    for (let k = 2; written.has(out); k++) out = path.join(outDir, slug(f) + '-' + k + ext);
     written.add(out);
-    fs.writeFileSync(out, encodeFrames(frames));
+    fs.writeFileSync(out, full ? encodePjm(frames) : encodeFrames(frames));
     const kb = fs.statSync(out).size / 1024; total += kb;
     console.log(`${kb.toFixed(0).padStart(5)} KB  ${String(frames.length).padStart(4)} frames  ${fit.padEnd(7)} ${path.basename(out)}  <- ${path.basename(f)}`);
   } catch (e) { console.log(`  SKIP ${path.basename(f)}: ${e.message}`); }
 }
 console.log(`Total ${(total / 1024).toFixed(2)} MB in ${outDir}`);
+
+// The card's full-color format (same as web/convert.js encodePjm): "PJM1", then per frame a 4-byte JPEG length,
+// 2-byte delay (ms), 2 spare bytes and the JPEG (128x64, quality 92). Near-black (under 16 on every channel) is
+// made pure black first, as on the phone, so the LEDs stay off there.
+function encodePjm(frames) {
+  const parts = [Buffer.from('PJM1')];
+  for (const f of frames) {
+    const d = Buffer.from(f.rgba);
+    for (let i = 0; i < d.length; i += 4) if (d[i] < 16 && d[i + 1] < 16 && d[i + 2] < 16) d[i] = d[i + 1] = d[i + 2] = 0;
+    const jpg = jpeg.encode({ data: d, width: W, height: H }, 92).data;
+    const hdr = Buffer.alloc(8); hdr.writeUInt32LE(jpg.length, 0); hdr.writeUInt16LE(Math.min(65535, Math.round(f.delay)), 4);
+    parts.push(hdr, jpg);
+  }
+  return Buffer.concat(parts);
+}

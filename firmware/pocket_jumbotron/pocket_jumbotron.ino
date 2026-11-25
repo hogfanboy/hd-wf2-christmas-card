@@ -56,6 +56,7 @@ uint8_t themeIx = 2;                           // color theme (canvas.ino THEMES
 String wxHome;                                 // last weather town picked on the page ("lat,lon,place" or "auto"), NVS
 bool autoUpdate = true;                        // daily update check from the website (online.ino), saved in NVS
 extern bool updateNow;
+uint8_t wxMatchFx();                           // weather.ino: snow / rain / none for "match the weather"
 // The HUB75 library already applies CIE1931 brightness correction (lumConvTab), so no extra gamma here.
 static const float GAMMA = 1.0f;
 static const uint32_t MIN_SHOW_MS = 8000;     // short GIFs loop until this long

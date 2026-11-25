@@ -6,9 +6,9 @@ const FX = { none: 'None', snow: 'Snow', sparkle: 'Sparkle', hearts: 'Hearts', c
   lights: 'Christmas lights', turkey: 'Turkey & leaves', bunny: 'Easter bunny', bats: 'Bats & pumpkins', shamrocks: 'Shamrocks',
   flag: 'US flag',
   auto: 'Match the weather' };
-// "Match the weather" (snow or rain when it does) only makes sense on a weather item.
-// On a countdown it means "match the holiday" (turkey for Thanksgiving...).
-const fxOptions = (kind) => Object.entries(FX).filter(([k]) => k !== 'auto' || kind === 'weather' || kind === 'countdown')
+// "Match the weather" (snow or rain when it does) on a weather item or a clock (the clock uses the weather the screen
+// fetched last, or the weather where the screen is). On a countdown it means "match the holiday" (turkey for Thanksgiving...).
+const fxOptions = (kind) => Object.entries(FX).filter(([k]) => k !== 'auto' || kind === 'weather' || kind === 'clock' || kind === 'countdown')
   .map(([k, v]) => `<option value="${k}">${k === 'auto' && kind === 'countdown' ? 'Match the holiday' : v}</option>`).join('');
 const rand = (n) => Math.floor(Math.random() * n);
 const sin8 = (a) => 128 + Math.trunc(127 * Math.sin((a & 255) * 6.2832 / 256));
@@ -372,7 +372,10 @@ function paintBg(it, t) {
   let effect = it.effect;
   if (effect === 'auto' && it.kind === 'countdown') { const h = countdownDays(it.date).hol; effect = h >= 0 ? HOLIDAYS[h][7] : 'sparkle'; }   // match the holiday
   else if (it.kind === 'dates' && datesShown(it, t)?.n === 0) effect = 'fireworks';   // the big day
-  else if (effect === 'auto') { const k = it.kind === 'weather' ? wxKind((it.wx || SAMPLE_WX).code) : ''; effect = k === 'snow' ? 'snow' : k === 'rain' || k === 'storm' ? 'rain' : 'none'; }
+  else if (effect === 'auto') {                    // match the weather (a clock: the show's first weather item)
+    const w = it.kind === 'weather' ? it : items.find(i => i.kind === 'weather' && i.wx), k = w ? wxKind((w.wx || SAMPLE_WX).code) : '';
+    effect = k === 'snow' ? 'snow' : k === 'rain' || k === 'storm' ? 'rain' : 'none';
+  }
   if (!effect || effect === 'none') return;
   const per = it.kind === 'text' ? 25 : it.kind === 'fx' ? 30 : 40, behind = it.kind !== 'fx';
   if (!it.fx || it.fx.t0 !== it.t0 || it.fx.effect !== effect) { it.fx = fxNew(effect, behind); it.fx.t0 = it.t0; }

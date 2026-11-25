@@ -204,7 +204,7 @@ const SIZE_NAME = { 8: 'Jumbo thin', 9: 'Jumbo small', 10: 'Jumbo medium', 11: '
   1: 'Pixel', 2: 'Classic small', 3: 'Classic medium', 4: 'Classic big' };
 function addDrawn(kind, o = {}) {
   const it = Object.assign({ kind, secs: 0, useTheme: !('fg' in o), fg: TH().main, bg: COLORS.bg, rainbow: false,
-    font: kind === 'text' || kind === 'stocks' ? 11 : 12, syms: '^GSPC,^DJI,^IXIC', effect: kind === 'countdown' ? 'snow' : kind === 'fx' ? 'fireworks' : 'none',
+    font: kind === 'text' || kind === 'stocks' ? 11 : 12, syms: '^GSPC,^DJI,^IXIC', effect: kind === 'countdown' ? 'snow' : kind === 'fx' ? 'fireworks' : kind === 'clock' || kind === 'weather' ? 'auto' : 'none',
     text: kind === 'text' ? 'Happy Birthday!' : kind === 'countdown' ? 'Christmas' : '', date: '12-25',
     unit: usesF() ? 'F' : 'C', lat: '', lon: '', place: '', lead: '', fc: false, rainsoon: false, alerts: false, rzoom: '6',
     h24: !new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12 }, o);

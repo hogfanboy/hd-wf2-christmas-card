@@ -23,8 +23,10 @@ static void playText(const ShowItem &it) {
   }
 }
 
-static void playClock(const ShowItem &it) {
+static void playClock(const ShowItem &item) {
   if (!timeValid()) return;
+  ShowItem it = item;
+  if (it.effect == FX_AUTO) it.effect = wxMatchFx();   // "match the weather" (weather.ino)
   effectInit(it); FxGuard fxg;
   uint32_t total = (it.sec ? it.sec : 8) * 1000UL, start = millis(), frame = 0;
   bool h12 = it.extra != "24";

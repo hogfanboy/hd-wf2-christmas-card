@@ -149,6 +149,18 @@ static int wxKind(int c) {                       // WMO weather codes
   if (c >= 95) return WX_STORM;
   return WX_RAIN;
 }
+// "Match the weather": snow or rain while it does, else no effect. A weather item uses its own town's weather; a
+// clock uses the weather the show fetched last (up to 2 hours old), or else fetches the weather where the screen is.
+uint8_t wxMatchFx() {
+  if (!(wx.ok && millis() - wx.at < 2UL * 3600 * 1000) && geoOk) {
+    ShowItem here; here.type = 'w';
+    here.extra = String(geoUsesF() ? "F," : "C,") + String(geoLat, 3) + "," + String(geoLon, 3);
+    weatherFetch(here);
+  }
+  if (!wx.ok || millis() - wx.at > 2UL * 3600 * 1000) return FX_NONE;
+  int k = wxKind(wx.code);
+  return k == WX_SNOW ? FX_SNOW : (k == WX_RAIN || k == WX_STORM) ? FX_RAIN : FX_NONE;
+}
 static const char *wxWord(int c) {
   if (c == 0) return "CLEAR"; if (c == 1) return "MOSTLY CLEAR"; if (c == 2) return "PARTLY CLOUDY"; if (c == 3) return "CLOUDY";
   if (c == 45 || c == 48) return "FOG"; if (c >= 51 && c <= 57) return "DRIZZLE"; if (c >= 61 && c <= 67) return "RAIN";
@@ -670,10 +682,7 @@ static void playWeather(const ShowItem &item) {
   }
   if (!weatherFetch(it)) return;
   airFetch(it.extra);
-  if (it.effect == FX_AUTO) {                     // "match the weather": snow or rain when it does, else nothing
-    int k = wxKind(wx.code);
-    it.effect = k == WX_SNOW ? FX_SNOW : (k == WX_RAIN || k == WX_STORM) ? FX_RAIN : FX_NONE;
-  }
+  if (it.effect == FX_AUTO) it.effect = wxMatchFx();   // "match the weather": this town's, just fetched
   effectInit(it); FxGuard fxg;
   String temp = String((int)lroundf(wx.temp));
   String line2 = "H" + String((int)lroundf(wx.hi)) + " L" + String((int)lroundf(wx.lo)) + " " + upcase(it.text);

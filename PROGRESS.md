@@ -38,8 +38,10 @@
    longer shows "Done", drawings captioned "Example drawing"; Connect/Cancel order = Windows; a failed install shows a
    red box + "Copy the technical details"; window drawings use the real title and say "Not a button" (she may have
    clicked the drawn Connect). Starter pictures now keep the pack builder's Fill/Fit (build-install.mjs passed
-   none). New weather = alerts + 24 h + 10 days + Match the weather; first show clock + weather = theme color, Jumbo
-   huge. Item cards: settings, then "Plays N seconds / When" (panel right below), then Move + Done at the bottom.
+   none) and GIF/Full color (make-gifs --format=full writes .pjm). New clock + weather (app and first show): theme
+   color, Jumbo huge, Match the weather (clock: last weather fetched, else where the screen is: weather.ino
+   wxMatchFx; firmware change, not on a card yet). Weather adds alerts + 24 h + 10 days. Item cards (app and pack
+   builder): labeled settings, then a bottom bar (Plays/When; Move + Done or Delete).
    Next: tester 2 sends that copy; judge the new card layout on the phone; parked: share pictures.
 000. **Soak passed (card 2, 32.3 h, 11-23)**: 0 crashes, flat memory. Card 2's auto-update stays OFF on the beta.
 00. **Judge beta17 by eye** - message scrolling and the moons (sun & moon screen).
