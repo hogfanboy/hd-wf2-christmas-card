@@ -39,3 +39,4 @@ Phone OTG install dropped (no iPhone path). Options: borrow any Chrome/Edge comp
 - Weather icon animation frames beyond the breathing sun (cloud puff wobble, raindrop splash) if the crisp set is liked.
 - Research: scan GitHub for projects built on the ESP32-HUB75-MatrixPanel-DMA library, and Huidu's HDPlayer feature list, for things worth adding.
 - Share pictures between owners (beta tester ask, 11-24): easiest = a Share button on a picture in the card app (phone share sheet: text/email the file; the friend adds it with + Pictures). Bigger = a shared community pack on GitHub, needs moderation/abuse checks.
+- Don't re-send pictures the card already has (11-24): when sending a show, skip uploads whose file is already on the card (compare name + size/hash via /api/info or a file list) so only new pictures go over WiFi. Do Friday 11-27 when weekly tokens reset.
