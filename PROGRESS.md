@@ -17,6 +17,11 @@
   "soak card 2". Loaded card: block 27.6 KB between items, ~17 KB while a .pjm plays; player freed 59 KB.
 - Card 1 (FM6124C): 192.168.50.16 / eed0 (USB COM10). Card 2 (RUL6024): 192.168.50.199 / 5df8. Rest: PROJECT-NOTES.md.
 
+- **Beta tester 3 (blue top half, sheared bands; panel P2.5-320X160-2020-32S RUL6024+7258D, same as card 2):** branch
+  `claude/project-thread-oceq9v` adds app **Panel type** (Standard / No chip setup / FM6126A / Plain, NVS `ptype`, card
+  restarts) and test screen 5 "Wiring test" in Color tune. NOT compiled or tried on a card yet. Suspect a HUB75 cable/pin
+  fault first. Default behavior unchanged.
+
 ## Verified pins (HD-WF2)
 - HUB75: R1 2, G1 6, B1 10, R2 3, G2 7, B2 11, A 39, B 38, C 37, D 36, E 21, LAT 33, OE 35, CLK 34. S1: GPIO17.
 

@@ -13,7 +13,7 @@ const TOTAL = 0x460000;
 
 const json = (res, o) => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
 const files = () => fs.readdirSync(store).filter(f => /.(gif|pjm)$/.test(f));
-let settings = { tz: 'UTC0', nightFrom: -1, nightTo: -1, nightLevel: 0, theme: 2 };
+let settings = { ptype: 0, tz: 'UTC0', nightFrom: -1, nightTo: -1, nightLevel: 0, theme: 2 };
 const showFile = path.join(store, 'show.txt');
 const datesFile = path.join(store, 'dates.txt');
 
@@ -35,7 +35,7 @@ http.createServer((req, res) => {
   if (url.pathname === '/api/show' && req.method === 'GET') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end(fs.existsSync(showFile) ? fs.readFileSync(showFile) : files().sort().map(f => 'pic	0	' + f + String.fromCharCode(10)).join('')); }
   if (url.pathname === '/api/show') { let b = ''; req.on('data', c => b += c); req.on('end', () => { fs.writeFileSync(showFile, b); log(b.split(String.fromCharCode(10)).length - 1, 'lines'); json(res, { ok: true }); }); return; }
   if (url.pathname === '/api/file') { const f = path.join(store, path.basename(url.searchParams.get('name') || '')); if (fs.existsSync(f)) { res.writeHead(200); return res.end(fs.readFileSync(f)); } res.writeHead(404); return res.end('not found'); }
-  if (url.pathname === '/api/settings') { const q = url.searchParams; for (const [k, n] of [['tz', 'tz'], ['nf', 'nightFrom'], ['nt', 'nightTo'], ['nl', 'nightLevel'], ['fc', 'fc'], ['theme', 'theme'], ['wx', 'wxHome']]) if (q.has(k)) settings[n] = k === 'tz' || k === 'fc' || k === 'wx' ? q.get(k) : +q.get(k); log(JSON.stringify(settings)); return json(res, { ok: true }); }
+  if (url.pathname === '/api/settings') { const q = url.searchParams; for (const [k, n] of [['tz', 'tz'], ['nf', 'nightFrom'], ['nt', 'nightTo'], ['nl', 'nightLevel'], ['fc', 'fc'], ['theme', 'theme'], ['ptype', 'ptype'], ['wx', 'wxHome']]) if (q.has(k)) settings[n] = k === 'tz' || k === 'fc' || k === 'wx' ? q.get(k) : +q.get(k); log(JSON.stringify(settings)); return json(res, { ok: true }); }
   // Firmware info + files for the update check (serves docs/firmware/ when built locally).
   if (url.pathname.startsWith('/firmware/')) { const f = path.join(root, 'docs', path.normalize(url.pathname)); if (f.startsWith(path.join(root, 'docs', 'firmware')) && fs.existsSync(f)) { res.writeHead(200); return res.end(fs.readFileSync(f)); } }
   if (url.pathname === '/api/cal') {            // Color tune (the card's tune.ino), kept in memory

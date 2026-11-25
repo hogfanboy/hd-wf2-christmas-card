@@ -6,6 +6,9 @@
 //   2 Colors: the colors the screens use, each as a solid block and as small text, numbered 1-8.
 //   3 Ramps:  16 steps from dark to full of white, red, green, blue, gold and light blue (rows 1-6).
 //   4 Solid:  the whole screen in one color (row bands show up best here).
+//   5 Wiring: for cable / HUB75 pin faults. Top half red | green | blue | white, bottom half the other way round,
+//             a black line every 8 rows and every 16 columns, a white frame. A dead color, a swapped half or a
+//             repeated / shifted row group points at one HUB75 line.
 static const float TUNE_RED[7] = {0.70f, 0.80f, 0.90f, 1.00f, 1.12f, 1.25f, 1.40f};   // grid columns 1-7
 static const float TUNE_BLUE[5] = {1.25f, 1.12f, 1.00f, 0.90f, 0.80f};               // grid rows A-E
 static const uint32_t TUNE_LABEL = 0x8C8C8C;
@@ -51,6 +54,16 @@ void tuneDraw() {
         uint32_t c = cols[row];
         tuneRect(s * 8, 2 + row * 10, 7, 9, tuneMul(c >> 16, k), tuneMul((c >> 8) & 255, k), tuneMul(c & 255, k));
       }
+  } else if (tunePat == 5) {
+    const uint8_t C[4][3] = {{255, 0, 0}, {0, 255, 0}, {0, 0, 255}, {255, 255, 255}};
+    for (int q = 0; q < 4; q++) {
+      tuneRect(q * 32, 0, 32, 32, C[q][0], C[q][1], C[q][2]);
+      tuneRect(q * 32, 32, 32, 32, C[3 - q][0], C[3 - q][1], C[3 - q][2]);
+    }
+    for (int y = 7; y < H; y += 8) tuneRect(0, y, W, 1, 0, 0, 0);
+    for (int x = 15; x < W; x += 16) tuneRect(x, 0, 1, H, 0, 0, 0);
+    tuneRect(0, 0, W, 1, 255, 255, 255); tuneRect(0, H - 1, W, 1, 255, 255, 255);
+    tuneRect(0, 0, 1, H, 255, 255, 255); tuneRect(W - 1, 0, 1, H, 255, 255, 255);
   } else {
     tuneRect(0, 0, W, H, r, g, b);
   }

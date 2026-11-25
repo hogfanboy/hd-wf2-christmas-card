@@ -314,6 +314,12 @@ void portalStop() {
 }
 
 // ---------- Start / service ----------
+void panelTypeLoad() {
+  Preferences p; p.begin("pj", true);
+  panelType = p.getUChar("ptype", 0);
+  if (panelType > 3) panelType = 0;
+  p.end();
+}
 void netBegin() {
   if (staSsid.isEmpty()) {
     Serial.println("No home WiFi saved (hold S1 2 s to set up)");

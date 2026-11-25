@@ -22,6 +22,8 @@ async function tuneSend(q) {
   catch (err) { st.className = 'status err'; st.textContent = 'Couldn\'t reach the screen: ' + err.message; }
 }
 async function tuneLoad() {
+  $('panelBox').hidden = card.ptype === undefined;
+  if (card.ptype !== undefined) $('panelType').value = card.ptype;
   $('tuneBox').hidden = card.hwMin === undefined;
   if ($('tuneBox').hidden) return;
   try { tuneShow(await api('/api/cal')); } catch {}
@@ -44,3 +46,9 @@ $('tuneSave').onclick = () => tuneSend('save=1');
 $('tuneReset').onclick = () => tuneSend((tuneOn() ? '' : 'level=' + tuneLv + '&pattern=' + $('tunePat').value + '&') + 'reset=1');
 $('tuneStop').onclick = () => tuneSend('pattern=0');
 $('tuneBox').ontoggle = () => { if (!$('tuneBox').open && tune?.on) tuneSend('pattern=0'); };   // folding it away ends the test
+
+$('panelApply').onclick = async () => {
+  const st = $('panelStatus'); st.className = 'status';
+  try { await api('/api/settings?ptype=' + $('panelType').value, { method: 'POST' }); st.textContent = 'Saved. The card is restarting; unplug its power for 10 seconds, plug it back in, then look at the screen.'; }
+  catch (err) { st.className = 'status err'; st.textContent = 'Couldn\'t reach the card: ' + err.message; }
+};
