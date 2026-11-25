@@ -32,6 +32,23 @@ Phone OTG install dropped (no iPhone path). Options: borrow any Chrome/Edge comp
 ## Separate track: Waveshare ESP32-S3-RGB-Matrix
 3 boards ordered (N32R16, microSD, ES8311 audio, USB-C; no speaker included, so a 4–8 Ω speaker is needed). Idea: MJPEG video + audio from SD. Confirm it drives a 128x64 panel (2x 64x64 chained). Don't mix assumptions with the WF2 (it has no PSRAM). Distribute only your own family video, not commercial specials.
 
+**Board arrived 11-24.** Its panel plug is smaller than the panel's HUB75 header (keyed). Before powering: check pin 1 and every signal line against Waveshare's pinout with a meter; don't trust the key alone.
+
+Plan to get it running with our project:
+1. Find the board's HUB75 pins, mic/speaker (ES8311 I2S) pins, SD pins and buttons from the Waveshare wiki/schematic.
+2. Probe sketch: test card on the 128x64 panel (same chip setup as the WF2?), then a beep, then mic levels.
+3. Port the firmware with a board switch (`#if BOARD_WAVESHARE`): pin map, PSRAM on (16 MB lets us skip the WF2's memory tricks), bigger app slot, SD as picture storage.
+4. Installer and app: detect the board and show its extra features only when present.
+
+Wow features (lean into "jumbotron", not a smart display):
+- **Stadium crowd mode:** a "MAKE SOME NOISE" meter that fills as the room gets louder, with fireworks + horn when it maxes out. Also Clap-o-meter, "DEFENSE!" chants, kiss cam / dance cam frames with a crowd roar.
+- **Music visualizer:** mic-driven beat detection that pulses our existing effects (snow, fireworks, sparkles) to the music in the room. No setup, works with any speaker.
+- **Sound-triggered moments:** clap twice for the next picture, a loud cheer sets off confetti, a doorbell-style chime plays a custom animation.
+- **Talking card:** record a short voice message in the app; the card plays it with its picture (birthday, holiday, "welcome home"). Great for the gift card idea.
+- **Video with sound from SD:** family videos / highlight reels on the panel (the original MJPEG idea).
+- **Scoreboard with sounds:** buzzer at 0:00, goal horn, home/away score buttons in the phone app; for game nights and kids' sports.
+- **Synced cards:** several cards play the same show / react to the same beat together (one card is the leader over WiFi).
+
 ## Parking Lot
 - Installer: choose the panel (128x64 P2.5, P3, P4, P5, 64x32, 64x64...: size and resolution) and several panels joined into one display (chain length, rows x columns, which way each panel faces). Firmware would read W/H/layout from NVS instead of constants.
 - 2nd HUB75 port on the WF2: find its pins and whether the DMA library can drive two outputs (or chain through it). Long-term goal: a 2x2 panel display (256x128).
