@@ -40,14 +40,15 @@ Plan to get it running with our project:
 3. Port the firmware with a board switch (`#if BOARD_WAVESHARE`): pin map, PSRAM on (16 MB lets us skip the WF2's memory tricks), bigger app slot, SD as picture storage.
 4. Installer and app: detect the board and show its extra features only when present.
 
-Wow features (lean into "jumbotron", not a smart display):
-- **Stadium crowd mode:** a "MAKE SOME NOISE" meter that fills as the room gets louder, with fireworks + horn when it maxes out. Also Clap-o-meter, "DEFENSE!" chants, kiss cam / dance cam frames with a crowd roar.
-- **Music visualizer:** mic-driven beat detection that pulses our existing effects (snow, fireworks, sparkles) to the music in the room. No setup, works with any speaker.
-- **Sound-triggered moments:** clap twice for the next picture, a loud cheer sets off confetti, a doorbell-style chime plays a custom animation.
-- **Talking card:** record a short voice message in the app; the card plays it with its picture (birthday, holiday, "welcome home"). Great for the gift card idea.
-- **Video with sound from SD:** family videos / highlight reels on the panel (the original MJPEG idea).
-- **Scoreboard with sounds:** buzzer at 0:00, goal horn, home/away score buttons in the phone app; for game nights and kids' sports.
-- **Synced cards:** several cards play the same show / react to the same beat together (one card is the leader over WiFi).
+Direction (spitballing, 11-24): a family kitchen display that feels **alive and proactive**, not a voice assistant. The Nest Hub Max waits for you to talk; this one notices the day and brings content to you. No noise meter / stadium stuff.
+- **A pixel character that lives on the panel:** reacts to the weather (umbrella in rain, sunglasses in sun, scarf in snow), yawns and sleeps at night, perks up when someone comes into the kitchen, dresses up for holidays and birthdays. This is the wow.
+- **Notices people, never listens:** the mic only measures "is the room busy or quiet" (a sound level, nothing recorded or sent). First sound in the morning = good-morning greeting with today's weather and reminders; quiet room = calm screen or dim.
+- **Time-of-day routines:** breakfast (weather, "jacket today", school bus countdown), after school, dinner, bedtime wind-down. Built from the show schedule we already have.
+- **Proactive nudges:** rain in 20 minutes -> umbrella animation + soft chime; trash day; a birthday shows a celebration all day; countdowns to holidays/trips.
+- **Family notes:** a parent sends "Proud of you!" or "Dinner at 6" from their phone; the card chimes softly and shows it when someone is in the room.
+- **Memories:** "on this day" family pictures, a different one every morning.
+- **Sound = gentle chimes only** (timers, nudges, the character's little noises), plus a kitchen timer from the button or phone.
+- Video with sound from SD stays on the list (family videos).
 
 ## Parking Lot
 - Installer: choose the panel (128x64 P2.5, P3, P4, P5, 64x32, 64x64...: size and resolution) and several panels joined into one display (chain length, rows x columns, which way each panel faces). Firmware would read W/H/layout from NVS instead of constants.
