@@ -1,6 +1,7 @@
 # PROGRESS
 
 ## Working state (2026-11-24: 1.1.0 released; card 2 = 1.1.0, auto-update on; card 1 = dev card)
+- **First show now also has a countdown to the next holiday** (Match the holiday, Jumbo huge, all year); new page countdowns default to it. Only the installer image changes: saved shows are untouched. Not flashed to a card yet.
 - **beta20 (better effect art + card report), on card 1:** sleigh scene, turkey, bunny + eggs, bats + pumpkins +
   moon, shamrocks, balloons, fish, hearts use shaded sprites from `tools/make-fxsprites.mjs` (1 byte/pixel + palette
   per sprite: 21 KB flash, no RAM; web/fxsprites.js for the page). App 1.64 of 1.75 MB (195 KB free). Art not
