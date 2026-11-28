@@ -224,7 +224,7 @@ function addDrawn(kind, o = {}) {
     ? `<label>Effect <select data-k="effect">${fxOptions().replace('<option value="none">None</option>', '')}</select></label>
        <label>Background <input type="color" data-k="bg"></label>`
     : `
-    ${kind === 'text' || kind === 'countdown' ? `<input type="text" maxlength="${kind === 'text' ? 120 : 21}" data-k="text" placeholder="${kind === 'text' ? 'Your message' : 'What for, e.g. Christmas'}">` : ''}
+    ${kind === 'text' || kind === 'countdown' ? `<input type="text" maxlength="${kind === 'text' ? 120 : 40}" data-k="text" placeholder="${kind === 'text' ? 'Your message' : 'What for, e.g. Christmas'}">` : ''}
     ${kind === 'countdown' ? `<label>Holiday <select class="hol"><option value="">My own date</option><option value="next">The next holiday (whichever comes next)</option><option value="baby">👶 Baby due date</option>
         ${HOLIDAYS.map(h => `<option value="${h[0]}">${h[1]}</option>`).join('')}</select></label>
       <label class="owndate"><span class="dlbl">Date</span> <input type="date" data-k="date"></label>

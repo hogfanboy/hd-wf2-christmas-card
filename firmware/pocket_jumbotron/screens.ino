@@ -127,6 +127,14 @@ static int countdownDays(const String &when, int *hol) {
   return best;
 }
 
+// A label line that fits is centered. A longer one (a long name) shows its start, slides to its end, then starts over.
+static void labelSlide(const String &s, int top, uint32_t c, uint32_t ms) {
+  int w = labelW(s);
+  if (w <= W - 2) { label(s, (W - w) / 2, top, c); return; }
+  int over = w - (W - 4), t = ms % (2400 + over * 30), sh = t < 1200 ? 0 : min(over, (int)(t - 1200) / 30);
+  label(s, 2 - sh, top, c);
+}
+
 static void playCountdown(const ShowItem &item) {
   if (!timeValid()) return;
   int hol, days = countdownDays(item.extra, &hol), bd = 0;
@@ -151,8 +159,8 @@ static void playCountdown(const ShowItem &item) {
     paintBackground(it, frame);
     fitBig(it.font, big, W - 2, 0);
     drawText(big, (W - textWidth(big)) / 2, textBaseline(curFont, 0, 40), it, millis());
-    if (l1.length()) labelC(l1, W / 2, 42, th().main);
-    if (l2.length()) labelC(l2, W / 2, 53, th().acc);
+    if (l1.length()) labelSlide(l1, 42, th().main, millis() - start);
+    if (l2.length()) labelSlide(l2, 53, th().acc, millis() - start);
     pushCanvas();
     frame++;
     int32_t wait = 40 - (int32_t)(millis() - t0);

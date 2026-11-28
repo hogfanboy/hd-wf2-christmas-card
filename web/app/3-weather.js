@@ -507,6 +507,12 @@ function countdownDays(when) {
 }
 const countdownName = (it) => { const h = countdownDays(it.date).hol; return it.date === 'next' && h >= 0 ? HOLIDAYS[h][2] : it.text ? it.text.toUpperCase() : h >= 0 ? HOLIDAYS[h][2] : isBaby(it.date) ? 'BABY' : ''; };
 const wxPlace = (it) => it.place || (it.lat === 'auto' ? card.place || '' : '');
+// A countdown's label line, as the card's labelSlide: centered if it fits, else start, slide to the end, start over.
+function Tslide(s, y, t) {
+  const w = M(s); if (w <= W - 2) return T(s, (W - w) / 2, y);
+  const over = w - (W - 4), k = t % (2400 + over * 30);
+  T(s, 2 - (k < 1200 ? 0 : Math.min(over, Math.trunc((k - 1200) / 30))), y);
+}
 function renderItem(it, t) {      // t = ms since the item started
   curLabels = it.font >= 8;
   if (it.useTheme && !it.rainbow) it.fg = TH().main;
@@ -583,7 +589,7 @@ function renderItem(it, t) {      // t = ms since the item started
     if (pmW) { smallF(); tctx.textBaseline = 'top'; tctx.fillStyle = it.rainbow ? '#fff' : it.fg; T(new Date().getHours() < 12 ? 'AM' : 'PM', bx + bw + 2, top); }
     smallF(); tctx.textBaseline = 'top';
     if (it.kind === 'clock') { tctx.fillStyle = TH().acc; T(l2, (W - M(l2)) / 2, 50); }
-    else { tctx.fillStyle = TH().main; T(l1, (W - M(l1)) / 2, 42); tctx.fillStyle = TH().acc; T(l2, (W - M(l2)) / 2, 53); }
+    else { tctx.fillStyle = TH().main; Tslide(l1, 42, t); tctx.fillStyle = TH().acc; Tslide(l2, 53, t); }
   }
   return tctx.getImageData(0, 0, W, H);
 }
