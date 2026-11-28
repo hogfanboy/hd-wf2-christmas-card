@@ -365,6 +365,8 @@ function addDrawn(kind, o = {}) {
   }
   select(it);
   updateSpace();
+  if (!loadingShow) requestAnimationFrame(() =>     // bring the new item's editor into view (a tall one: its top)
+    el.scrollIntoView({ behavior: 'smooth', block: el.offsetHeight > innerHeight * 0.9 ? 'start' : 'center' }));
   return it;
 }
 $('addText').onclick = () => addDrawn('text');
