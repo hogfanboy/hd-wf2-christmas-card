@@ -256,6 +256,9 @@ async function checkUpdate() {
   try {
     latest = await (await fetch(SITE + 'firmware/info.json', { cache: 'no-store' })).json();
     if (card.fw && newer(latest.version, card.fw)) { $('updVer').textContent = 'version ' + latest.version; $('updBox').hidden = false; }
+    const test = /\+|test/i.test(card.fw || '');                 // a test version (e.g. 1.1.0+ex2): offer the normal one back
+    $('fwBack').hidden = $('fwTestNote').hidden = !test;
+    if (test) { $('fwBackVer').textContent = card.fw; $('fwBackBtn').textContent = 'Go back to the normal version (' + latest.version + ')'; }
   } catch { /* no internet: no update check */ }
 }
 $('updBtn').onclick = async () => {
@@ -341,4 +344,21 @@ $('fwCodeBtn').onclick = async () => {
     setTimeout(() => location.reload(), 20000);
   } catch (err) { st.className = 'status err'; st.textContent = 'Couldn\'t install it: ' + err.message; }
   $('fwCodeBtn').disabled = false;
+};
+
+$('fwBackBtn').onclick = async () => {
+  const st = $('fwStatus'); st.className = 'status';
+  if (!latest) { st.className = 'status err'; st.textContent = 'Couldn\'t reach the website. Check the phone\'s internet and try again.'; return; }
+  $('fwBackBtn').disabled = true;
+  try {
+    st.textContent = 'Downloading…';
+    const bin = await (await fetch(SITE + 'firmware/' + latest.app.file, { cache: 'no-store' })).blob();
+    if (bin.size !== latest.app.size) throw new Error('download incomplete');
+    st.textContent = 'Installing… keep this page open.';
+    const fd = new FormData(); fd.append('firmware', bin, latest.app.file);
+    await api('/api/update', { method: 'POST', body: fd });
+    st.className = 'status ok'; st.textContent = 'Installed version ' + latest.version + '. The screen is restarting; this page reloads in 20 seconds.';
+    setTimeout(() => location.reload(), 20000);
+  } catch (err) { st.className = 'status err'; st.textContent = 'Couldn\'t install it: ' + err.message; }
+  $('fwBackBtn').disabled = false;
 };
