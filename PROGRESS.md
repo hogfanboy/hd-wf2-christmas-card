@@ -34,8 +34,7 @@
 ## Next (the user can answer with one of these commands)
 00000. **1.1.1 released 11-28**: baby due date countdown (Holiday > 👶 Baby due date; date `baby:YYYY-MM-DD`, once;
    effect `baby`: stork, footprints, rattles; due day stork behind "TODAY!", then "SOON! ANY DAY NOW" 21 days), names up
-   to 40 letters (a too-wide label slides), new items scroll into view; also ships the clock "match the weather".
-   Hog OK'd it on card 1 by eye. Probe: `tools/baby-probe.ps1`. Cards on 1.1.0 skip baby items (app says update).
+   to 40 letters (label slides), new items scroll into view, clock "match the weather". OK'd on card 1. tools/baby-probe.ps1.
 0000. **1.1.0 released 11-24 (main = radar branch)**: radar ranges, birthdays & dates, night Off/10/25%, new cards 50%,
    Color tune (defaults = card 2's tuning; details PROJECT-NOTES). Installer step 3 now says "No compatible devices
    found" is normal. 11-24: tester 2 saw "Installing, Done" loop = step 6's example drawing (it repeats); drawing no
