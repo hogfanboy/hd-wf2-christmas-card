@@ -4,7 +4,7 @@
 const FX = { none: 'None', snow: 'Snow', sparkle: 'Sparkle', hearts: 'Hearts', confetti: 'Confetti', fireworks: 'Fireworks',
   stars: 'Starfield', fire: 'Fire', matrix: 'Code rain', sleigh: "Santa's sleigh", balloons: 'Balloons', fish: 'Aquarium', rain: 'Rain',
   lights: 'Christmas lights', turkey: 'Turkey & leaves', bunny: 'Easter bunny', bats: 'Bats & pumpkins', shamrocks: 'Shamrocks',
-  flag: 'US flag',
+  flag: 'US flag', baby: 'Baby & stork',
   auto: 'Match the weather' };
 // "Match the weather" (snow or rain when it does) on a weather item or a clock (the clock uses the weather the screen
 // fetched last, or the weather where the screen is). On a countdown it means "match the holiday" (turkey for Thanksgiving...).
@@ -21,7 +21,7 @@ const GLYPHS = '0123456789ABCDEFXZ$#@%&*+=<>';
 function starReset(f) { f.x = rand(1024) - 512; f.y = rand(512) - 256; f.bri = 200 + rand(56); f.spd = 1 + rand(3); }
 function fxNew(effect, behind) {
   const s = { effect, frame: 0, sparks: [], rockets: [{}, {}, {}], glyphs: [], sleighWait: 0,
-    sleighX: (effect === 'sleigh' && !behind ? -94 : effect === 'turkey' ? -36 : effect === 'bunny' ? -32 : -50) * 16,
+    sleighX: (effect === 'sleigh' && !behind ? -94 : effect === 'turkey' ? -36 : effect === 'bunny' ? -32 : effect === 'baby' ? -36 : -50) * 16, bundle: 0,
     flakes: Array.from({ length: 48 }, () => ({ x: rand(W * 16), y: rand(H * 16), spd: 4 + rand(10), bri: 90 + rand(166) })),
     heat: effect === 'fire' ? new Uint8Array(W * H) : null,
     cols: Array.from({ length: 21 }, () => ({ head: rand(40), len: 3 + rand(5), spd: 1 + rand(3), g: Array.from({ length: 8 }, () => GLYPHS[rand(GLYPHS.length)]) })) };
@@ -161,7 +161,7 @@ function fxStep(s, d, behind) {
       }
       break;
     }
-    case 'turkey': case 'bunny': case 'bats': case 'shamrocks': case 'flag': fxHoliday(s, frame, px, add, spr, behind); break;
+    case 'turkey': case 'bunny': case 'bats': case 'shamrocks': case 'flag': case 'baby': fxHoliday(s, frame, px, add, spr, behind); break;
     case 'balloons':
       for (let i = 0; i < (behind ? 6 : 10); i++) {
         const f = s.flakes[i];
@@ -268,6 +268,7 @@ function nightSky(px, add, s, frame, n) {
 }
 // Holiday effects: same as effects.ino.
 const hx = (h) => [(h >> 16) & 255, (h >> 8) & 255, h & 255];
+const BABYC = [0xFF8CC0, 0x7CC0FF, 0xFFD870, 0x8CE8A8];   // baby: pink, blue, yellow, mint
 const LEAF = [0xE04010, 0xFF9020, 0xF0C030, 0x9A4A18], PASTEL = [0xFF90C0, 0xB090FF, 0x80E8A0, 0xFFE070, 0x80C0FF], GREENS = [0x20C040, 0x40E060, 0x109030];
 function fxHoliday(s, frame, px, add, spr, behind) {
   const WHITE = [255, 255, 255];
@@ -342,6 +343,20 @@ function fxHoliday(s, frame, px, add, spr, behind) {
         if (v > 150) { const v3 = tr(v / 3); add(x + 1, y, g, v3); add(x - 1, y, g, v3); add(x, y + 1, g, v3); add(x, y - 1, g, v3); }
       }
       return;
+    case 'baby': {                       // same as fxBaby: footprints, rattles, hearts; the stork full screen or on the due day
+      for (let i = 0; i < (behind ? 8 : 14); i++) {
+        const f = s.flakes[i]; f.y -= tr(f.spd / 4) + 1;
+        if (f.y < -14 * 16) { f.y = H * 16 + rand(320); f.x = rand(W - 12) * 16; }
+        const k = i % 3;
+        spr(k === 0 ? 'FEET' : k === 1 ? 'RATTLE' : 'HEART_S', tr(f.x / 16) + tr((sin8(frame * 2 + i * 45) - 128) / 50), tr(f.y / 16), false, hx(BABYC[(tr(i / 3) + k) & 3]));
+      }
+      if (behind && !s.party) return;
+      if (s.sleighWait) { s.sleighWait--; return; }
+      if ((s.sleighX += behind ? 10 : 12) > (W + 2) * 16) { s.sleighX = -36 * 16; s.sleighWait = 30 + rand(50); s.bundle++; return; }
+      const up = tr(frame / 6) & 1;
+      spr('STORK' + (up ? 0 : 1) + (behind ? '_S' : ''), tr(s.sleighX / 16), (behind ? 1 : 12) + tr((sin8(frame * 4) - 128) / 40), false, hx(BABYC[s.bundle & 3]));
+      return;
+    }
     case 'flag': {
       const top = 6, x0 = 3;
       if (!behind) {
@@ -370,7 +385,7 @@ function fxHoliday(s, frame, px, add, spr, behind) {
 function paintBg(it, t) {
   tctx.fillStyle = it.bg; tctx.fillRect(0, 0, W, H);
   let effect = it.effect;
-  if (effect === 'auto' && it.kind === 'countdown') { const h = countdownDays(it.date).hol; effect = h >= 0 ? HOLIDAYS[h][7] : 'sparkle'; }   // match the holiday
+  if (effect === 'auto' && it.kind === 'countdown') { const h = countdownDays(it.date).hol; effect = isBaby(it.date) ? 'baby' : h >= 0 ? HOLIDAYS[h][7] : 'sparkle'; }   // match the holiday
   else if (it.kind === 'dates' && datesShown(it, t)?.n === 0) effect = 'fireworks';   // the big day
   else if (effect === 'auto') {                    // match the weather (a clock: the show's first weather item)
     const w = it.kind === 'weather' ? it : items.find(i => i.kind === 'weather' && i.wx), k = w ? wxKind((w.wx || SAMPLE_WX).code) : '';
@@ -380,6 +395,7 @@ function paintBg(it, t) {
   const per = it.kind === 'text' ? 25 : it.kind === 'fx' ? 30 : 40, behind = it.kind !== 'fx';
   if (!it.fx || it.fx.t0 !== it.t0 || it.fx.effect !== effect) { it.fx = fxNew(effect, behind); it.fx.t0 = it.t0; }
   it.fx.dark = /^#0{6}$/i.test(it.bg);
+  it.fx.party = it.kind === 'countdown' && isBaby(it.date) && countdownDays(it.date).late <= 0;   // due day: the stork flies behind the words
   const n = Math.max(1, Math.min(4, Math.floor(t / per) + 1 - it.fx.frame));
   for (let i = 1; i < n; i++) fxStep(it.fx, null, behind);
   const img = tctx.getImageData(0, 0, W, H);

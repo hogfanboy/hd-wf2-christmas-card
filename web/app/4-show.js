@@ -24,7 +24,7 @@ function select(it) {
 const label = (it) => it.kind === 'pic' ? it.name : it.kind === 'text' ? '“' + it.text + '”' : it.kind === 'clock' ? 'Clock'
   : it.kind === 'fx' ? (FX[it.effect] || 'Effect') : it.kind === 'weather' ? (!it.lat ? 'Weather: pick a town' : it.lat === 'auto' ? 'Weather here' + (card.place ? ' (' + card.place + ')' : '') : 'Weather' + (it.place ? ' in ' + it.place : ''))
   : it.kind === 'dates' ? `🎂 Birthdays & dates (${it.dates.length})`
-  : it.kind === 'stocks' ? 'Stocks: ' + (it.syms.split(',').filter(Boolean).map(s => MKT_LABEL[s] || s).join(', ') || 'pick some') : (it.lead !== '' && it.lead != null ? '🔔 ' : 'Countdown to ') + (it.date === 'next' ? 'the next holiday' : it.text || HOLIDAYS.find(h => h[0] === it.date)?.[1] || '…') + (/^\d\d-\d\d$/.test(it.date) ? ' · ' + md(it.date.replace('-', '')) : '');
+  : it.kind === 'stocks' ? 'Stocks: ' + (it.syms.split(',').filter(Boolean).map(s => MKT_LABEL[s] || s).join(', ') || 'pick some') : (it.lead !== '' && it.lead != null ? '🔔 ' : 'Countdown to ') + (isBaby(it.date) ? '👶 ' : '') + (it.date === 'next' ? 'the next holiday' : it.text || HOLIDAYS.find(h => h[0] === it.date)?.[1] || (isBaby(it.date) ? 'Baby' : '…')) + (/^\d\d-\d\d$/.test(it.date) ? ' · ' + md(it.date.replace('-', '')) : isBaby(it.date) ? ' · due ' + md(it.date.slice(10).replace('-', '')) : '');
 function move(it, d) {
   const i = items.indexOf(it), j = i + d;
   if (j < 0 || j >= items.length) return;
@@ -224,10 +224,11 @@ function addDrawn(kind, o = {}) {
     ? `<label>Effect <select data-k="effect">${fxOptions().replace('<option value="none">None</option>', '')}</select></label>
        <label>Background <input type="color" data-k="bg"></label>`
     : `
-    ${kind === 'text' || kind === 'countdown' ? `<input type="text" maxlength="${kind === 'text' ? 120 : 21}" data-k="text" placeholder="${kind === 'text' ? 'Your message' : 'What for, e.g. Christmas'}">` : ''}
-    ${kind === 'countdown' ? `<label>Holiday <select class="hol"><option value="">My own date</option><option value="next">The next holiday (whichever comes next)</option>
+    ${kind === 'text' || kind === 'countdown' ? `<input type="text" maxlength="${kind === 'text' ? 120 : 40}" data-k="text" placeholder="${kind === 'text' ? 'Your message' : 'What for, e.g. Christmas'}">` : ''}
+    ${kind === 'countdown' ? `<label>Holiday <select class="hol"><option value="">My own date</option><option value="next">The next holiday (whichever comes next)</option><option value="baby">👶 Baby due date</option>
         ${HOLIDAYS.map(h => `<option value="${h[0]}">${h[1]}</option>`).join('')}</select></label>
-      <label class="owndate">Date <input type="date" data-k="date"></label>
+      <label class="owndate"><span class="dlbl">Date</span> <input type="date" data-k="date"></label>
+      <div class="muted babynote" style="font-size:13px">Counts down the days with a stork, baby footprints and rattles. On the due day the stork flies in, and after it the screen says "any day now" for 3 weeks. Type a name above if you like, e.g. Baby Emma.</div>
       <label>Start showing <input class="s" type="number" min="0" max="365" data-k="lead" placeholder="any" style="width:70px"> days before (blank = all year)</label>` : ''}
     ${kind === 'dates' ? `<div class="dlist"></div>
       <div class="flex"><input type="text" class="dname" maxlength="30" placeholder="Name, e.g. Kevin" style="flex:1;min-width:0"></div>
@@ -254,10 +255,10 @@ function addDrawn(kind, o = {}) {
     const k = inp.dataset.k;
     if (inp.type === 'checkbox') inp.checked = !!it[k];
     else if (inp.classList.contains('wtg')) inp.value = it[k] ? '1' : '';
-    else if (k === 'date') inp.value = /^\d\d-\d\d$/.test(it.date) ? new Date().getFullYear() + '-' + it.date : '';
+    else if (k === 'date') inp.value = /^\d\d-\d\d$/.test(it.date) ? new Date().getFullYear() + '-' + it.date : isBaby(it.date) ? it.date.slice(5) : '';
     else inp.value = it[k];
     inp.oninput = () => {
-      it[k] = inp.type === 'checkbox' ? inp.checked : inp.classList.contains('wtg') ? inp.value === '1' : k === 'font' ? +inp.value : k === 'date' ? inp.value.slice(5) : inp.value;
+      it[k] = inp.type === 'checkbox' ? inp.checked : inp.classList.contains('wtg') ? inp.value === '1' : k === 'font' ? +inp.value : k === 'date' ? (isBaby(it.date) ? (inp.value ? 'baby:' + inp.value : it.date) : inp.value.slice(5)) : inp.value;
       if (k === 'fg') { it.useTheme = false; const c = ed.querySelector('[data-k=useTheme]'); if (c) c.checked = false; }
       if (k === 'useTheme' && it.useTheme) { it.fg = TH().main; const c = ed.querySelector('[data-k=fg]'); if (c) c.value = it.fg; }
       if (k === 'lead') { it.whenRefresh(); it.drawDates?.(); }
@@ -275,19 +276,30 @@ function addDrawn(kind, o = {}) {
   const hs = ed.querySelector('.hol');
   if (hs) {                                        // holiday picker: moving dates (Thanksgiving, Easter...) are worked out by the screen
     const show = () => {
-      const own = it.date !== 'next' && !HOLIDAYS.some(h => h[0] === it.date);
-      hs.value = own ? '' : it.date;
+      const baby = isBaby(it.date), own = baby || (it.date !== 'next' && !HOLIDAYS.some(h => h[0] === it.date));
+      hs.value = baby ? 'baby' : own ? '' : it.date;
       ed.querySelector('.owndate').style.display = own ? '' : 'none';
+      ed.querySelector('.dlbl').textContent = baby ? 'Due date' : 'Date';
+      ed.querySelector('.babynote').style.display = baby ? '' : 'none';
       ed.querySelector('[data-k=text]').style.display = it.date === 'next' ? 'none' : '';
     };
     hs.onchange = () => {
       const k = hs.value, h = HOLIDAYS.find(x => x[0] === k);
       if (/^\d\d-\d\d$/.test(it.date)) it.ownDate = it.date;
-      it.date = k || it.ownDate || '12-25';
-      if (k) { it.text = ''; it.effect = 'auto'; }        // blank label: the screen shows the holiday's own name
+      if (isBaby(it.date)) it.babyDate = it.date;
+      if (k === 'baby') {                              // a baby's due date: once, with its year (default: about 6 months away)
+        const d = new Date(Date.now() + 182 * 864e5), p2 = (v) => String(v).padStart(2, '0');
+        it.date = it.babyDate || `baby:${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+        if (!it.text || it.text === 'Christmas') it.text = 'Baby';
+        it.effect = 'baby';
+      } else {
+        it.date = k || it.ownDate || '12-25';
+        if (k) { it.text = ''; it.effect = 'auto'; }      // blank label: the screen shows the holiday's own name
+        else if (it.effect === 'baby') it.effect = 'snow';
+      }
       ed.querySelector('[data-k=text]').value = it.text;
       ed.querySelector('[data-k=effect]').value = it.effect;
-      ed.querySelector('[data-k=date]').value = /^\d\d-\d\d$/.test(it.date) ? new Date().getFullYear() + '-' + it.date : '';
+      ed.querySelector('[data-k=date]').value = /^\d\d-\d\d$/.test(it.date) ? new Date().getFullYear() + '-' + it.date : isBaby(it.date) ? it.date.slice(5) : '';
       show(); el.querySelector('.name').textContent = label(it); it.t0 = performance.now(); updateSpace();
     };
     show();
@@ -353,6 +365,8 @@ function addDrawn(kind, o = {}) {
   }
   select(it);
   updateSpace();
+  if (!loadingShow) requestAnimationFrame(() =>     // bring the new item's editor into view (a tall one: its top)
+    el.scrollIntoView({ behavior: 'smooth', block: el.offsetHeight > innerHeight * 0.9 ? 'start' : 'center' }));
   return it;
 }
 $('addText').onclick = () => addDrawn('text');

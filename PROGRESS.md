@@ -1,6 +1,6 @@
 # PROGRESS
 
-## Working state (2026-11-24: 1.1.0 released; card 2 = 1.1.0, auto-update on; card 1 = dev card)
+## Working state (2026-11-28: 1.1.1 released; 2026-11-24: 1.1.0; card 2 = 1.1.0, auto-update on; card 1 = dev card)
 - **beta20 (better effect art + card report), on card 1:** sleigh scene, turkey, bunny + eggs, bats + pumpkins +
   moon, shamrocks, balloons, fish, hearts use shaded sprites from `tools/make-fxsprites.mjs` (1 byte/pixel + palette
   per sprite: 21 KB flash, no RAM; web/fxsprites.js for the page). App 1.64 of 1.75 MB (195 KB free). Art not
@@ -37,6 +37,9 @@
 - Test uploads with curl: `-H "Content-Type: text/plain"` for /api/show, then POST /api/play.
 
 ## Next (the user can answer with one of these commands)
+00000. **1.1.1 released 11-28**: baby due date countdown (Holiday > 👶 Baby due date; date `baby:YYYY-MM-DD`, once;
+   effect `baby`: stork, footprints, rattles; due day stork behind "TODAY!", then "SOON! ANY DAY NOW" 21 days), names up
+   to 40 letters (label slides), new items scroll into view, clock "match the weather". OK'd on card 1. tools/baby-probe.ps1.
 0000. **1.1.0 released 11-24 (main = radar branch)**: radar ranges, birthdays & dates, night Off/10/25%, new cards 50%,
    Color tune (defaults = card 2's tuning; details PROJECT-NOTES). Installer step 3 now says "No compatible devices
    found" is normal. 11-24: tester 2 saw "Installing, Done" loop = step 6's example drawing (it repeats); drawing no
