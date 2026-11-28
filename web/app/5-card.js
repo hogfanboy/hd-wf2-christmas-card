@@ -202,6 +202,8 @@ $('send').onclick = async () => {
     await api('/api/show', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: lines.join('\n') + '\n' });
     await api('/api/play', { method: 'POST' });
     st.className = 'status ok'; st.textContent = `Done! ${list.length} item${list.length > 1 ? 's are' : ' is'} now playing.`;
+    if (card.fw && !newer(card.fw, '1.1.0') && list.some(i => i.kind === 'countdown' && isBaby(i.date)))   // older screens skip it
+      st.textContent += ' The baby countdown needs the newest screen software: update the screen to see it.';
   } catch (err) {
     st.className = 'status err'; st.textContent = 'Something went wrong: ' + err.message + '. Try again.';
   }
@@ -254,6 +256,9 @@ async function checkUpdate() {
   try {
     latest = await (await fetch(SITE + 'firmware/info.json', { cache: 'no-store' })).json();
     if (card.fw && newer(latest.version, card.fw)) { $('updVer').textContent = 'version ' + latest.version; $('updBox').hidden = false; }
+    const test = /\+|test/i.test(card.fw || '');                 // a test version (e.g. 1.1.0+ex2): offer the normal one back
+    $('fwBack').hidden = $('fwTestNote').hidden = !test;
+    if (test) { $('fwBackVer').textContent = card.fw; $('fwBackBtn').textContent = 'Go back to the normal version (' + latest.version + ')'; }
   } catch { /* no internet: no update check */ }
 }
 $('updBtn').onclick = async () => {
@@ -318,4 +323,42 @@ $('fw').onchange = async (e) => {
     st.className = 'status ok'; st.textContent = 'Update installed. The screen is restarting.';
   } catch (err) { st.className = 'status err'; st.textContent = 'Update failed: ' + err.message; }
   e.target.value = '';
+};
+
+// Test versions for one tester (docs/test/<code>.bin on the website): the phone downloads it, then installs it
+// on this screen like a chosen file. Nothing reaches other screens.
+$('fwCodeBtn').onclick = async () => {
+  const code = $('fwCode').value.trim().toLowerCase(), st = $('fwStatus');
+  if (!/^[a-z0-9-]{1,20}$/.test(code)) { st.className = 'status err'; st.textContent = 'Type the test code you were given.'; return; }
+  st.className = 'status'; st.textContent = 'Downloading…';
+  $('fwCodeBtn').disabled = true;
+  try {
+    const r = await fetch(SITE + 'test/' + code + '.bin', { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status === 404 ? 'no test version with that code' : 'download failed (' + r.status + ')');
+    const bin = await r.blob();
+    if (bin.size < 100000) throw new Error('download incomplete');
+    st.textContent = 'Installing… keep this page open.';
+    const fd = new FormData(); fd.append('firmware', bin, code + '.bin');
+    await api('/api/update', { method: 'POST', body: fd });
+    st.className = 'status ok'; st.textContent = 'Installed. The screen is restarting; this page reloads in 20 seconds.';
+    setTimeout(() => location.reload(), 20000);
+  } catch (err) { st.className = 'status err'; st.textContent = 'Couldn\'t install it: ' + err.message; }
+  $('fwCodeBtn').disabled = false;
+};
+
+$('fwBackBtn').onclick = async () => {
+  const st = $('fwStatus'); st.className = 'status';
+  if (!latest) { st.className = 'status err'; st.textContent = 'Couldn\'t reach the website. Check the phone\'s internet and try again.'; return; }
+  $('fwBackBtn').disabled = true;
+  try {
+    st.textContent = 'Downloading…';
+    const bin = await (await fetch(SITE + 'firmware/' + latest.app.file, { cache: 'no-store' })).blob();
+    if (bin.size !== latest.app.size) throw new Error('download incomplete');
+    st.textContent = 'Installing… keep this page open.';
+    const fd = new FormData(); fd.append('firmware', bin, latest.app.file);
+    await api('/api/update', { method: 'POST', body: fd });
+    st.className = 'status ok'; st.textContent = 'Installed version ' + latest.version + '. The screen is restarting; this page reloads in 20 seconds.';
+    setTimeout(() => location.reload(), 20000);
+  } catch (err) { st.className = 'status err'; st.textContent = 'Couldn\'t install it: ' + err.message; }
+  $('fwBackBtn').disabled = false;
 };
