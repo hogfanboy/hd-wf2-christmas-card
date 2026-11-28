@@ -356,6 +356,51 @@ function heart(S) {
 add('HEART', 9, 8, 1, true, heart);
 add('HEART_S', 9, 8, 0.6, true, heart);
 
+// ---- Baby on the way: a stork carrying the bundle (faces right, wings up / down), big and small. The bundle's
+// cloth is glow pixels: the card paints it in the color it passes (pink, blue, yellow...). ----
+function stork(S, up) {
+  const O = 8, wht = hex(0xF4F4F4), tip = hex(0x6A7488), org = hex(0xFF8A2A), skin = hex(0xFFC8A0);
+  const face = (x, y) => Math.hypot(x - 31.2, y - O - 9.0) < 1.7;
+  S.paint((x, y) => cap(x, y, [9, O + 8.6], [0.8, O + 10.4], 0.6) || cap(x, y, [10, O + 9.2], [1.6, O + 12.6], 0.6) ? org : null);   // legs trailing
+  S.paint((x, y) => inPoly(x, y, [[8.5, O + 5.6], [3, O + 5.4], [4, O + 8.4], [8.5, O + 9]]) ? tip : null);                      // tail
+  S.paint((x, y) => { const l = lit(x, y, 13.6, O + 7, 7, 3.3, -0.12); return l == null ? null : shade(wht, 0.4 + l * 0.6, 0); });   // body
+  S.paint((x, y) => cap(x, y, [19, O + 5.6], [23.2, O + 1.6], 1.25) ? shade(wht, 0.85, 0) : null);                               // neck
+  S.paint((x, y) => { const l = lit(x, y, 23.8, O + 0.9, 1.9, 1.8); return l == null ? null : shade(wht, 0.55 + l / 2, 0); });   // head
+  S.paint((x, y) => inPoly(x, y, [[24.8, O - 0.2], [33.4, O + 2.3], [24.8, O + 2.0]]) ? org : null);                             // beak
+  S.paint((x, y) => Math.hypot(x - 24.2, y - O - 0.4) < 0.6 ? hex(0x101010) : null);                                             // eye
+  S.key((x, y) => !face(x, y) && (cap(x, y, [31.8, O + 2.6], [31.2, O + 5.6], 0.8) || ellD(x, y, 30.6, O + 9.6, 3.7, 3.9) < 1));   // bundle cloth
+  S.paint((x, y) => face(x, y) ? skin : null);                                                                                    // baby face
+  const wing = up ? [[9.5, O + 5.5], [17.5, O + 5], [14, O - 2.5], [9.5, O - 8], [4.5, O - 7]]
+                  : [[9.5, O + 7.5], [18, O + 7.5], [16.5, O + 13.5], [9.5, O + 15.5], [4.5, O + 14]];
+  S.paint((x, y) => {
+    if (!inPoly(x, y, wing)) return null;
+    const far = up ? (O + 5 - y) / 13 : (y - O - 7.5) / 8;          // 0 at the body, 1 at the tip
+    return far > 0.62 ? tip : shade(wht, 0.95 - far * 0.45, 0);
+  });
+}
+add('STORK0', 35, 23.5, 1, false, (S) => stork(S, true));
+add('STORK1', 35, 23.5, 1, false, (S) => stork(S, false));
+add('STORK0_S', 35, 23.5, 0.6, false, (S) => stork(S, true));
+add('STORK1_S', 35, 23.5, 0.6, false, (S) => stork(S, false));
+
+// ---- Baby footprints, a pair (tint) ----
+add('FEET', 14, 14, 1, true, (S) => {
+  for (const [cx, cy, rot] of [[3.6, 9.2, -0.2], [10.2, 5.6, 0.2]]) {
+    S.paint((x, y) => { const d = ellD(x, y, cx, cy, 2.3, 3.4, rot); return d < 1 ? T(0.6 + 0.4 * clamp01(1 - d), 0) : null; });   // sole
+    [[-1.8, -5.0], [0, -5.5], [1.8, -4.9]].forEach(([dx, dy], k) => {
+      const tx = cx + dx * Math.cos(rot) - dy * Math.sin(rot), ty = cy + dx * Math.sin(rot) + dy * Math.cos(rot);
+      S.paint((x, y) => Math.hypot(x - tx, y - ty) < (k === 0 ? 0.9 : 0.75) ? T(0.9) : null);   // toes
+    });
+  }
+});
+
+// ---- Baby rattle (tint) ----
+add('RATTLE', 12, 13, 1, true, (S) => {
+  S.paint((x, y) => cap(x, y, [5.6, 6.2], [9.6, 10.6], 0.8) ? T(0.65, 0.5) : null);                                  // handle
+  S.paint((x, y) => Math.hypot(x - 10.2, y - 11.3) < 1.5 ? T(0.8) : null);                                            // knob
+  S.paint((x, y) => { const l = lit(x, y, 4.4, 4.4, 3.8, 3.8); if (l == null) return null; return T(0.5 + l * 0.5, Math.abs(x + y - 8.8) < 0.7 ? 0.8 : 0); });   // ball, white stripe
+});
+
 // ---- palettes: each sprite keeps at most 255 colors (index 0 = clear). A sprite with more (town, turkey) is
 // rounded to a coarser color grid until it fits; the glow color FF00FF stays exact. The page uses the same pixels.
 for (const s of SPR) {
