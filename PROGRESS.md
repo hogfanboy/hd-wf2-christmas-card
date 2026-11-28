@@ -1,7 +1,7 @@
 # PROGRESS
 
-## Working state (2026-11-28: 1.1.1 released; 2026-11-24: 1.1.0; card 2 = 1.1.0, auto-update on; card 1 = dev card)
-- **First show now also has a countdown to the next holiday** (Match the holiday, Jumbo huge, all year); new page countdowns default to it. Only the installer image changes: saved shows are untouched. Not flashed to a card yet.
+## Working state (2026-11-28: 1.1.3 = first show adds a countdown to the next holiday; 1.1.2 = both panel headers (75EX1 + 75EX2); 1.1.1 released; 2026-11-24: 1.1.0; card 2 = 1.1.0, auto-update on; card 1 = dev card)
+- **1.1.3 first show:** clock, weather, countdown to the next holiday (Match the holiday, Jumbo huge, all year), starter pictures; new page countdowns default to next holiday + Match the holiday. Only the installer image changes: saved shows are untouched. Not flashed to a card yet.
 - **beta20 (better effect art + card report), on card 1:** sleigh scene, turkey, bunny + eggs, bats + pumpkins +
   moon, shamrocks, balloons, fish, hearts use shaded sprites from `tools/make-fxsprites.mjs` (1 byte/pixel + palette
   per sprite: 21 KB flash, no RAM; web/fxsprites.js for the page). App 1.64 of 1.75 MB (195 KB free). Art not
@@ -17,6 +17,9 @@
   0 crashes), then the soak moved to card 2 (family room, 20 items, flash full) on 2026-11-22 10:45, 32 h, tab
   "soak card 2". Loaded card: block 27.6 KB between items, ~17 KB while a .pjm plays; player freed 59 KB.
 - Card 1 (FM6124C): 192.168.50.16 / eed0 (USB COM10). Card 2 (RUL6024): 192.168.50.199 / 5df8. Rest: PROJECT-NOTES.md.
+
+- **1.1.2:** same picture on 75EX1 and 75EX2 (Kim, card ad04, blue top half: try 75EX2). Test versions by code
+  (About this screen > Install a software update file > Test code = `docs/test/<code>.bin`; "Go back" button).
 
 ## Verified pins (HD-WF2)
 - HUB75: R1 2, G1 6, B1 10, R2 3, G2 7, B2 11, A 39, B 38, C 37, D 36, E 21, LAT 33, OE 35, CLK 34. S1: GPIO17.
