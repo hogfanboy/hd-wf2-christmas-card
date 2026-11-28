@@ -15,7 +15,7 @@
 //   sec 0 = automatic (pictures: 8-20 s by their own length; scrolling text: one pass; others: 8-10 s).
 //   fg/bg are RRGGBB hex, fg may be "rainbow". effect: one of FX_NAMES (none, snow, sparkle, hearts, confetti,
 //   fireworks, stars, fire, matrix; sleigh, balloons, fish, rain since 1.0; lights; turkey, bunny, bats,
-//   shamrocks, flag since 1.0.0-beta19; baby after 1.1.0). Unknown names (e.g. the removed "plasma") play as none.
+//   shamrocks, flag since 1.0.0-beta19; baby since 1.1.1). Unknown names (e.g. the removed "plasma") play as none.
 //   Any line may end with an options field starting with '@' (space-separated, all optional; fw 0.9.0+):
 //     dates=MMDD-MMDD  only between these days, every year (may wrap past New Year, e.g. 1215-0105)
 //     days=0123456     only on these weekdays (0 = Sunday)
