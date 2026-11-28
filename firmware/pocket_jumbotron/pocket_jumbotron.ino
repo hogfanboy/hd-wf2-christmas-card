@@ -84,6 +84,8 @@ static const uint8_t CAL_DEFAULT[CAL_N][3] = {{95, 100, 156}, {95, 100, 113}, {1
 uint8_t calGain[CAL_N][3];
 uint32_t tuneUntil = 0;                        // a Color tune screen is up until then: tune.ino
 int8_t tuneLevel = -1;                         // the level being tuned, shown on the panel whatever the time of day
+uint8_t panelType = 0;                        // 0 standard, 1 no chip setup, 2 FM6126A, 3 plain: NVS ptype (panel.ino)
+void panelTypeLoad();                          // net.ino: reads panelType before the panel starts
 uint8_t hwMin = 12;                            // lowest panel level used; dimmer than that is done in the colors: NVS hwmin
 typedef uint8_t PixRow[W][3];
 static const size_t CANVAS_BYTES = sizeof(PixRow) * H;
@@ -213,6 +215,7 @@ void setup() {
   Serial.println("\nPocket Jumbotron - GIF player");
   for (int i = 0; i < 256; i++) gammaLutR[i] = gammaLutG[i] = gammaLutB[i] = gammaLut[i] = (uint8_t)(powf(i / 255.0f, GAMMA) * 255.0f + 0.5f);
 
+  panelTypeLoad();
   if (!startPanel(USE_DOUBLE_BUFFER) && !startPanel(false)) { Serial.println("Panel init FAILED"); for (;;) delay(1000); }
   settingsLoad();
   panelRegInit();                  // every panel (FM6124C ignores these; RUL6024 needs them)

@@ -200,7 +200,7 @@
       <div class="flex" id="tuneLv"></div>
       <div class="muted"><b>2. Test screen</b></div>
       <div class="flex">
-        <select class="s" id="tunePat"><option value="1">Grid (pick the best patch)</option><option value="2">Colors (big and small)</option><option value="3">Ramps (dark to full)</option><option value="4">Solid (one color)</option></select>
+        <select class="s" id="tunePat"><option value="1">Grid (pick the best patch)</option><option value="2">Colors (big and small)</option><option value="3">Ramps (dark to full)</option><option value="4">Solid (one color)</option><option value="5">Wiring test (cable and pin check)</option></select>
         <select class="s" id="tuneCol"><option value="ffffff">White</option><option value="ffd27a">Soft gold</option><option value="c8e6ff">Light blue</option><option value="b49c78">Tan</option><option value="808080">Gray</option></select>
       </div>
       <div class="muted"><b>3. Fix it</b> - on the grid, find the patch that looks most like the color named above
@@ -220,6 +220,18 @@
       </div>
       <div class="muted" id="tuneTable"></div>
       <div class="status" id="tuneStatus"></div>
+      </div>
+    </details>
+    <details class="setting" id="panelBox" hidden>
+      <summary><b>Panel type</b> <span class="muted">(only if the picture looks wrong)</span></summary>
+      <div class="stack" style="margin-top:10px">
+        <div class="muted">Most panels work with <b>Standard</b>. If the picture is garbled, banded or tinted, try the others one at a time.
+          The card restarts after each change. Unplug the power for 10 seconds before judging, because the panel keeps its chip settings while powered.</div>
+        <div class="flex">
+          <select class="s" id="panelType"><option value="0">Standard</option><option value="1">No chip setup</option><option value="2">FM6126A chip</option><option value="3">Plain shift register</option></select>
+          <button class="primary" id="panelApply">Apply and restart</button>
+        </div>
+        <div class="status" id="panelStatus"></div>
       </div>
     </details>
     <div class="setting stack" id="auBox" hidden>

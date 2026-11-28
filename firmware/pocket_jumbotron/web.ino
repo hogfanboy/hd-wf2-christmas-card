@@ -51,14 +51,14 @@ static void handleInfo() {
   uint8_t mac[6]; WiFi.macAddress(mac); snprintf(cardId, sizeof(cardId), "%02x%02x", mac[4], mac[5]);   // e.g. eed0
   snprintf(buf, sizeof(buf), "{\"api\":1,\"fw\":\"%s\",\"name\":\"%s\",\"total\":%u,\"used\":%u,\"files\":%d,\"items\":%u,\"brightness\":%u,\"heap\":%u,"
            "\"up\":%u,\"minHeap\":%u,\"block\":%u,\"boot\":\"%s\",\"bootWhy\":\"%s\",\"quietRestarts\":%u,\"crashes\":%u,"
-           "\"tz\":\"%s\",\"nightFrom\":%d,\"nightTo\":%d,\"nightLevel\":%u,\"hwMin\":%u,\"night\":%s,\"time\":%lu,\"place\":\"%s\",\"tzAuto\":%s,\"autoUpdate\":%s,\"theme\":%u,\"wxHome\":\"%s\","
+           "\"tz\":\"%s\",\"nightFrom\":%d,\"nightTo\":%d,\"nightLevel\":%u,\"hwMin\":%u,\"night\":%s,\"time\":%lu,\"place\":\"%s\",\"tzAuto\":%s,\"autoUpdate\":%s,\"theme\":%u,\"ptype\":%u,\"wxHome\":\"%s\","
            "\"id\":\"%s\",\"rssi\":%d,\"chip\":\"%s rev %u\",\"app\":%u,\"appMax\":%u,\"boots\":%u,\"lifeCrashes\":%u,\"lastCrash\":\"%s\"}",
            FW_VERSION, hostName.c_str(), (unsigned)LittleFS.totalBytes(), (unsigned)LittleFS.usedBytes(), countPictures(),
            (unsigned)playlist.size(), brightnessPct, (unsigned)ESP.getFreeHeap(),
            (unsigned)upSec(), (unsigned)ESP.getMinFreeHeap(), (unsigned)ESP.getMaxAllocHeap(), BOOT_NAME[bootKind], bootDetail,
            (unsigned)rtcQuietN, (unsigned)rtcCrashN, jsonEsc(tzString).c_str(), nightFrom, nightTo, nightLevel, (unsigned)hwMin,
            nightNow ? "true" : "false", timeValid() ? (unsigned long)time(nullptr) : 0UL,
-           geoOk ? jsonEsc(geoCity.substring(0, 40)).c_str() : "", tzAuto ? "true" : "false", autoUpdate ? "true" : "false", themeIx, jsonEsc(wxHome).c_str(),
+           geoOk ? jsonEsc(geoCity.substring(0, 40)).c_str() : "", tzAuto ? "true" : "false", autoUpdate ? "true" : "false", themeIx, (unsigned)panelType, jsonEsc(wxHome).c_str(),
            cardId, WiFi.status() == WL_CONNECTED ? (int)WiFi.RSSI() : 0, ESP.getChipModel(), (unsigned)ESP.getChipRevision(),
            (unsigned)appSize, (unsigned)appMax, (unsigned)lifeBoots,
            (unsigned)lifeCrashes, lifeLast);
@@ -195,6 +195,10 @@ static void handleSettings() {
   if (web->hasArg("nf")) { nightFrom = constrain((int)web->arg("nf").toInt(), -1, 23); prefs.putChar("nfrom", nightFrom); }
   if (web->hasArg("nt")) { nightTo = constrain((int)web->arg("nt").toInt(), -1, 23); prefs.putChar("nto", nightTo); }
   if (web->hasArg("theme")) { themeIx = constrain((int)web->arg("theme").toInt(), 0, 6); prefs.putUChar("theme", themeIx); }
+  if (web->hasArg("ptype")) {                      // panel type: saved, then the card restarts so the panel starts that way
+    uint8_t pt = constrain((int)web->arg("ptype").toInt(), 0, 3);
+    if (pt != panelType) { panelType = pt; prefs.putUChar("ptype", pt); restartRequested = true; }
+  }
   if (web->hasArg("wx") && web->arg("wx").length() < 90) {   // the page remembers the last weather town here
     wxHome = web->arg("wx"); wxHome.replace("\t", " "); prefs.putString("wxhome", wxHome);
   }
@@ -246,7 +250,7 @@ static void handleCalPost() {
   int pat = web->hasArg("pattern") ? web->arg("pattern").toInt() : -1;
   if (pat == 0 || web->hasArg("stop")) tuneStop();
   else {
-    if (pat > 0) tunePat = constrain(pat, 1, 4);
+    if (pat > 0) tunePat = constrain(pat, 1, 5);
     if (pat > 0 || tuneUntil) { tuneUntil = (millis() + 10UL * 60 * 1000) | 1; tuneDirty = true; }
     applyBrightness();
   }

@@ -24,6 +24,7 @@ static void panelRegWrite(const bool reg[16], int latClocks) {
   for (int i = 0; i < (int)sizeof(steal); i++) GPIO.func_out_sel_cfg[steal[i]].val = saved[i];
 }
 void panelRegInit() {
+  if (panelType) return;                         // other panel types: no register writes from us (FM6126A: the library does its own)
   static const bool REG1[16] = {0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0};
   static const bool REG2[16] = {0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0};
   static const bool GAIN[16] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
@@ -60,11 +61,13 @@ bool startPanel(bool dbl, bool fast) {
   // the library's DP3246 mode gives the 3-clock latch the RUL6024 needs, but it also inverts the clock,
   // which shifts the RUL6024 image one column and misaligns the FM6124C's two halves. So after begin()
   // the clock pin goes back to the original edge (the library applies the inversion in the GPIO matrix).
-  cfg.driver = HUB75_I2S_CFG::DP3246;
+  // Panel type (app: Panel type, saved as NVS ptype): 0 and 1 = the setup above, 2 = the library's FM6126A
+  // driver and init, 3 = a plain shift register. Only types 0 and 1 get the clock fix below.
+  cfg.driver = panelType == 2 ? HUB75_I2S_CFG::FM6126A : panelType == 3 ? HUB75_I2S_CFG::SHIFTREG : HUB75_I2S_CFG::DP3246;
   cfg.double_buff = dbl;
   panel = new MatrixPanel_I2S_DMA(cfg);
   if (panel->begin()) {
-    GPIO.func_out_sel_cfg[PINS.clk].inv_sel = 0;
+    if (panelType <= 1) GPIO.func_out_sel_cfg[PINS.clk].inv_sel = 0;
     doubleBuffered = dbl;
     panelFast = fast;
     return true;
