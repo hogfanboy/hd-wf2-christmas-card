@@ -7,9 +7,22 @@
 //  - N=14 = 0x0100: removes the fixed noise in the lower middle-right. Other bits there either do nothing,
 //    make the noise worse, or roughen the gradient.
 // The pins are taken from the LCD peripheral for a moment as plain GPIO, then handed back.
+// Both panel headers (1.1.2): the colour data also goes out on 75EX2, so a panel works on either header (a card
+// whose 75EX1 is damaged still works). 75EX2's colour pins: R1/G1/B1 = GPIO 4/8/12, R2/G2/B2 = 5/9/13 (verified
+// on card 1, 2026-11-28); A-E, CLK, LAT and OE are shared with 75EX1 on the board.
+static const uint8_t X2_DATA[6] = {4, 8, 12, 5, 9, 13};
+static void panelMirrorX2() {
+  const uint8_t x1[6] = {PINS.r1, PINS.g1, PINS.b1, PINS.r2, PINS.g2, PINS.b2};
+  for (int i = 0; i < 6; i++) {
+    gpio_reset_pin((gpio_num_t)X2_DATA[i]);
+    gpio_set_direction((gpio_num_t)X2_DATA[i], GPIO_MODE_OUTPUT);
+    gpio_set_drive_capability((gpio_num_t)X2_DATA[i], GPIO_DRIVE_CAP_3);
+    GPIO.func_out_sel_cfg[X2_DATA[i]].val = GPIO.func_out_sel_cfg[x1[i]].val;   // same LCD signal as the 75EX1 pin
+  }
+}
 static void panelRegWrite(const bool reg[16], int latClocks) {
-  const uint8_t steal[] = {PINS.r1, PINS.g1, PINS.b1, PINS.r2, PINS.g2, PINS.b2, PINS.clk, PINS.lat, PINS.oe};
-  const uint8_t data[] = {PINS.r1, PINS.g1, PINS.b1, PINS.r2, PINS.g2, PINS.b2};
+  const uint8_t steal[] = {PINS.r1, PINS.g1, PINS.b1, PINS.r2, PINS.g2, PINS.b2, PINS.clk, PINS.lat, PINS.oe, 4, 8, 12, 5, 9, 13};
+  const uint8_t data[] = {PINS.r1, PINS.g1, PINS.b1, PINS.r2, PINS.g2, PINS.b2, 4, 8, 12, 5, 9, 13};
   uint32_t saved[sizeof(steal)];
   gpio_set_level((gpio_num_t)PINS.oe, 1); gpio_set_level((gpio_num_t)PINS.lat, 0); gpio_set_level((gpio_num_t)PINS.clk, 0);
   for (int i = 0; i < (int)sizeof(steal); i++) { saved[i] = GPIO.func_out_sel_cfg[steal[i]].val; GPIO.func_out_sel_cfg[steal[i]].val = 0x100; }
@@ -68,6 +81,7 @@ bool startPanel(bool dbl, bool fast) {
   panel = new MatrixPanel_I2S_DMA(cfg);
   if (panel->begin()) {
     if (panelType <= 1) GPIO.func_out_sel_cfg[PINS.clk].inv_sel = 0;
+    panelMirrorX2();
     doubleBuffered = dbl;
     panelFast = fast;
     return true;

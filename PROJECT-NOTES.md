@@ -45,6 +45,7 @@ Custom firmware + website for ~15 LED "Christmas cards" already mailed out last 
 
 ## Hardware facts (confirmed)
 - HUB75 pins: R1 2, G1 6, B1 10, R2 3, G2 7, B2 11, A 39, B 38, C 37, D 36, E 21, LAT 33, OE 35, CLK 34.
+- **Second header 75EX2** (1.1.2, `panel.ino panelMirrorX2()`): R1 4, G1 8, B1 12, R2 5, G2 9, B2 13; A-E, LAT, OE, CLK shared with 75EX1 (verified on card 1 with a 64-row panel, 2026-11-28). The firmware drives both headers with the same picture, so a panel works on either; panels normally go on 75EX1.
 - **S1 = GPIO 17, active LOW.** S1 is *not* the boot/GPIO0 button.
 - Flash is DIO, 8 MB, unencrypted.
 - Card 1: MAC e8:06:90:fe:ee:d0 → `PocketJumbo-EED0`, FM6124C panel. Card 2: MAC e8:06:90:fd:5d:f8 → `PocketJumbo-5DF8`, RUL6024 panel. Spare WF2 (no panel): MAC e8:06:90:fd:ad:04, still on Huidu.
