@@ -319,3 +319,24 @@ $('fw').onchange = async (e) => {
   } catch (err) { st.className = 'status err'; st.textContent = 'Update failed: ' + err.message; }
   e.target.value = '';
 };
+
+// Test versions for one tester (docs/test/<code>.bin on the website): the phone downloads it, then installs it
+// on this screen like a chosen file. Nothing reaches other screens.
+$('fwCodeBtn').onclick = async () => {
+  const code = $('fwCode').value.trim().toLowerCase(), st = $('fwStatus');
+  if (!/^[a-z0-9-]{1,20}$/.test(code)) { st.className = 'status err'; st.textContent = 'Type the test code you were given.'; return; }
+  st.className = 'status'; st.textContent = 'Downloading…';
+  $('fwCodeBtn').disabled = true;
+  try {
+    const r = await fetch(SITE + 'test/' + code + '.bin', { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status === 404 ? 'no test version with that code' : 'download failed (' + r.status + ')');
+    const bin = await r.blob();
+    if (bin.size < 100000) throw new Error('download incomplete');
+    st.textContent = 'Installing… keep this page open.';
+    const fd = new FormData(); fd.append('firmware', bin, code + '.bin');
+    await api('/api/update', { method: 'POST', body: fd });
+    st.className = 'status ok'; st.textContent = 'Installed. The screen is restarting; this page reloads in 20 seconds.';
+    setTimeout(() => location.reload(), 20000);
+  } catch (err) { st.className = 'status err'; st.textContent = 'Couldn\'t install it: ' + err.message; }
+  $('fwCodeBtn').disabled = false;
+};
