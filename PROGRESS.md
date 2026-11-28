@@ -32,6 +32,9 @@
 - Test uploads with curl: `-H "Content-Type: text/plain"` for /api/show, then POST /api/play.
 
 ## Next (the user can answer with one of these commands)
+00000. **"Baby looks good" / "change X"** (PR, not on a card yet): countdown "👶 Baby due date" (date `baby:YYYY-MM-DD`,
+   once), effect `baby` (stork, footprints, rattles); due day: stork behind "TODAY!", then "SOON! ANY DAY NOW" 21 days.
+   Probe: `tools/baby-probe.ps1` on card 1 after flashing the PR build. Cards on 1.1.0 skip the item (app says update).
 0000. **1.1.0 released 11-24 (main = radar branch)**: radar ranges, birthdays & dates, night Off/10/25%, new cards 50%,
    Color tune (defaults = card 2's tuning; details PROJECT-NOTES). Installer step 3 now says "No compatible devices
    found" is normal. 11-24: tester 2 saw "Installing, Done" loop = step 6's example drawing (it repeats); drawing no

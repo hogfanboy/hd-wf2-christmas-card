@@ -91,8 +91,20 @@ static int daysTo(int y, int m, int d) {                         // whole days f
   time_t ta = mktime(&a), tb = mktime(&b);
   return (int)floor((double)(tb - ta) / 86400 + 0.5);
 }
+// A baby's due date: the countdown's date is "baby:YYYY-MM-DD" (once, not every year). days = days to go (negative =
+// past due). False if it isn't one. Past the date it says "any day now" for BABY_LATE days, then the item rests.
+static const int BABY_LATE = 21;
+static bool babyDue(const String &when, int &days) {
+  if (!when.startsWith("baby:") || when.length() < 15) return false;
+  int y = when.substring(5, 9).toInt(), m = when.substring(10, 12).toInt(), d = when.substring(13, 15).toInt();
+  if (y < 2000 || m < 1 || m > 12 || d < 1 || d > 31) return false;
+  days = daysTo(y, m, d);
+  return true;
+}
 // Days until a countdown's date (0 = today, -1 = not a date) and which holiday it is (-1 = none).
 static int countdownDays(const String &when, int *hol) {
+  int bd;
+  if (babyDue(when, bd)) { if (hol) *hol = -1; return bd >= 0 ? bd : bd >= -BABY_LATE ? 0 : -1; }
   time_t now = time(nullptr); struct tm lt; localtime_r(&now, &lt);
   int y = lt.tm_year + 1900, best = -1, bi = -1;
   for (int i = 0; i < N_HOLIDAYS; i++) {
@@ -117,17 +129,20 @@ static int countdownDays(const String &when, int *hol) {
 
 static void playCountdown(const ShowItem &item) {
   if (!timeValid()) return;
-  int hol, days = countdownDays(item.extra, &hol);
+  int hol, days = countdownDays(item.extra, &hol), bd = 0;
   if (days < 0) return;
+  bool baby = babyDue(item.extra, bd);
   ShowItem it = item;
-  if (it.effect == FX_AUTO) it.effect = hol >= 0 ? HOLIDAYS[hol].fx : FX_SPARKLE;   // "match the holiday"
-  if (days == 0 && it.lead >= 0) it.effect = FX_FIREWORKS;       // a reminder's big day
-  String name = item.extra == "next" && hol >= 0 ? String(HOLIDAYS[hol].name) : it.text.length() ? it.text : hol >= 0 ? String(HOLIDAYS[hol].name) : String("");
+  if (it.effect == FX_AUTO) it.effect = baby ? FX_BABY : hol >= 0 ? HOLIDAYS[hol].fx : FX_SPARKLE;   // "match the holiday"
+  if (days == 0 && it.lead >= 0 && !baby) it.effect = FX_FIREWORKS;   // a reminder's big day
+  String name = item.extra == "next" && hol >= 0 ? String(HOLIDAYS[hol].name) : it.text.length() ? it.text : hol >= 0 ? String(HOLIDAYS[hol].name) : String(baby ? "BABY" : "");
+  fxParty = baby && bd <= 0;                                     // due day and after: the stork flies behind the words
   effectInit(it); FxGuard fxg;
   String big = days == 0 ? "TODAY!" : String(days);
   String l1 = days == 0 ? "" : days == 1 ? "DAY UNTIL" : "DAYS UNTIL";
   String l2 = upcase(name);
   if (days == 0) { l1 = l2; l2 = ""; }
+  if (baby && bd <= 0) { l1 = upcase(name); l2 = bd == 0 ? "IS DUE" : "ANY DAY NOW"; if (bd < 0) big = "SOON!"; }
   uint32_t total = (it.sec ? it.sec : 8) * 1000UL, start = millis(), frame = 0;
   pjLabels = isPJ(it.font);
   shownValid = false;

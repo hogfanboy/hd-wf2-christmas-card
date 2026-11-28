@@ -485,10 +485,14 @@ function holidayDay(h, y) {                       // [month, day] of holiday h i
   else if (wd >= 0) { const last = new Date(y, m, 0).getDate(); d = last - (dowOf(y, m, last) - wd + 7) % 7; }
   return [m, d];
 }
-// Days until a countdown's date (MM-DD, a holiday key or "next"; -1 = not a date) and which holiday it is (-1 = none).
+// Days until a countdown's date (MM-DD, a holiday key, "next" or "baby:YYYY-MM-DD"; -1 = not a date) and which
+// holiday it is (-1 = none). A baby's due date counts once: late = days to go, negative past it ("any day now" for
+// 21 days, as the card's babyDue).
+const isBaby = (when) => /^baby:\d{4}-\d\d-\d\d$/.test(when || '');
 function countdownDays(when) {
   const now = new Date(), y = now.getFullYear(), today = new Date(y, now.getMonth(), now.getDate(), 12);
   const to = (yy, m, d) => Math.round((new Date(yy, m - 1, d, 12) - today) / 864e5);
+  if (isBaby(when)) { const [yy, m, d] = when.slice(5).split('-').map(Number), late = to(yy, m, d); return { n: late >= 0 ? late : late >= -21 ? 0 : -1, hol: -1, late }; }
   let n = -1, hol = -1;
   HOLIDAYS.forEach((h, i) => {
     if (when !== 'next' && when !== h[0]) return;
@@ -501,7 +505,7 @@ function countdownDays(when) {
   }
   return { n, hol };
 }
-const countdownName = (it) => { const h = countdownDays(it.date).hol; return it.date === 'next' && h >= 0 ? HOLIDAYS[h][2] : it.text ? it.text.toUpperCase() : h >= 0 ? HOLIDAYS[h][2] : ''; };
+const countdownName = (it) => { const h = countdownDays(it.date).hol; return it.date === 'next' && h >= 0 ? HOLIDAYS[h][2] : it.text ? it.text.toUpperCase() : h >= 0 ? HOLIDAYS[h][2] : isBaby(it.date) ? 'BABY' : ''; };
 const wxPlace = (it) => it.place || (it.lat === 'auto' ? card.place || '' : '');
 function renderItem(it, t) {      // t = ms since the item started
   curLabels = it.font >= 8;
@@ -567,8 +571,10 @@ function renderItem(it, t) {      // t = ms since the item started
       bigS = (it.h24 ? String(h).padStart(2, '0') : h) + ':' + String(d.getMinutes()).padStart(2, '0');
       l2 = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '').toUpperCase() ;
     } else {
-      const n = countdownDays(it.date).n, name = countdownName(it);
+      const { n, late } = countdownDays(it.date), name = countdownName(it);
       bigS = n ? String(n) : 'TODAY!'; l1 = n ? (n === 1 ? 'DAY UNTIL' : 'DAYS UNTIL') : name; l2 = n ? name : '';
+      if (isBaby(it.date) && late <= 0) { l2 = late === 0 ? 'IS DUE' : 'ANY DAY NOW'; if (late < 0) bigS = 'SOON!'; }   // as the card
+      if (isBaby(it.date) && n < 0) { bigS = '-'; l1 = 'BABY IS HERE?'; l2 = 'DUE DATE PASSED'; }
     }
     const pmW = it.kind === 'clock' && !it.h24 ? (curLabels ? PJFont.width(8, 'PM') + 2 : 13) : 0;      // 12-hour clock: small AM/PM beside the time
     fitBig(it.font, bigS, W - 2, pmW);
