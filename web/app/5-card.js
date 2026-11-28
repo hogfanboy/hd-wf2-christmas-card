@@ -202,6 +202,8 @@ $('send').onclick = async () => {
     await api('/api/show', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: lines.join('\n') + '\n' });
     await api('/api/play', { method: 'POST' });
     st.className = 'status ok'; st.textContent = `Done! ${list.length} item${list.length > 1 ? 's are' : ' is'} now playing.`;
+    if (card.fw && !newer(card.fw, '1.1.0') && list.some(i => i.kind === 'countdown' && isBaby(i.date)))   // older screens skip it
+      st.textContent += ' The baby countdown needs the newest screen software: update the screen to see it.';
   } catch (err) {
     st.className = 'status err'; st.textContent = 'Something went wrong: ' + err.message + '. Try again.';
   }

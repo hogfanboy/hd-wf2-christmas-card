@@ -10,7 +10,7 @@ static Rocket rockets[3];
 static uint8_t *heat = nullptr;                  // fire heat map W*H, values 0..36
 static uint8_t mHead[22], mLen[22], mSpd[22];    // matrix rain: head row in 1/4 rows, trail length, speed
 static char mGlyph[22][8];
-static int16_t sleighX; static uint8_t sleighWait;  // sleigh position in 1/16 px, frames to wait off screen
+static int16_t sleighX; static uint8_t sleighWait, sleighBundle;  // sleigh position in 1/16 px, frames to wait off screen
 static const char MGLYPHS[] = "0123456789ABCDEFXZ$#@%&*+=<>";
 
 static void starReset(Flake &f) { f.x = (int16_t)rnd(1024) - 512; f.y = (int16_t)rnd(512) - 256; f.bri = 200 + rnd(56); f.spd = 1 + rnd(3); }
@@ -23,10 +23,11 @@ static void effectInit(const ShowItem &it) {
   for (auto &r : rockets) r.on = false;
   for (int c = 0; c < 22; c++) { mHead[c] = rnd(40); mLen[c] = 3 + rnd(5); mSpd[c] = 1 + rnd(3); for (int r = 0; r < 8; r++) mGlyph[c][r] = MGLYPHS[rnd(sizeof(MGLYPHS) - 1)]; }
   if (it.effect == FX_FIRE && !heat) heat = (uint8_t *)calloc(W, H);
-  sleighX = it.effect == FX_SLEIGH && it.type == 'f' ? -94 * 16 : it.effect == FX_TURKEY ? -36 * 16 : it.effect == FX_BUNNY ? -32 * 16 : -50 * 16;
+  sleighX = it.effect == FX_SLEIGH && it.type == 'f' ? -94 * 16 : it.effect == FX_TURKEY ? -36 * 16 : it.effect == FX_BUNNY ? -32 * 16 : it.effect == FX_BABY ? -36 * 16 : -50 * 16;
   sleighWait = 0;
 }
-static void effectEnd() { free(heat); heat = nullptr; }
+static bool fxParty = false;                     // baby: the due day (the stork flies even behind the words)
+static void effectEnd() { free(heat); heat = nullptr; fxParty = false; }
 struct FxGuard { ~FxGuard() { effectEnd(); } };    // frees the fire heat map however the item ends
 
 static void fxFireworks(uint32_t frame) {
@@ -411,6 +412,25 @@ static void fxFlag(uint32_t frame, bool behind) {
   }
 }
 
+// Baby on the way: pastel footprints, rattles and little hearts drifting up; full screen (and behind the words on
+// the due day) a stork flies across with the bundle, its cloth a different pastel each trip.
+static const uint32_t BABYC[4] = {0xFF8CC0, 0x7CC0FF, 0xFFD870, 0x8CE8A8};   // pink, blue, yellow, mint
+static void fxBaby(uint32_t frame, bool behind) {
+  for (int i = 0; i < (behind ? 8 : 14); i++) {
+    Flake &f = flakes[i];
+    f.y -= f.spd / 4 + 1;
+    if (f.y < -14 * 16) { f.y = H * 16 + rnd(320); f.x = rnd(W - 12) * 16; }
+    int x = f.x / 16 + ((int)sin8(frame * 2 + i * 45) - 128) / 50, y = f.y / 16, k = i % 3;
+    fxSpr(k == 0 ? FXS_FEET : k == 1 ? FXS_RATTLE : FXS_HEART_S, x, y, false, BABYC[(i / 3 + k) & 3]);
+  }
+  if (behind && !fxParty) return;
+  if (sleighWait) { sleighWait--; return; }
+  if ((sleighX += behind ? 10 : 12) > (W + 2) * 16) { sleighX = -36 * 16; sleighWait = 30 + rnd(50); sleighBundle++; return; }
+  int y = (behind ? 1 : 12) + ((int)sin8(frame * 4) - 128) / 40;
+  bool up = (frame / 6) & 1;
+  fxSpr(behind ? (up ? FXS_STORK0_S : FXS_STORK1_S) : (up ? FXS_STORK0 : FXS_STORK1), sleighX / 16, y, false, BABYC[sleighBundle & 3]);
+}
+
 static void paintBackground(const ShowItem &it, uint32_t frame) {
   uint8_t br = it.bg >> 16, bgg = it.bg >> 8, bb = it.bg;
   bool behind = it.type != 'f';                  // something is drawn on top: keep busy effects calmer
@@ -482,6 +502,7 @@ static void paintBackground(const ShowItem &it, uint32_t frame) {
     case FX_BATS: fxBats(frame, behind); break;
     case FX_SHAMROCKS: fxShamrocks(frame, behind); break;
     case FX_FLAG: fxFlag(frame, behind); break;
+    case FX_BABY: fxBaby(frame, behind); break;
   }
 }
 

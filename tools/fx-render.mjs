@@ -24,7 +24,7 @@ list.forEach((e, n) => [false, true].forEach((behind, b) => {
   const s = ctx.fxNew(e, behind), d = new Float64Array(128 * 64 * 4);
   for (let f = 0; f < +frames; f++) ctx.fxStep(s, null, behind);
   if (s.sleighWait) s.sleighWait = 0;
-  if (['sleigh', 'turkey', 'bunny'].includes(e)) s.sleighX = (behind ? 30 : 15) * 16;
+  if (['sleigh', 'turkey', 'bunny', 'baby'].includes(e)) s.sleighX = (behind ? 30 : 15) * 16;
   ctx.fxStep(s, d, behind);
   const k = n * 2 + b, ox = (k % cols) * 128 * SC, oy = Math.floor(k / cols) * 64 * SC;
   for (let y = 0; y < 64; y++) for (let x = 0; x < 128; x++) for (let j = 0; j < SC - 1; j++) for (let i = 0; i < SC - 1; i++) {

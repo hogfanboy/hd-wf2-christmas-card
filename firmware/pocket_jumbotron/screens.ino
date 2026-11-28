@@ -91,8 +91,20 @@ static int daysTo(int y, int m, int d) {                         // whole days f
   time_t ta = mktime(&a), tb = mktime(&b);
   return (int)floor((double)(tb - ta) / 86400 + 0.5);
 }
+// A baby's due date: the countdown's date is "baby:YYYY-MM-DD" (once, not every year). days = days to go (negative =
+// past due). False if it isn't one. Past the date it says "any day now" for BABY_LATE days, then the item rests.
+static const int BABY_LATE = 21;
+static bool babyDue(const String &when, int &days) {
+  if (!when.startsWith("baby:") || when.length() < 15) return false;
+  int y = when.substring(5, 9).toInt(), m = when.substring(10, 12).toInt(), d = when.substring(13, 15).toInt();
+  if (y < 2000 || m < 1 || m > 12 || d < 1 || d > 31) return false;
+  days = daysTo(y, m, d);
+  return true;
+}
 // Days until a countdown's date (0 = today, -1 = not a date) and which holiday it is (-1 = none).
 static int countdownDays(const String &when, int *hol) {
+  int bd;
+  if (babyDue(when, bd)) { if (hol) *hol = -1; return bd >= 0 ? bd : bd >= -BABY_LATE ? 0 : -1; }
   time_t now = time(nullptr); struct tm lt; localtime_r(&now, &lt);
   int y = lt.tm_year + 1900, best = -1, bi = -1;
   for (int i = 0; i < N_HOLIDAYS; i++) {
@@ -115,19 +127,30 @@ static int countdownDays(const String &when, int *hol) {
   return best;
 }
 
+// A label line that fits is centered. A longer one (a long name) shows its start, slides to its end, then starts over.
+static void labelSlide(const String &s, int top, uint32_t c, uint32_t ms) {
+  int w = labelW(s);
+  if (w <= W - 2) { label(s, (W - w) / 2, top, c); return; }
+  int over = w - (W - 4), t = ms % (2400 + over * 30), sh = t < 1200 ? 0 : min(over, (int)(t - 1200) / 30);
+  label(s, 2 - sh, top, c);
+}
+
 static void playCountdown(const ShowItem &item) {
   if (!timeValid()) return;
-  int hol, days = countdownDays(item.extra, &hol);
+  int hol, days = countdownDays(item.extra, &hol), bd = 0;
   if (days < 0) return;
+  bool baby = babyDue(item.extra, bd);
   ShowItem it = item;
-  if (it.effect == FX_AUTO) it.effect = hol >= 0 ? HOLIDAYS[hol].fx : FX_SPARKLE;   // "match the holiday"
-  if (days == 0 && it.lead >= 0) it.effect = FX_FIREWORKS;       // a reminder's big day
-  String name = item.extra == "next" && hol >= 0 ? String(HOLIDAYS[hol].name) : it.text.length() ? it.text : hol >= 0 ? String(HOLIDAYS[hol].name) : String("");
+  if (it.effect == FX_AUTO) it.effect = baby ? FX_BABY : hol >= 0 ? HOLIDAYS[hol].fx : FX_SPARKLE;   // "match the holiday"
+  if (days == 0 && it.lead >= 0 && !baby) it.effect = FX_FIREWORKS;   // a reminder's big day
+  String name = item.extra == "next" && hol >= 0 ? String(HOLIDAYS[hol].name) : it.text.length() ? it.text : hol >= 0 ? String(HOLIDAYS[hol].name) : String(baby ? "BABY" : "");
+  fxParty = baby && bd <= 0;                                     // due day and after: the stork flies behind the words
   effectInit(it); FxGuard fxg;
   String big = days == 0 ? "TODAY!" : String(days);
   String l1 = days == 0 ? "" : days == 1 ? "DAY UNTIL" : "DAYS UNTIL";
   String l2 = upcase(name);
   if (days == 0) { l1 = l2; l2 = ""; }
+  if (baby && bd <= 0) { l1 = upcase(name); l2 = bd == 0 ? "IS DUE" : "ANY DAY NOW"; if (bd < 0) big = "SOON!"; }
   uint32_t total = (it.sec ? it.sec : 8) * 1000UL, start = millis(), frame = 0;
   pjLabels = isPJ(it.font);
   shownValid = false;
@@ -136,8 +159,8 @@ static void playCountdown(const ShowItem &item) {
     paintBackground(it, frame);
     fitBig(it.font, big, W - 2, 0);
     drawText(big, (W - textWidth(big)) / 2, textBaseline(curFont, 0, 40), it, millis());
-    if (l1.length()) labelC(l1, W / 2, 42, th().main);
-    if (l2.length()) labelC(l2, W / 2, 53, th().acc);
+    if (l1.length()) labelSlide(l1, 42, th().main, millis() - start);
+    if (l2.length()) labelSlide(l2, 53, th().acc, millis() - start);
     pushCanvas();
     frame++;
     int32_t wait = 40 - (int32_t)(millis() - t0);
